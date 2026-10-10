@@ -29,6 +29,14 @@ cargo run --manifest-path native/Cargo.toml --locked -- --root '/path/to/The Sim
 
 Use `--settings` to open Settings directly. The [native app guide](native-app.md) describes all controls and CLI options. The app supports Linux; other desktop platforms have not been verified.
 
+Capture the production review popups with synthetic data in light, dark and small-window layouts:
+
+```bash
+cargo run --manifest-path native/Cargo.toml --locked --example verify_popups -- native/target/popup-captures
+```
+
+This helper renders the app's actual controller and popup code. It creates temporary fixtures, captures ten states, and checks that no operation was approved and no settings were saved. It needs a graphical Linux session.
+
 ## Local storage and safety
 
 Native file and folder selection uses `rfd` with the XDG desktop portal, as in [ZapFast's dependency configuration](https://github.com/crmne/zapfast/blob/main/Cargo.toml). A Linux desktop needs a working XDG portal and file-chooser backend for its native picker. `rfd` can fall back to Zenity when the portal is unavailable. The adapter in `native/src/file_picker.rs` returns paths on a channel; `Controls` retains each request's purpose and import identity, handles cancellation, and keeps existing confirmation and filesystem safety checks.

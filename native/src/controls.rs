@@ -824,11 +824,11 @@ impl Controls {
         self.previews.begin_frame(ctx, catalog.generation());
         if let Some((identity, candidates)) = self.candidates.take() {
             let mut keep = true;
-            egui::Window::new("Source candidates").default_width(480.0).show(ctx, |ui| {
+            let popup = crate::popup::show(ctx, "source-candidates", "Source candidates", |ui| {
                 if candidates.is_empty() {
                     ui.label("No real provider candidates were found.");
                 }
-                egui::ScrollArea::vertical().max_height(350.0).show(ui, |ui| {
+                egui::ScrollArea::vertical().max_height(crate::popup::body_height(ctx)).show(ui, |ui| {
                     for candidate in &candidates {
                         ui.heading(&candidate.title);
                         ui.label(&candidate.source_url);
@@ -864,13 +864,15 @@ impl Controls {
                         ui.separator();
                     }
                 });
-                if ui.button("Close").clicked() {
+                if crate::popup::close(ui).clicked() {
                     keep = false;
                 }
             });
-            if keep {
+            if keep && !popup.should_close() {
                 self.candidates = Some((identity, candidates));
             }
+            ctx.request_repaint();
+            return;
         }
         if let Some((identity, entries)) = self.trash_entries.take().filter(|(id, _)| {
             id.current(
@@ -880,11 +882,11 @@ impl Controls {
             )
         }) {
             let mut keep = true;
-            egui::Window::new("Restore from trash").show(ctx, |ui| {
+            let popup = crate::popup::show(ctx, "restore-from-trash", "Restore from trash", |ui| {
                 if entries.is_empty() {
                     ui.label("No recoverable entries in trash.");
                 }
-                egui::ScrollArea::vertical().max_height(300.0).show(ui, |ui| {
+                egui::ScrollArea::vertical().max_height(crate::popup::body_height(ctx)).show(ui, |ui| {
                     for entry in &entries {
                         ui.label(&entry.path);
                         if let Some(path) = &entry.original_path {
@@ -901,13 +903,15 @@ impl Controls {
                         }
                     }
                 });
-                if ui.button("Close").clicked() {
+                if crate::popup::close(ui).clicked() {
                     keep = false;
                 }
             });
-            if keep {
+            if keep && !popup.should_close() {
                 self.trash_entries = Some((identity, entries));
             }
+            ctx.request_repaint();
+            return;
         }
         let Some(mut dialog) = self.dialog.take() else {
             return;
@@ -927,177 +931,352 @@ impl Controls {
             Dialog::SettingsImport(..) => "Review imported settings",
         }
         .to_string();
-        egui::Window::new(title)
-            .default_width(480.0)
-            .collapsible(false)
-            .show(ctx, |ui| {
-                match &mut dialog {
+        let popup = crate::popup::show(ctx, "management-review", &title, |ui| {
+            let (label, enabled) = egui::ScrollArea::vertical()
+                .max_height(crate::popup::body_height(ctx))
+                .show(ui, |ui| {
+                    ui.style_mut().wrap_mode = Some(egui::TextWrapMode::Wrap);
+                    let action = match &mut dialog {
+                        Dialog::Import { identity, zip, path, name } => {
+                            ui.label(if *zip { "ZIP path" } else { "Folder path" });
+                            ui.label(egui::RichText::new(path.display().to_string()).color(ui.visuals().weak_text_color()));
+                            ui.add_space(12.0);
+                            ui.label("Mod name");
+                            crate::popup::text_field(ui, name);
+                            let current = identity.current(catalog.root.as_ref(), catalog.selected.as_ref(), catalog.generation());
+                            if !current {
+                                ui.colored_label(ui.visuals().error_fg_color, "Game folder or selection changed. Cancel and choose the import again.");
+                            }
+                            ("Import", current && !path.as_os_str().is_empty() && !name.trim().is_empty())
+                        }
+                        Dialog::Rename(identity, name) => {
+                            ui.label("Display name");
+                            crate::popup::text_field(ui, name);
+                            ("Save name", identity.current(catalog.root.as_ref(), catalog.selected.as_ref(), catalog.generation()) && !name.trim().is_empty())
+                        }
+                        Dialog::Manual(identity, url) => {
+                            ui.label("Source URL. Manual attachments carry no verified match claim.");
+                            crate::popup::text_field(ui, url);
+                            ("Review URL attachment", identity.current(catalog.root.as_ref(), catalog.selected.as_ref(), catalog.generation()) && !url.trim().is_empty())
+                        }
+                        Dialog::Confirm { identity, lines, .. } => {
+                            for line in lines { ui.label(line.as_str()); }
+                            let current = identity.current(catalog.root.as_ref(), catalog.selected.as_ref(), catalog.generation());
+                            if !current {
+                                ui.colored_label(ui.visuals().error_fg_color, "Selection or catalog changed. Close and review again.");
+                            }
+                            ("Confirm", current)
+                        }
+                        Dialog::SettingsImport(settings, key_included) => {
+                            ui.label("Version 1 settings");
+                            ui.label(format!("Theme: {}", match settings.theme {
+                                Theme::Light => "light", Theme::Dark => "dark", Theme::System => "system",
+                            }));
+                            for root in &settings.game_roots { ui.label(root); }
+                            if let Some(selected) = &settings.selected_root { ui.label(format!("Selected folder: {selected}")); }
+                            ui.label(if *key_included { "Includes an API key" } else { "API key omitted. Existing local key will be preserved." });
+                            ("Confirm settings import", true)
+                        }
+                    };
+                    if let Some(error) = &self.error {
+                        ui.colored_label(ui.visuals().error_fg_color, error);
+                    }
+                    action
+                }).inner;
+            let (approve, cancel) = crate::popup::actions(ui, label, enabled);
+            if enabled {
+                self.confirm_rect = Some(approve.rect);
+            }
+            if cancel.clicked() {
+                keep = false;
+            }
+            if approve.clicked() {
+                match &dialog {
                     Dialog::Import {
                         identity,
                         zip,
                         path,
                         name,
                     } => {
-                        ui.label(if *zip { "ZIP path" } else { "Folder path" });
-                        ui.label(path.display().to_string());
-                        ui.label("Mod name");
-                        ui.text_edit_singleline(name);
-                        if ui
-                            .add_enabled(
-                                identity.current(
-                                    catalog.root.as_ref(),
-                                    catalog.selected.as_ref(),
-                                    catalog.generation(),
-                                ) && !path.as_os_str().is_empty()
-                                    && !name.trim().is_empty(),
-                                egui::Button::new("Import"),
-                            )
-                            .clicked()
-                        {
-                            {
-                                self.submit(
-                                    identity.clone(),
-                                    if *zip {
-                                        Action::ImportZip {
-                                            path: path.clone(),
-                                            name: name.trim().into(),
-                                        }
-                                    } else {
-                                        Action::ImportFolder {
-                                            path: path.clone(),
-                                            name: name.trim().into(),
-                                        }
-                                    },
-                                );
-                                keep = false;
-                            }
-                        }
+                        self.submit(
+                            identity.clone(),
+                            if *zip {
+                                Action::ImportZip {
+                                    path: path.clone(),
+                                    name: name.trim().into(),
+                                }
+                            } else {
+                                Action::ImportFolder {
+                                    path: path.clone(),
+                                    name: name.trim().into(),
+                                }
+                            },
+                        );
+                        keep = false;
                     }
                     Dialog::Rename(identity, name) => {
-                        ui.label("Display name");
-                        ui.text_edit_singleline(name);
-                        if ui
-                            .add_enabled(
-                                identity.current(
-                                    catalog.root.as_ref(),
-                                    catalog.selected.as_ref(),
-                                    catalog.generation(),
-                                ) && !name.trim().is_empty(),
-                                egui::Button::new("Save name"),
-                            )
-                            .clicked()
-                        {
-                            self.submit(identity.clone(), Action::Rename(name.clone()));
-                            keep = false;
-                        }
+                        self.submit(identity.clone(), Action::Rename(name.clone()));
+                        keep = false;
                     }
-                    Dialog::Manual(identity, url) => {
-                        ui.label("Source URL. Manual attachments carry no verified match claim.");
-                        ui.text_edit_singleline(url);
-                        if ui
-                            .add_enabled(
-                                identity.current(
-                                    catalog.root.as_ref(),
-                                    catalog.selected.as_ref(),
-                                    catalog.generation(),
-                                ) && !url.trim().is_empty(),
-                                egui::Button::new("Review URL attachment"),
-                            )
-                            .clicked()
-                        {
-                            self.confirm(
-                                catalog,
-                                Action::ManualSource(url.trim().into()),
-                                "Attach manual source URL",
-                                vec![
-                                    url.trim().into(),
-                                    "Save this URL to the selected mod's metadata?".into(),
-                                ],
-                            );
-                            keep = false;
-                        }
+                    Dialog::Manual(_, url) => {
+                        self.confirm(
+                            catalog,
+                            Action::ManualSource(url.trim().into()),
+                            "Attach manual source URL",
+                            vec![
+                                url.trim().into(),
+                                "Save this URL to the selected mod's metadata?".into(),
+                            ],
+                        );
+                        keep = false;
                     }
                     Dialog::Confirm {
-                        identity,
-                        action,
-                        lines,
-                        ..
-                    } => {
-                        egui::ScrollArea::vertical()
-                            .max_height(350.0)
-                            .show(ui, |ui| {
-                                for line in lines {
-                                    ui.label(line.as_str());
-                                }
-                            });
-                        let current = identity.current(
-                            catalog.root.as_ref(),
-                            catalog.selected.as_ref(),
-                            catalog.generation(),
-                        );
-                        if !current {
-                            ui.colored_label(
-                                ui.visuals().error_fg_color,
-                                "Selection or catalog changed. Close and review again.",
-                            );
-                        }
-                        let confirm = ui.add_enabled(current, egui::Button::new("Confirm"));
-                        if current {
-                            self.confirm_rect = Some(confirm.rect);
-                        }
-                        if confirm.clicked() {
-                            match self.approve(catalog, identity, action.clone()) {
-                                Ok(_) => keep = false,
-                                Err(error) => self.error = Some(error),
+                        identity, action, ..
+                    } => match self.approve(catalog, identity, action.clone()) {
+                        Ok(_) => keep = false,
+                        Err(error) => self.error = Some(error),
+                    },
+                    Dialog::SettingsImport(settings, _) => {
+                        match settings.save(&self.settings_path) {
+                            Ok(()) => {
+                                self.settings = settings.clone();
+                                crate::ui::apply_settings_theme(ctx, &self.settings);
+                                self.roots_changed =
+                                    settings.selected_root.as_ref().map(PathBuf::from);
+                                keep = false;
                             }
-                        }
-                    }
-                    Dialog::SettingsImport(settings, key_included) => {
-                        ui.label("Version 1 settings");
-                        ui.label(format!(
-                            "Theme: {}",
-                            match settings.theme {
-                                Theme::Light => "light",
-                                Theme::Dark => "dark",
-                                Theme::System => "system",
-                            }
-                        ));
-                        for root in &settings.game_roots {
-                            ui.label(root);
-                        }
-                        if let Some(selected) = &settings.selected_root {
-                            ui.label(format!("Selected folder: {selected}"));
-                        }
-                        ui.label(if *key_included {
-                            "Includes an API key"
-                        } else {
-                            "API key omitted. Existing local key will be preserved."
-                        });
-                        if ui.button("Confirm settings import").clicked() {
-                            match settings.save(&self.settings_path) {
-                                Ok(()) => {
-                                    self.settings = settings.clone();
-                                    crate::ui::apply_settings_theme(ctx, &self.settings);
-                                    self.roots_changed =
-                                        settings.selected_root.as_ref().map(PathBuf::from);
-                                    keep = false;
-                                }
-                                Err(e) => self.error = Some(e),
-                            }
+                            Err(error) => self.error = Some(error),
                         }
                     }
                 }
-                if ui.button("Cancel").clicked() {
-                    keep = false;
-                }
-            });
-        if keep {
+            }
+        });
+        if keep && !popup.should_close() {
             self.dialog = Some(dialog);
         }
     }
 }
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn popup_keeps_actions_aligned_and_fits_a_small_window() {
+        let fixture = tempfile::tempdir().unwrap();
+        let mut catalog = Catalog::default();
+        let generation = catalog.begin_scan(fixture.path().join("game"));
+        catalog.accept_scan(generation, Ok(vec![]));
+        let mut controls = Controls::new(
+            fixture.path().join("managed"),
+            fixture.path().into(),
+            Settings::default(),
+            || {},
+        )
+        .unwrap();
+        let ctx = egui::Context::default();
+        crate::ui::setup(&ctx);
+        ctx.set_theme(egui::Theme::Light);
+        ctx.all_styles_mut(|style| style.animation_time = 0.0);
+        let identity = controls.identity(&catalog).unwrap();
+        controls.picked(
+            PickPurpose::Import(identity, true),
+            Some(
+                fixture
+                    .path()
+                    .join("long-directory".repeat(20))
+                    .join("A long mod archive.zip"),
+            ),
+            &catalog,
+        );
+        let screen = egui::Rect::from_min_size(egui::Pos2::ZERO, egui::vec2(640.0, 480.0));
+        let render = |controls: &mut Controls| {
+            let mut output = ctx.run_ui(
+                egui::RawInput {
+                    screen_rect: Some(screen),
+                    ..Default::default()
+                },
+                |ui| controls.show(ui, &catalog),
+            );
+            output.textures_delta.clear();
+            output
+        };
+        render(&mut controls);
+        render(&mut controls);
+        let output = render(&mut controls);
+        let cancel = output
+            .shapes
+            .iter()
+            .find_map(|shape| match &shape.shape {
+                egui::epaint::Shape::Text(text) if text.galley.text() == "Cancel" => {
+                    Some(text.pos + text.galley.rect.center().to_vec2())
+                }
+                _ => None,
+            })
+            .unwrap();
+        let approve = controls.confirm_rect.unwrap();
+        assert!((cancel.y - approve.center().y).abs() < 1.0);
+        assert!(cancel.x < approve.left());
+        let popup = ctx.read_response(egui::Id::new(("management-review", "Import ZIP"))).unwrap().rect;
+        assert!(screen.contains_rect(popup));
+        assert!(popup.center().distance(screen.center()) < 2.0);
+        assert!(popup.contains_rect(approve));
+
+        // A long review must not leave a large empty popup behind when the next review is short.
+        controls.dialog = Some(Dialog::SettingsImport(Settings::default(), false));
+        render(&mut controls);
+        render(&mut controls);
+        render(&mut controls);
+        let popup = ctx.read_response(egui::Id::new(("management-review", "Review imported settings"))).unwrap().rect;
+        assert!(
+            popup.height() < 300.0,
+            "short review must shrink to its content"
+        );
+    }
+
+    #[test]
+    fn clicking_library_behind_a_review_only_dismisses_the_popup() {
+        let fixture = tempfile::tempdir().unwrap();
+        let mut catalog = Catalog::default();
+        let generation = catalog.begin_scan(fixture.path().join("game"));
+        catalog.accept_scan(generation, Ok(vec![]));
+        let mut controls = Controls::new(
+            fixture.path().join("managed"),
+            fixture.path().into(),
+            Settings::default(),
+            || {},
+        )
+        .unwrap();
+        let identity = controls.identity(&catalog).unwrap();
+        controls.picked(
+            PickPurpose::Import(identity, true),
+            Some(fixture.path().join("mod.zip")),
+            &catalog,
+        );
+        let ctx = egui::Context::default();
+        frame(&ctx, &mut controls, &catalog, vec![]);
+        frame(&ctx, &mut controls, &catalog, vec![]);
+        let pos = controls.import_rect.unwrap().center();
+        frame(
+            &ctx,
+            &mut controls,
+            &catalog,
+            vec![
+                egui::Event::PointerMoved(pos),
+                egui::Event::PointerButton {
+                    pos,
+                    button: egui::PointerButton::Primary,
+                    pressed: true,
+                    modifiers: Default::default(),
+                },
+                egui::Event::PointerButton {
+                    pos,
+                    button: egui::PointerButton::Primary,
+                    pressed: false,
+                    modifiers: Default::default(),
+                },
+            ],
+        );
+        assert!(controls.dialog.is_none());
+        assert!(
+            controls.picker.is_none(),
+            "backdrop click must not activate Import folder behind it"
+        );
+        assert!(controls.operations.is_empty());
+    }
+    #[test]
+    fn reviews_are_modal_and_escape_cancels_without_submitting() {
+        let fixture = tempfile::tempdir().unwrap();
+        let catalog = Catalog::default();
+        let mut controls = Controls::new(
+            fixture.path().join("managed"),
+            fixture.path().into(),
+            Settings::default(),
+            || {},
+        )
+        .unwrap();
+        let ctx = egui::Context::default();
+        crate::ui::setup(&ctx);
+        for review in [
+            Dialog::SettingsImport(Settings::default(), false),
+            Dialog::Import {
+                identity: Identity {
+                    root: fixture.path().join("game"),
+                    entry: None,
+                    generation: 0,
+                    operation: 0,
+                },
+                zip: true,
+                path: fixture.path().join("A very long mod archive name.zip"),
+                name: "A very long mod archive name".into(),
+            },
+        ] {
+            controls.dialog = Some(review);
+            frame(&ctx, &mut controls, &catalog, vec![]);
+            frame(&ctx, &mut controls, &catalog, vec![]);
+            assert!(
+                ctx.memory(|memory| memory.top_modal_layer().is_some()),
+                "review must block interaction with the library"
+            );
+            frame(
+                &ctx,
+                &mut controls,
+                &catalog,
+                vec![egui::Event::Key {
+                    key: egui::Key::Escape,
+                    physical_key: None,
+                    pressed: true,
+                    repeat: false,
+                    modifiers: Default::default(),
+                }],
+            );
+            assert!(
+                controls.dialog.is_none(),
+                "Escape must dismiss without approval"
+            );
+            assert!(controls.operations.is_empty());
+            assert!(!controls.settings_path.exists());
+        }
+    }
+
+    #[test]
+    fn source_and_trash_reviews_use_the_same_modal_dismissal() {
+        let fixture = tempfile::tempdir().unwrap();
+        let mut catalog = Catalog::default();
+        let generation = catalog.begin_scan(fixture.path().join("game"));
+        catalog.accept_scan(generation, Ok(vec![]));
+        let mut controls = Controls::new(
+            fixture.path().join("managed"),
+            fixture.path().into(),
+            Settings::default(),
+            || {},
+        )
+        .unwrap();
+        let ctx = egui::Context::default();
+        for trash in [false, true] {
+            let identity = controls.identity(&catalog).unwrap();
+            if trash {
+                controls.trash_entries = Some((identity, vec![]));
+            } else {
+                controls.candidates = Some((identity, vec![]));
+            }
+            frame(&ctx, &mut controls, &catalog, vec![]);
+            frame(&ctx, &mut controls, &catalog, vec![]);
+            assert!(ctx.memory(|memory| memory.top_modal_layer().is_some()));
+            frame(
+                &ctx,
+                &mut controls,
+                &catalog,
+                vec![egui::Event::Key {
+                    key: egui::Key::Escape,
+                    physical_key: None,
+                    pressed: true,
+                    repeat: false,
+                    modifiers: Default::default(),
+                }],
+            );
+            assert!(controls.trash_entries.is_none());
+            assert!(controls.candidates.is_none());
+            assert!(controls.operations.is_empty());
+        }
+    }
     #[test]
     fn picker_selection_requires_import_confirmation_and_rejects_a_changed_game_folder() {
         let dir = tempfile::tempdir().unwrap();

@@ -8,6 +8,8 @@ Import folder is the primary action in the library toolbar, beside Import ZIP an
 
 Import folder and Import ZIP open your desktop's file picker. ZIP selection filters for ZIP archives. After selection, review the chosen path and edit the suggested mod name before selecting Import. Canceling the picker does not import anything. A changed game folder or selection invalidates a pending import selection.
 
+App reviews appear as centered popups over a dimmed library. Import, rename, source attachment, settings import and management confirmations share this layout. Long paths wrap, long reviews scroll, and the action row remains visible. Cancel, Escape or a click on the backdrop dismisses a review without applying it. Source candidates and trash entries also open in popups; reviewing an entry replaces that popup with its confirmation.
+
 Choose folder and Change folder open the desktop folder picker for the Sims 4 folder containing Mods. You can also enter a game path manually. Settings import opens a JSON file picker and then shows the existing confirmation review. Settings export opens a save dialog suggesting `ts4-mod-manager-settings.json`; exports still refuse to overwrite an existing file.
 
 The picker starts in Downloads when that folder exists, otherwise in your home directory, and remembers the last selected location during the session. Change folder starts in the current game folder. Only one desktop picker can be open at a time. Picker work runs separately from approved management operations and does not block the UI or normal shutdown.
