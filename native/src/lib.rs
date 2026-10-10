@@ -10,3 +10,5 @@ pub mod settings;
 pub mod workflows;
 
 mod photo_cache;
+
+mod file_picker;

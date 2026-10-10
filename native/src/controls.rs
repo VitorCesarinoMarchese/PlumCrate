@@ -13,7 +13,7 @@ enum Dialog {
     Import {
         identity: Identity,
         zip: bool,
-        path: String,
+        path: PathBuf,
         name: String,
     },
     Rename(Identity, String),
@@ -25,6 +25,16 @@ enum Dialog {
         lines: Vec<String>,
     },
     SettingsImport(Settings, bool),
+}
+enum PickPurpose {
+    Import(Identity, bool),
+    GameFolder,
+    SettingsImport,
+    SettingsExport(Settings),
+}
+struct PendingPicker {
+    purpose: PickPurpose,
+    receiver: std::sync::mpsc::Receiver<Option<PathBuf>>,
 }
 pub struct Controls {
     pub settings_page: bool,
@@ -48,7 +58,10 @@ pub struct Controls {
         Vec<ts4_mod_manager_core::source_candidates::SourceCandidate>,
     )>,
     trash_entries: Option<(Identity, Vec<ts4_mod_manager_core::lifecycle::TrashEntry>)>,
-    transfer_path: String,
+    picker: Option<PendingPicker>,
+    picker_directory: PathBuf,
+    #[cfg(test)]
+    picker_sender: Option<std::sync::mpsc::Sender<Option<PathBuf>>>,
     include_key: bool,
     notice: Option<String>,
     pub error: Option<String>,
@@ -87,13 +100,105 @@ impl Controls {
             dialog: None,
             candidates: None,
             trash_entries: None,
-            transfer_path: String::new(),
+            picker: None,
+            picker_directory: if home.join("Downloads").is_dir() { home.join("Downloads") } else { home.clone() },
+            #[cfg(test)]
+            picker_sender: None,
             include_key: false,
             notice: None,
             error: None,
             refresh: None,
             roots_changed: None,
         })
+    }
+    fn start_picker(
+        &mut self,
+        purpose: PickPurpose,
+        ctx: &egui::Context,
+        initial: Option<PathBuf>,
+    ) {
+        if self.picker.is_some() {
+            return;
+        }
+        let kind = match &purpose {
+            PickPurpose::Import(_, true) => crate::file_picker::Kind::ImportZip,
+            PickPurpose::Import(_, false) => crate::file_picker::Kind::ImportFolder,
+            PickPurpose::GameFolder => crate::file_picker::Kind::GameFolder,
+            PickPurpose::SettingsImport => crate::file_picker::Kind::SettingsImport,
+            PickPurpose::SettingsExport(_) => crate::file_picker::Kind::SettingsExport,
+        };
+        let initial = initial.unwrap_or_else(|| self.picker_directory.clone());
+        #[cfg(not(test))]
+        let result = crate::file_picker::open(kind, initial, ctx.clone());
+        #[cfg(test)]
+        let result: std::io::Result<_> = {
+            let _ = (kind, initial, ctx);
+            let (sender, receiver) = std::sync::mpsc::channel();
+            self.picker_sender = Some(sender);
+            Ok(receiver)
+        };
+        match result {
+            Ok(receiver) => self.picker = Some(PendingPicker { purpose, receiver }),
+            Err(error) => {
+                self.error = Some(format!("Cannot open the desktop file picker: {error}"))
+            }
+        }
+    }
+    pub fn choose_game_folder(&mut self, ctx: &egui::Context, initial: Option<PathBuf>) {
+        self.start_picker(PickPurpose::GameFolder, ctx, initial);
+    }
+    pub fn picker_open(&self) -> bool {
+        self.picker.is_some()
+    }
+    fn picked(&mut self, purpose: PickPurpose, path: Option<PathBuf>, catalog: &Catalog) {
+        let Some(path) = path else {
+            return;
+        };
+        if let Some(parent) = path.parent() {
+            self.picker_directory = parent.to_path_buf();
+        }
+        match purpose {
+            PickPurpose::GameFolder => self.roots_changed = Some(path),
+            PickPurpose::Import(identity, zip) => {
+                if !identity.current(
+                    catalog.root.as_ref(),
+                    catalog.selected.as_ref(),
+                    catalog.generation(),
+                ) {
+                    self.notice =
+                        Some("Game folder or selection changed. Choose the import again.".into());
+                    return;
+                }
+                let name = (if zip {
+                    path.file_stem()
+                } else {
+                    path.file_name()
+                })
+                .map(|name| name.to_string_lossy().into_owned())
+                .unwrap_or_default();
+                self.dialog = Some(Dialog::Import {
+                    identity,
+                    zip,
+                    path,
+                    name,
+                });
+            }
+            PickPurpose::SettingsImport => match Settings::read_transfer(&path) {
+                Ok(mut settings) => {
+                    let included = settings.curseforge_api_key.is_some();
+                    settings.preserve_omitted_key(&self.settings);
+                    if settings.custom_themes.is_empty() {
+                        settings.custom_themes = self.settings.custom_themes.clone();
+                    }
+                    self.dialog = Some(Dialog::SettingsImport(settings, included));
+                }
+                Err(error) => self.error = Some(error),
+            },
+            PickPurpose::SettingsExport(settings) => match settings.save_new(&path) {
+                Ok(()) => self.notice = Some("Settings exported".into()),
+                Err(error) => self.error = Some(error),
+            },
+        }
     }
     fn identity(&mut self, catalog: &Catalog) -> Option<Identity> {
         let root = catalog.root.clone()?;
@@ -226,6 +331,19 @@ impl Controls {
                 .any(|o| !matches!(o.job.action, Action::Lookup(_)) && (o.status == "Queued" || o.status == "Running"))
     }
     pub fn poll(&mut self, catalog: &Catalog) {
+        if let Some(picker) = &self.picker {
+            match picker.receiver.try_recv() {
+                Ok(path) => {
+                    let picker = self.picker.take().unwrap();
+                    self.picked(picker.purpose, path, catalog);
+                }
+                Err(std::sync::mpsc::TryRecvError::Disconnected) => {
+                    self.picker = None;
+                    self.error = Some("The desktop file picker closed unexpectedly. Try again.".into());
+                }
+                Err(std::sync::mpsc::TryRecvError::Empty) => {}
+            }
+        }
         for event in self.worker.drain().collect::<Vec<_>>() {
             match event {
                 Event::Recovered(result) => {
@@ -363,7 +481,7 @@ impl Controls {
     }
     pub fn toolbar(&mut self, ui: &mut egui::Ui, catalog: &Catalog) {
         ui.horizontal_wrapped(|ui| {
-            let ready = catalog.root.is_some() && !catalog.loading;
+            let ready = catalog.root.is_some() && !catalog.loading && self.picker.is_none();
             let import = ui.add_enabled(
                 ready,
                 egui::Button::new("Import folder")
@@ -374,24 +492,14 @@ impl Controls {
             if import.clicked()
                 && let Some(identity) = self.identity(catalog)
             {
-                self.dialog = Some(Dialog::Import {
-                    identity,
-                    zip: false,
-                    path: String::new(),
-                    name: String::new(),
-                })
+                self.start_picker(PickPurpose::Import(identity, false), ui.ctx(), None);
             }
             if ui
                 .add_enabled(ready, egui::Button::new("Import ZIP"))
                 .clicked()
                 && let Some(identity) = self.identity(catalog)
             {
-                self.dialog = Some(Dialog::Import {
-                    identity,
-                    zip: true,
-                    path: String::new(),
-                    name: String::new(),
-                })
+                self.start_picker(PickPurpose::Import(identity, true), ui.ctx(), None);
             }
             if ui
                 .add_enabled(ready, egui::Button::new("Restore from trash"))
@@ -635,21 +743,16 @@ impl Controls {
             ui.add_space(24.0); ui.separator(); ui.add_space(16.0);
             ui.collapsing("Import and export settings", |ui| {
                 ui.label("Custom colors use the separate theme JSON export above.");
-                ui.label("Transfer JSON path"); ui.text_edit_singleline(&mut self.transfer_path);
                 ui.checkbox(&mut self.include_key, "Include API key in export");
                 ui.horizontal_wrapped(|ui| {
-                    let ready = !self.transfer_path.trim().is_empty();
+                    let ready = self.picker.is_none();
                     if ui.add_enabled(ready, egui::Button::new("Export settings")).clicked() {
-                        let mut exported = self.settings.clone(); if !self.include_key { exported.curseforge_api_key = None; }
-                        match exported.save_new(&PathBuf::from(self.transfer_path.trim())) { Ok(()) => self.notice = Some("Settings exported".into()), Err(error) => self.error = Some(error) }
+                        let mut exported = self.settings.clone();
+                        if !self.include_key { exported.curseforge_api_key = None; }
+                        self.start_picker(PickPurpose::SettingsExport(exported), ui.ctx(), None);
                     }
-                    if ui.add_enabled(ready, egui::Button::new("Preview settings import")).clicked() {
-                        match Settings::read_transfer(&PathBuf::from(self.transfer_path.trim())) {
-                            Ok(mut settings) => { let included = settings.curseforge_api_key.is_some(); settings.preserve_omitted_key(&self.settings);
-                                if settings.custom_themes.is_empty() { settings.custom_themes = self.settings.custom_themes.clone(); }
-                                self.dialog = Some(Dialog::SettingsImport(settings, included)); }
-                            Err(error) => self.error = Some(error),
-                        }
+                    if ui.add_enabled(ready, egui::Button::new("Import settings")).clicked() {
+                        self.start_picker(PickPurpose::SettingsImport, ui.ctx(), None);
                     }
                 });
             });
@@ -836,7 +939,7 @@ impl Controls {
                         name,
                     } => {
                         ui.label(if *zip { "ZIP path" } else { "Folder path" });
-                        ui.text_edit_singleline(path);
+                        ui.label(path.display().to_string());
                         ui.label("Mod name");
                         ui.text_edit_singleline(name);
                         if ui
@@ -845,7 +948,7 @@ impl Controls {
                                     catalog.root.as_ref(),
                                     catalog.selected.as_ref(),
                                     catalog.generation(),
-                                ) && !path.trim().is_empty()
+                                ) && !path.as_os_str().is_empty()
                                     && !name.trim().is_empty(),
                                 egui::Button::new("Import"),
                             )
@@ -856,12 +959,12 @@ impl Controls {
                                     identity.clone(),
                                     if *zip {
                                         Action::ImportZip {
-                                            path: path.trim().into(),
+                                            path: path.clone(),
                                             name: name.trim().into(),
                                         }
                                     } else {
                                         Action::ImportFolder {
-                                            path: path.trim().into(),
+                                            path: path.clone(),
                                             name: name.trim().into(),
                                         }
                                     },
@@ -995,6 +1098,101 @@ impl Controls {
 }
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn picker_selection_requires_import_confirmation_and_rejects_a_changed_game_folder() {
+        let dir = tempfile::tempdir().unwrap();
+        let mut catalog = Catalog::default();
+        let generation = catalog.begin_scan(dir.path().join("game"));
+        catalog.accept_scan(generation, Ok(vec![]));
+        let mut controls = Controls::new(
+            dir.path().join("managed"),
+            dir.path().into(),
+            Settings::default(),
+            || {},
+        )
+        .unwrap();
+        let identity = controls.identity(&catalog).unwrap();
+        let source = dir.path().join("My mod.zip");
+        controls.picked(
+            PickPurpose::Import(identity.clone(), true),
+            Some(source.clone()),
+            &catalog,
+        );
+        assert!(matches!(
+            &controls.dialog,
+            Some(Dialog::Import { zip: true, .. })
+        ));
+        assert!(
+            matches!(&controls.dialog, Some(Dialog::Import { path, name, .. }) if path == &source && name == "My mod")
+        );
+        assert!(controls.operations.is_empty());
+        controls.dialog = None;
+        catalog.begin_scan(dir.path().join("other-game"));
+        controls.picked(PickPurpose::Import(identity, true), Some(source), &catalog);
+        assert!(controls.dialog.is_none());
+        assert!(controls.operations.is_empty());
+    }
+
+    #[test]
+    fn cancelled_picker_does_not_create_a_dialog_or_write_files() {
+        let dir = tempfile::tempdir().unwrap();
+        let mut controls = Controls::new(
+            dir.path().join("managed"),
+            dir.path().into(),
+            Settings::default(),
+            || {},
+        )
+        .unwrap();
+        controls.picked(
+            PickPurpose::SettingsExport(Settings::default()),
+            None,
+            &Catalog::default(),
+        );
+        assert!(controls.notice.is_none());
+        assert!(controls.dialog.is_none());
+        assert!(!controls.settings_path.exists());
+    }
+
+    #[test]
+    fn settings_picker_previews_import_and_export_refuses_overwrite() {
+        let dir = tempfile::tempdir().unwrap();
+        let mut settings = Settings {
+            curseforge_api_key: Some("fixture-secret".into()),
+            ..Settings::default()
+        };
+        let mut controls = Controls::new(
+            dir.path().join("managed"),
+            dir.path().into(),
+            settings.clone(),
+            || {},
+        )
+        .unwrap();
+        let path = dir.path().join("transfer.json");
+        settings.curseforge_api_key = None;
+        controls.picked(
+            PickPurpose::SettingsExport(settings),
+            Some(path.clone()),
+            &Catalog::default(),
+        );
+        let bytes = std::fs::read(&path).unwrap();
+        assert!(!String::from_utf8_lossy(&bytes).contains("fixture-secret"));
+        controls.picked(
+            PickPurpose::SettingsImport,
+            Some(path.clone()),
+            &Catalog::default(),
+        );
+        assert!(
+            matches!(&controls.dialog, Some(Dialog::SettingsImport(settings, false)) if settings.curseforge_api_key.as_deref() == Some("fixture-secret"))
+        );
+        assert!(!controls.settings_path.exists());
+        controls.picked(
+            PickPurpose::SettingsExport(Settings::default()),
+            Some(path.clone()),
+            &Catalog::default(),
+        );
+        assert_eq!(std::fs::read(path).unwrap(), bytes);
+        assert!(controls.error.as_deref().unwrap().contains("unused"));
+    }
     #[test]
     fn mode_switch_preserves_custom_theme_and_unsaved_editor_colors() {
         let fixture = tempfile::tempdir().unwrap();
@@ -1241,7 +1439,12 @@ mod tests {
                 },
             ],
         );
-        assert!(matches!(controls.dialog, Some(Dialog::Import { .. })));
+        assert!(controls.picker.is_some());
+        assert!(controls.dialog.is_none());
+        assert!(controls.operations.is_empty());
+        controls.picker_sender.take().unwrap().send(Some(dir.path().join("Chosen folder"))).unwrap();
+        controls.poll(&catalog);
+        assert!(matches!(controls.dialog, Some(Dialog::Import { zip: false, .. })));
         assert!(controls.operations.is_empty());
     }
     #[test]

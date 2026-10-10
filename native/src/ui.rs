@@ -301,6 +301,11 @@ impl View {
                     ui.add(Icon::Folder.image(ui.visuals().weak_text_color(), 18.0));
                     match catalog.root.as_ref().filter(|_| !self.editing_root) {
                         None => {
+                            if let Some(c) = controls.as_deref_mut()
+                                && ui.add_enabled(!c.picker_open(), egui::Button::new("Choose folder")).clicked()
+                            {
+                                c.choose_game_folder(ui.ctx(), None);
+                            }
                             let response = ui.add_sized(
                                 [(ui.available_width() - 80.0).max(100.0), 36.0],
                                 egui::TextEdit::singleline(&mut self.root_input)
@@ -347,8 +352,12 @@ impl View {
                                 },
                             );
                             if ui.button("Change folder").clicked() {
-                                self.root_input = path.into_owned();
-                                self.editing_root = true;
+                                if let Some(c) = controls.as_deref_mut() {
+                                    c.choose_game_folder(ui.ctx(), Some(root.clone()));
+                                } else {
+                                    self.root_input = path.into_owned();
+                                    self.editing_root = true;
+                                }
                             }
                         }
                     }

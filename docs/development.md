@@ -31,6 +31,8 @@ Use `--settings` to open Settings directly. The [native app guide](native-app.md
 
 ## Local storage and safety
 
+Native file and folder selection uses `rfd` with the XDG desktop portal, as in [ZapFast's dependency configuration](https://github.com/crmne/zapfast/blob/main/Cargo.toml). A Linux desktop needs a working XDG portal and file-chooser backend for its native picker. `rfd` can fall back to Zenity when the portal is unavailable. The adapter in `native/src/file_picker.rs` returns paths on a channel; `Controls` retains each request's purpose and import identity, handles cancellation, and keeps existing confirmation and filesystem safety checks.
+
 Managed files live in `~/.local/share/sims4-mod-manager`. Scanning does not create managed storage. Unreadable folders, file entries and damaged managed metadata report an incomplete scan rather than a successful partial catalog. Each managed mod keeps its metadata in `meta.json`.
 
 Settings live in `~/.config/ts4-mod-manager/settings.json`. Saves use atomic replacement and restricted permissions. Custom theme colors persist locally and have a separate JSON export. Settings transfers omit the API key unless explicitly included.
