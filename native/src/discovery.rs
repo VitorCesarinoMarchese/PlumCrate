@@ -219,6 +219,7 @@ impl DiscoverView {
                 sort: self.sort,
                 category: self.category,
                 index: 0,
+                ..Default::default()
             },
         );
     }

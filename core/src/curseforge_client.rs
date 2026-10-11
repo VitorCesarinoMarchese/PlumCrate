@@ -106,8 +106,13 @@ impl<T: CurseForgeTransport> CurseForgeClient<T> {
         use crate::curseforge_browse::{MAX_SEARCH_RESULTS, PAGE_SIZE};
         if query.index >= MAX_SEARCH_RESULTS { return Err(SourceLookupError::InvalidResponse); }
         let mut request = build_search_request(Some(&self.api_key), &query.search)?;
-        request.url.push_str(&format!("&sortField={}&sortOrder={}&index={}&pageSize={PAGE_SIZE}", query.sort.field(), query.sort.order(), query.index));
+        if let Some(field) = query.sort.field() {
+            request.url.push_str(&format!("&sortField={field}&sortOrder={}", query.sort.order()));
+        }
+        request.url.push_str(&format!("&index={}&pageSize={PAGE_SIZE}", query.index));
+        if let Some(class_id) = query.class_id { request.url.push_str(&format!("&classId={class_id}")); }
         if let Some(category) = query.category { request.url.push_str(&format!("&categoryId={category}")); }
+        if let Some(version) = &query.game_version { request.url.push_str(&format!("&gameVersion={}", encode_query(version))); }
         let (status, body) = self.transport.get(&request)?;
         classify_status(status)?;
         let page = crate::curseforge_browse::parse_browse_response(&body)?;
@@ -120,6 +125,13 @@ impl<T: CurseForgeTransport> CurseForgeClient<T> {
         let (status, body) = self.transport.get(&request)?;
         classify_status(status)?;
         crate::curseforge_browse::parse_categories_response(&body)
+    }
+
+    pub fn browse_game_versions(&self) -> Result<Vec<String>, SourceLookupError> {
+        let request = CurseForgeRequest { url: format!("{CURSEFORGE_API_BASE}/v1/games/{SIMS4_GAME_ID}/versions"), api_key: self.api_key.clone() };
+        let (status, body) = self.transport.get(&request)?;
+        classify_status(status)?;
+        crate::curseforge_browse::parse_game_versions_response(&body)
     }
 
     pub fn search_mods(&self, search_filter: &str) -> Result<Vec<CurseForgeModSummary>, SourceLookupError> {
