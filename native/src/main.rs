@@ -94,6 +94,8 @@ fn run() -> Result<(), String> {
                 move || wake_ctx.request_repaint(),
             )?;
             controls.settings_page = options.settings_page;
+            let mut view = View::default();
+            view.discovery = ts4_mod_manager_native::discovery::DiscoverView::with_cache(options.home.join(".cache/ts4-mod-manager/photos"));
             jobs.submit(Request::Detect {
                 generation: 0,
                 home: options.home,
@@ -101,7 +103,7 @@ fn run() -> Result<(), String> {
             let mut app = NativeApp {
                 controls,
                 catalog: Catalog::default(),
-                view: View::default(),
+                view,
                 jobs,
                 managed_root: options.managed_root,
                 scrolling: Default::default(),

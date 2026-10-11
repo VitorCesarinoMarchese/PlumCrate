@@ -14,6 +14,26 @@ Choose folder and Change folder open the desktop folder picker for the Sims 4 fo
 
 The picker starts in Downloads when that folder exists, otherwise in your home directory, and remembers the last selected location during the session. Change folder starts in the current game folder. Only one desktop picker can be open at a time. Picker work runs separately from approved management operations and does not block the UI or normal shutdown.
 
+## Browse CurseForge
+
+**Browse mods** opens a separate Sims 4 CurseForge browser without requiring a game folder. It uses the API key saved in local Settings. Unsaved key edits do not affect requests. The **Open Settings** action appears when the key is missing or rejected.
+
+With a saved key, the browser loads popular projects. Search submits through **Search** or Enter; Ctrl+F focuses the browser search field. Category choices come from CurseForge. Sorting offers Popular, Most downloaded, Recently updated, and Name. Previous and Next use the submitted query and provider pagination, with 24 results per page and the API's 10,000-result limit. Editing a search without submitting it does not change page navigation.
+
+Project cards show provider names, authors, logos, summaries, categories, download counts, and modification dates. **View details** opens the full summary and provider screenshots inside the app. **Back to results** or Escape restores the current results. **Open on CurseForge** and **Copy link** appear only when the API supplies a usable HTTPS project URL. Broken provider images hide. Preview requests omit Referer.
+
+Switching to **My mods** preserves local search and selection. Browsing does not install or update mods, write mod metadata, or attach sources. Use the existing import controls for files you already have.
+
+Requests run in a separate read-only worker. Pending searches coalesce and late responses cannot replace newer results. Loading, no matches, missing or rejected credentials, rate limits, network errors, and unavailable providers have separate states. Each request uses the existing bounded CurseForge transport. Normal shutdown does not wait for provider I/O.
+
+The capture example uses only synthetic API responses and local procedural images:
+
+```sh
+cargo run --manifest-path native/Cargo.toml --locked --example verify_discovery -- native/target/ui-discovery
+```
+
+Live searches need a valid locally saved key. The implementation was checked against fixtures because no key was available during development.
+
 ## Build and launch
 
 Requires Rust 1.98 or later and native Linux graphics support. Fastframe is pinned to `bb79dbddef01e660f9cfc37ccd9dff1c299a8d47`. `Cargo.lock` pins the resolved dependencies, including egui/eframe 0.36.2. The native app uses published egui/winit rather than the optional Fastframe forks.

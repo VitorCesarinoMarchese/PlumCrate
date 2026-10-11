@@ -113,6 +113,7 @@ impl Controls {
             roots_changed: None,
         })
     }
+    pub fn source_api_key(&self) -> Option<&str> { self.saved_settings.curseforge_api_key.as_deref() }
     fn start_picker(
         &mut self,
         purpose: PickPurpose,
@@ -668,7 +669,7 @@ impl Controls {
             Err(error) => self.error = Some(error),
         }
     }
-    pub fn settings_content(&mut self, ui: &mut egui::Ui, catalog: &Catalog) {
+    pub fn settings_content(&mut self, ui: &mut egui::Ui, catalog: &Catalog, back_label: &str) {
         let ctx = ui.ctx().clone();
         ui.horizontal(|ui| {
             ui.label(egui::RichText::new("Settings").size(27.0).strong());
@@ -679,7 +680,7 @@ impl Controls {
                 if ui.add_enabled(self.settings_dirty(), egui::Button::new("Discard")).clicked() {
                     self.discard_preferences(&ctx);
                 }
-                if ui.button("Back to library").on_hover_text("Back to library (Escape)").clicked() {
+                if ui.button(back_label).on_hover_text(format!("{back_label} (Escape)")).clicked() {
                     self.settings_page = false;
                 }
             });
@@ -1499,7 +1500,7 @@ mod tests {
         let fixture = tempfile::tempdir().unwrap();
         let mut controls = Controls::new(fixture.path().join("managed"), fixture.path().into(), Settings::default(), || {}).unwrap();
         let ctx = egui::Context::default();
-        let mut output = ctx.run_ui(egui::RawInput::default(), |ui| controls.settings_content(ui, &Catalog::default()));
+        let mut output = ctx.run_ui(egui::RawInput::default(), |ui| controls.settings_content(ui, &Catalog::default(), "Back to library"));
         output.textures_delta.clear();
         assert!(!controls.settings_dirty());
     }

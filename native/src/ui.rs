@@ -202,6 +202,8 @@ pub struct View {
     pub instances: Vec<GameInstance>,
     pub scan_ms: Option<f64>,
     pub stats: RenderStats,
+    pub browse_page: bool,
+    pub discovery: crate::discovery::DiscoverView,
     detail_open: Option<EntryId>,
     editing_root: bool,
     help_open: bool,
@@ -214,6 +216,8 @@ pub struct View {
 #[derive(Default)]
 pub struct RenderStats {
     pub logo: Option<egui::Rect>,
+    pub browse_tab: Option<egui::Rect>,
+    pub library_tab: Option<egui::Rect>,
     pub theme_button: Option<egui::Rect>,
     pub rows: usize,
     pub files: usize,
@@ -320,6 +324,24 @@ impl View {
                 });
                 ui.add_space(6.0);
                 ui.horizontal(|ui| {
+                    let settings = controls.as_ref().is_some_and(|c| c.settings_page);
+                    let library = ui.add(egui::Button::new("My mods").selected(!self.browse_page && !settings));
+                    self.stats.library_tab = Some(library.rect);
+                    if library.clicked() {
+                        self.browse_page = false;
+                        if let Some(c) = controls.as_deref_mut() { c.settings_page = false; }
+                    }
+                    let browse = ui.add(egui::Button::image_and_text(Icon::Search.image(foreground, 16.0), "Browse mods").selected(self.browse_page && !settings));
+                    self.stats.browse_tab = Some(browse.rect);
+                    if browse.clicked() {
+                        self.browse_page = true;
+                        self.detail_open = None;
+                        if let Some(c) = controls.as_deref_mut() { c.settings_page = false; }
+                    }
+                });
+                if self.browse_page { return; }
+                ui.add_space(6.0);
+                ui.horizontal(|ui| {
                     ui.add(Icon::Folder.image(ui.visuals().weak_text_color(), 18.0));
                     match catalog.root.as_ref().filter(|_| !self.editing_root) {
                         None => {
@@ -421,12 +443,14 @@ impl View {
             .show(ui, |ui| {
                 ui.horizontal_wrapped(|ui| {
                     ui.label(
-                        RichText::new("Local library")
+                        RichText::new(if self.browse_page { "CurseForge browser" } else { "Local library" })
                             .size(12.0)
                             .color(ui.visuals().weak_text_color()),
                     );
                     ui.separator();
-                    if catalog.loading {
+                    if self.browse_page {
+                        ui.label(RichText::new("Browse and inspect mods before adding them to your library.").size(12.0).color(ui.visuals().weak_text_color()));
+                    } else if catalog.loading {
                         ui.spinner();
                         ui.label(RichText::new("Scanning your Mods folder...").size(12.0));
                     } else if let Some(ms) = self.scan_ms {
@@ -450,7 +474,7 @@ impl View {
             });
 
         let settings_page = controls.as_ref().is_some_and(|c| c.settings_page);
-        if !narrow {
+        if !narrow && !self.browse_page {
             egui::Panel::left("library-navigation")
                 .exact_size(176.0)
                 .resizable(false)
@@ -487,6 +511,7 @@ impl View {
                         .selected(active);
                         if ui.add_sized([ui.available_width(), 40.0], button).clicked() {
                             catalog.set_filter(filter);
+                            self.browse_page = false;
                             if let Some(c) = controls.as_deref_mut() {
                                 c.settings_page = false;
                             }
@@ -501,7 +526,13 @@ impl View {
         egui::CentralPanel::default().frame(egui::Frame::new().fill(ui.visuals().panel_fill).inner_margin(24))
             .show(ui, |ui| {
                 if settings_page {
-                    if let Some(c) = controls.as_deref_mut() { c.settings_content(ui, catalog); }
+                    if let Some(c) = controls.as_deref_mut() { c.settings_content(ui, catalog, if self.browse_page { "Back to browsing" } else { "Back to library" }); }
+                    return;
+                }
+                if self.browse_page {
+                    let key = controls.as_ref().and_then(|c| c.source_api_key());
+                    let settings_requested = self.discovery.show(ui, key, search_requested);
+                    if settings_requested && let Some(c) = controls.as_deref_mut() { c.settings_page = true; }
                     return;
                 }
                 if let Some(error) = &catalog.error {
@@ -589,6 +620,7 @@ impl View {
             self.detail_open = None;
         }
         if !settings_page
+            && !self.browse_page
             && !self.help_open
             && self.detail_open.is_some()
             && !controls
@@ -603,6 +635,7 @@ impl View {
                     for (title, body) in [
                         ("Add mods", "Choose your Sims 4 game folder, then Import folder or Import ZIP. Originals stay in place. Open the imported mod and Enable it when ready."),
                         ("Inspect and organize", "Click a card or list row for details. Use Previous/Next to browse. Right-click a mod for rename, source and trash actions. Trash remains recoverable."),
+                        ("Browse CurseForge", "Browse mods searches The Sims 4 mods and custom content on CurseForge. Save your API key in Settings, then search, filter by category or sort. Open a project to read its summary and view screenshots. Browsing does not install mods or attach sources."),
                         ("Save a source", "Find source uses your locally saved CurseForge key. No match? Attach a known URL manually. Review every attachment before saving."),
                         ("Change appearance", "Settings previews your choices. Save settings keeps them; Discard restores saved values. The header Light/Dark switch saves immediately."),
                         ("Keyboard shortcuts", "Ctrl+F searches · Alt+Left/Right browses open mod details · Tab moves focus · Enter/Space activates buttons · Escape goes back one level · F1 opens Help."),

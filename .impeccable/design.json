@@ -1,6 +1,6 @@
 {
   "schemaVersion": 2,
-  "generatedAt": "2026-10-09T14:49:15.864576+00:00",
+  "generatedAt": "2026-10-11T15:12:19.467892+00:00",
   "title": "Design System: Sims 4 Mod Manager native",
   "extensions": {
     "platform": "Linux Fastframe/egui",
@@ -11,7 +11,8 @@
       "native/src/controls.rs",
       "native/src/settings.rs",
       "native/src/main.rs",
-      "native/src/cli.rs"
+      "native/src/cli.rs",
+      "native/src/discovery.rs"
     ],
     "units": "egui logical points",
     "colorMeta": {
@@ -106,6 +107,10 @@
       {
         "name": "narrow-library",
         "value": "1040pt"
+      },
+      {
+        "name": "short-browser",
+        "value": "600pt content height"
       }
     ],
     "nativeLayout": {
@@ -192,6 +197,21 @@
         "name": "Status and activity",
         "source": "native/src/controls.rs::Controls::activity",
         "description": "Bottom status, notices and errors with disclosed operation history."
+      },
+      {
+        "name": "CurseForge browser",
+        "source": "native/src/discovery.rs::DiscoverView::content",
+        "description": "Provider search, category and sort controls, result counts and pagination using the existing native theme."
+      },
+      {
+        "name": "CurseForge project card",
+        "source": "native/src/discovery.rs::DiscoverView::cards",
+        "description": "Provider logo, name, author, bounded summary and metadata with aligned header, summary and View details rows."
+      },
+      {
+        "name": "CurseForge project details",
+        "source": "native/src/discovery.rs::DiscoverView::details",
+        "description": "Pinned Back to results above full summary, categories, supplied links and screenshots in one scroll region."
       }
     ],
     "previewPolicy": {
@@ -224,6 +244,88 @@
       "captureCount": 9,
       "fixtureInputsUnchanged": true,
       "independentDisposition": "ship"
+    },
+    "nativeDiscovery": {
+      "theme": "Existing light/dark roles; no new color tokens.",
+      "navigation": "My mods and Browse mods below the logo; browser uses the full central panel without the library rail.",
+      "layout": {
+        "searchHeight": 42,
+        "searchButtonSize": [
+          88,
+          36
+        ],
+        "columnGap": 16,
+        "columnBudget": 280,
+        "columnFormula": "max(1, floor((available_width + 16) / 280))",
+        "cardWidthFormula": "(available_width - 16 * (columns - 1)) / columns",
+        "cardPadding": 14,
+        "cardCornerRadius": 8,
+        "cardMinContentHeight": 238,
+        "virtualRowHeight": 268,
+        "headerRegionHeight": 64,
+        "summaryRegionHeight": 54,
+        "logoMaxSize": [
+          60,
+          60
+        ],
+        "projectLogoMaxSize": [
+          80,
+          80
+        ],
+        "screenshotMaxSize": [
+          780,
+          420
+        ],
+        "shortWindow": "Below 600 points of content height, everything below the browser heading scrolls together.",
+        "projectScroll": "Back to results remains above the scroll region."
+      },
+      "typography": {
+        "cardName": 16,
+        "cardNameMaxRows": 2,
+        "cardSummary": 14,
+        "cardSummaryMaxRows": 3,
+        "cardMetadata": 12,
+        "projectTitle": 26,
+        "screenshotsHeading": 18
+      },
+      "states": {
+        "cardHoverAndFocus": "Existing selection stroke inside the 8-point card border when hovered or focused.",
+        "search": "Search or Enter submits; category and sort changes restart at index zero.",
+        "sortChoices": [
+          "Popular",
+          "Downloads",
+          "Updated",
+          "Name"
+        ],
+        "counts": "Provider pagination supplies result count, range and Previous/Next availability.",
+        "setup": "Connect to CurseForge with Open Settings and instructions to save a local API key.",
+        "error": "Search unavailable with provider-specific guidance, Open Settings and Try again.",
+        "categoryError": "Visible warning; available projects remain shown.",
+        "return": "Back to results or Escape restores the current page; Ctrl+F returns to browser search."
+      },
+      "images": {
+        "sizing": "contain within bounded sizes",
+        "pending": "spinner",
+        "failure": "hide",
+        "httpReferer": false
+      },
+      "scope": "Provider search and in-app inspection only; no downloads, updates, metadata writes or source attachments. Requests use the saved local key.",
+      "verification": {
+        "captures": [
+          "browse-dark",
+          "browse-light",
+          "browse-narrow",
+          "browse-small",
+          "project-dark",
+          "project-small",
+          "browse-setup",
+          "browse-error"
+        ],
+        "captureDirectory": "native/target/ui-discovery",
+        "fixtureContent": "Synthetic test projects and procedural images, not provider results.",
+        "independentDisposition": "ship after keyboard card focus and card-row alignment fixes",
+        "liveProvider": "Not validated; no API key is available in this environment."
+      }
     }
   },
   "components": [],

@@ -2,7 +2,7 @@
 
 ## Use the app
 
-- [App guide](native-app.md): library controls, game folders, themes, source lookup, settings, and command-line options.
+- [App guide](native-app.md): library controls, game folders, themes, CurseForge browsing, source lookup, settings, and command-line options.
 - [Storage and safety](development.md#local-storage-and-safety): local file locations, source attachment, and recoverable management actions.
 
 ## Develop and package

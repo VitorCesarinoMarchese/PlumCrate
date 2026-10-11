@@ -19,6 +19,7 @@ Browse your collection by photo, find a file by name, and choose which mods are 
 | Feature | What you can do |
 | --- | --- |
 | Browse your collection | Switch between photo cards and a compact list. Search mod names and filenames, or filter installed and stored mods. |
+| Search CurseForge | Browse Sims 4 mods and custom content by name, category, and sort order. Read summaries and view screenshots inside the app. Requires your API key in local Settings. |
 | Bring your own mods | Import a local folder or ZIP archive, or review existing game mods before moving them into the managed library. |
 | Choose what loads | Review the files before enabling or disabling a managed mod. |
 | Keep track of sources | Save a source link yourself, or review CurseForge suggestions and confirm a match. |
@@ -44,7 +45,7 @@ See the [app guide](docs/native-app.md) for settings, themes, source lookup, and
 
 ## Your files stay yours
 
-Your library and settings stay on your computer. Local browsing and mod management work without CurseForge. Optional source lookup and remote preview images use network requests.
+Your library and settings stay on your computer. Local browsing and mod management work without CurseForge. Optional CurseForge browsing, source lookup, and remote preview images use network requests.
 
 Management actions require review. The app checks ownership before removing its links, leaves unmanaged files alone, and moves removed managed mods to recoverable trash. Read the [storage and safety details](docs/development.md#local-storage-and-safety) for locations and recovery behavior.
 

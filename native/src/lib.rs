@@ -13,3 +13,5 @@ mod photo_cache;
 
 mod file_picker;
 mod popup;
+
+pub mod discovery;
