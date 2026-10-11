@@ -124,21 +124,6 @@ pub fn apply_settings_theme(ctx: &egui::Context, settings: &crate::settings::Set
         .iter()
         .find(|t| settings.active_custom_theme.as_ref() == Some(&t.name))
     {
-        let colors = &theme.colors;
-        let Some([accent, background, surface, text, muted, border]) = [
-            &colors.accent,
-            &colors.background,
-            &colors.surface,
-            &colors.text,
-            &colors.muted_text,
-            &colors.border,
-        ]
-        .map(|s| hex_color(s))
-        .into_iter()
-        .collect::<Option<Vec<_>>>()
-        .and_then(|v| <Vec<Color32> as TryInto<[Color32; 6]>>::try_into(v).ok()) else {
-            return;
-        };
         let blend = |a: Color32, b: Color32, ratio: f32| {
             Color32::from_rgb(
                 (a.r() as f32 * (1.0 - ratio) + b.r() as f32 * ratio) as u8,
@@ -147,6 +132,21 @@ pub fn apply_settings_theme(ctx: &egui::Context, settings: &crate::settings::Set
             )
         };
         ctx.all_styles_mut(|style| {
+            let colors = theme.palette(style.visuals.dark_mode);
+            let Some([accent, background, surface, text, muted, border]) = [
+                &colors.accent,
+                &colors.background,
+                &colors.surface,
+                &colors.text,
+                &colors.muted_text,
+                &colors.border,
+            ]
+            .map(|s| hex_color(s))
+            .into_iter()
+            .collect::<Option<Vec<_>>>()
+            .and_then(|v| <Vec<Color32> as TryInto<[Color32; 6]>>::try_into(v).ok()) else {
+                return;
+            };
             let v = &mut style.visuals;
             v.panel_fill = background;
             v.extreme_bg_color = surface;

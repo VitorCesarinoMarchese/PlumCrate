@@ -667,7 +667,7 @@ impl Controls {
                     self.use_default_colors(&ctx);
                 }
                 if ui.button("Create custom theme").clicked() {
-                    let mut theme = crate::settings::CustomTheme::base(ui.visuals().dark_mode);
+                    let mut theme = crate::settings::CustomTheme::base();
                     let mut n = 1;
                     while self.settings.custom_themes.iter().any(|t| t.name == format!("Custom theme {n}")) { n += 1; }
                     theme.name = format!("Custom theme {n}");
@@ -690,9 +690,13 @@ impl Controls {
                 ui.add_space(16.0);
                 ui.label("Theme name");
                 ui.add(egui::TextEdit::singleline(&mut theme.name).desired_width(300.0).min_size(egui::vec2(200.0, 34.0)).margin(egui::vec2(10.0, 9.0)));
+                ui.add_space(16.0);
+                let dark = ui.visuals().dark_mode;
+                ui.label(egui::RichText::new(if dark { "Dark colors" } else { "Light colors" }).strong());
+                ui.label(egui::RichText::new("Choose Light or Dark above to edit each version.").color(ui.visuals().weak_text_color()));
                 ui.add_space(8.0);
-                egui::Grid::new("theme-colors").num_columns(3).spacing([16.0, 10.0]).show(ui, |ui| {
-                    for (label, value) in theme.colors.fields() {
+                egui::Grid::new(("theme-colors", dark)).num_columns(3).spacing([16.0, 10.0]).show(ui, |ui| {
+                    for (label, value) in theme.palette_mut(dark).fields() {
                         ui.label(label);
                         ui.add(egui::TextEdit::singleline(value).desired_width(112.0).min_size(egui::vec2(112.0, 34.0)).margin(egui::vec2(10.0, 9.0)).char_limit(7));
                         if let Some(color) = crate::ui::hex_color(value) {
@@ -703,9 +707,9 @@ impl Controls {
                     }
                 });
                 let valid = theme.validate().is_ok();
-                if !valid { ui.colored_label(ui.visuals().error_fg_color, "Enter a name and six colors in #RRGGBB format."); }
+                if let Err(error) = theme.validate() { ui.colored_label(ui.visuals().error_fg_color, error); }
                 ui.horizontal_wrapped(|ui| {
-                    if ui.button("Reset colors").clicked() { theme.colors = crate::settings::CustomTheme::base(ui.visuals().dark_mode).colors; }
+                    if ui.button("Reset colors").clicked() { *theme.palette_mut(dark) = crate::settings::ThemeColors::base(dark); }
                     if ui.add_enabled(valid, egui::Button::new("Copy theme JSON")).clicked() {
                         match serde_json::to_string_pretty(theme) { Ok(json) => { ctx.copy_text(json.clone()); self.theme_json = json; }, Err(_) => self.error = Some("Cannot export theme".into()) }
                     }
@@ -1375,9 +1379,9 @@ mod tests {
     #[test]
     fn mode_switch_preserves_custom_theme_and_unsaved_editor_colors() {
         let fixture = tempfile::tempdir().unwrap();
-        let mut theme = crate::settings::CustomTheme::base(true);
+        let mut theme = crate::settings::CustomTheme::base();
         theme.name = "My theme".into();
-        theme.colors.accent = "#BE73D1".into();
+        theme.dark.accent = "#BE73D1".into();
         let settings = Settings {
             theme: Theme::Dark,
             active_custom_theme: Some(theme.name.clone()),
@@ -1385,27 +1389,32 @@ mod tests {
             ..Settings::default()
         };
         let mut controls = Controls::new(fixture.path().join("managed"), fixture.path().into(), settings, || {}).unwrap();
-        controls.theme_edit.as_mut().unwrap().colors.accent = "#123456".into();
+        controls.theme_edit.as_mut().unwrap().dark.accent = "#123456".into();
         let ctx = egui::Context::default();
         controls.set_color_mode(&ctx, Theme::Light);
         assert_eq!(ctx.theme(), egui::Theme::Light);
         for mode in [egui::Theme::Light, egui::Theme::Dark] {
             let style = ctx.style_of(mode);
-            assert_eq!(style.visuals.panel_fill, egui::Color32::from_rgb(0x13, 0x13, 0x15));
-            assert_eq!(style.visuals.hyperlink_color, egui::Color32::from_rgb(0xBE, 0x73, 0xD1));
+            let (background, accent) = if mode == egui::Theme::Dark {
+                ([0x13, 0x13, 0x15], [0xBE, 0x73, 0xD1])
+            } else {
+                ([0xF6, 0xF4, 0xEF], [0x53, 0x3D, 0x14])
+            };
+            assert_eq!(style.visuals.panel_fill, egui::Color32::from_rgb(background[0], background[1], background[2]));
+            assert_eq!(style.visuals.hyperlink_color, egui::Color32::from_rgb(accent[0], accent[1], accent[2]));
         }
         assert_eq!(controls.settings.active_custom_theme.as_deref(), Some("My theme"));
-        assert_eq!(controls.theme_edit.as_ref().unwrap().colors.accent, "#123456");
+        assert_eq!(controls.theme_edit.as_ref().unwrap().dark.accent, "#123456");
         assert_eq!(controls.theme_edit_original.as_deref(), Some("My theme"));
         let saved = Settings::load(&controls.settings_path).unwrap();
         assert!(saved.theme == Theme::Light);
         assert_eq!(saved.active_custom_theme.as_deref(), Some("My theme"));
-        assert_eq!(saved.custom_themes[0].colors.accent, "#BE73D1");
+        assert_eq!(saved.custom_themes[0].dark.accent, "#BE73D1");
         controls.set_color_mode(&ctx, Theme::Dark);
         assert_eq!(ctx.theme(), egui::Theme::Dark);
         assert_eq!(controls.settings.active_custom_theme.as_deref(), Some("My theme"));
         controls.preview_color_mode(&ctx, Theme::Light);
-        assert_eq!(controls.theme_edit.as_ref().unwrap().colors.accent, "#123456");
+        assert_eq!(controls.theme_edit.as_ref().unwrap().dark.accent, "#123456");
         controls.use_default_colors(&ctx);
         controls.save_preferences(&ctx);
         let saved = Settings::load(&controls.settings_path).unwrap();

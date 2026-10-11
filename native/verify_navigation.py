@@ -49,14 +49,24 @@ def main():
         assert snapshot(fixture) == before, "Captures modified their inputs"
         settings_path = home / ".config/ts4-mod-manager/settings.json"
         settings_path.parent.mkdir(parents=True)
-        settings_path.write_text(json.dumps({"version": 1, "theme": "dark", "gameRoots": [], "activeCustomTheme": "Plum", "customThemes": [{"name": "Plum", "colors": {"accent": "#b18bd0", "background": "#19151f", "surface": "#251e30", "text": "#f6f0ff", "mutedText": "#c7b8d8", "border": "#53445f"}}]}))
-        before = snapshot(fixture)
-        for name, flags in [("navigation-theme-editor.png", []), ("navigation-theme-narrow.png", ["--size", "680x760"])]:
+        settings = {"version": 1, "theme": "dark", "gameRoots": [], "activeCustomTheme": "Plum", "customThemes": [{"name": "Plum",
+            "light": {"accent": "#64387A", "background": "#F8F3FA", "surface": "#FFFFFF", "text": "#251B2C", "mutedText": "#67566F", "border": "#DACDE1"},
+            "dark": {"accent": "#B18BD0", "background": "#19151F", "surface": "#251E30", "text": "#F6F0FF", "mutedText": "#C7B8D8", "border": "#53445F"}}]}
+        theme_captures = [
+            ("navigation-theme-editor.png", "dark", []),
+            ("navigation-theme-narrow.png", "dark", ["--size", "680x760"]),
+            ("navigation-theme-light.png", "light", []),
+            ("navigation-theme-light-narrow.png", "light", ["--size", "680x760"]),
+        ]
+        for name, mode, flags in theme_captures:
+            settings["theme"] = mode
+            settings_path.write_text(json.dumps(settings))
+            before = snapshot(fixture)
             path = args.capture_dir.resolve() / name
             subprocess.run([str(binary), *base, "--settings", *flags, "--screenshot", str(path)], check=True, timeout=60)
             assert path.read_bytes().startswith(b"\x89PNG\r\n\x1a\n")
-        assert snapshot(fixture) == before, "Custom-theme captures modified their inputs"
-        print(json.dumps({"captures": len(captures) + 2, "inputsUnchanged": True, "fixturePathsOnly": True}))
+            assert snapshot(fixture) == before, "Custom-theme captures modified their inputs"
+        print(json.dumps({"captures": len(captures) + len(theme_captures), "inputsUnchanged": True, "fixturePathsOnly": True}))
 
 
 if __name__ == "__main__":

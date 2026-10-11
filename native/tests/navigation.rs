@@ -144,6 +144,263 @@ fn custom_theme_roundtrips_and_rejects_bad_colors_or_missing_selection() {
     );
 }
 
+fn paired_theme_json() -> serde_json::Value {
+    serde_json::json!({
+        "name": "Plum",
+        "light": {"accent": "#64387A", "background": "#F8F3FA", "surface": "#FFFFFF", "text": "#251B2C", "mutedText": "#67566F", "border": "#DACDE1"},
+        "dark": {"accent": "#B18BD0", "background": "#19151F", "surface": "#251E30", "text": "#F6F0FF", "mutedText": "#C7B8D8", "border": "#53445F"}
+    })
+}
+
+#[test]
+fn paired_theme_roundtrips_and_applies_a_different_palette_for_each_mode() {
+    let theme =
+        ts4_mod_manager_native::settings::CustomTheme::parse(&paired_theme_json().to_string())
+            .expect("paired light and dark theme");
+    let settings = Settings {
+        active_custom_theme: Some(theme.name.clone()),
+        custom_themes: vec![theme],
+        ..Settings::default()
+    };
+    let fixture = tempfile::tempdir().unwrap();
+    let path = fixture.path().join("settings.json");
+    settings.save(&path).unwrap();
+    let loaded = Settings::load(&path).unwrap();
+    let json: serde_json::Value = serde_json::from_str(&loaded.export(false).unwrap()).unwrap();
+    assert_eq!(json["customThemes"][0], paired_theme_json());
+    let ctx = egui::Context::default();
+    ui::setup(&ctx);
+    ui::apply_settings_theme(&ctx, &loaded);
+    for (mode, background, accent) in [
+        (egui::Theme::Light, [0xF8, 0xF3, 0xFA], [0x64, 0x38, 0x7A]),
+        (egui::Theme::Dark, [0x19, 0x15, 0x1F], [0xB1, 0x8B, 0xD0]),
+    ] {
+        ctx.set_theme(mode);
+        let visuals = &ctx.style_of(mode).visuals;
+        assert_eq!(
+            visuals.panel_fill,
+            egui::Color32::from_rgb(background[0], background[1], background[2])
+        );
+        assert_eq!(
+            visuals.hyperlink_color,
+            egui::Color32::from_rgb(accent[0], accent[1], accent[2])
+        );
+    }
+}
+
+#[test]
+fn legacy_theme_keeps_its_palette_and_gets_a_companion_version() {
+    for mode in ["light", "dark"] {
+        let paired = paired_theme_json();
+        let legacy = serde_json::json!({"name": "Plum", "colors": paired[mode]});
+        let theme =
+            ts4_mod_manager_native::settings::CustomTheme::parse(&legacy.to_string()).unwrap();
+        let exported = serde_json::to_value(theme).unwrap();
+        assert_eq!(exported[mode], paired[mode], "preserve all existing colors");
+        assert!(exported[if mode == "dark" { "light" } else { "dark" }].is_object());
+        assert!(exported.get("colors").is_none());
+    }
+}
+
+#[test]
+fn paired_theme_requires_two_valid_palettes_and_rejects_mixed_formats() {
+    use ts4_mod_manager_native::settings::CustomTheme;
+    assert!(CustomTheme::parse(&paired_theme_json().to_string()).is_ok());
+    for mode in ["light", "dark"] {
+        let mut json = paired_theme_json();
+        json[mode]["accent"] = "invalid".into();
+        assert!(CustomTheme::parse(&json.to_string()).is_err());
+        let mut json = paired_theme_json();
+        json.as_object_mut().unwrap().remove(mode);
+        assert!(CustomTheme::parse(&json.to_string()).is_err());
+    }
+    let mut json = paired_theme_json();
+    json["colors"] = json["dark"].clone();
+    assert!(CustomTheme::parse(&json.to_string()).is_err());
+    let mut json = paired_theme_json();
+    json["unknown"] = true.into();
+    assert!(CustomTheme::parse(&json.to_string()).is_err());
+}
+
+#[test]
+fn editor_edits_and_saves_both_versions_without_losing_the_other_draft() {
+    let dir = tempfile::tempdir().unwrap();
+    let theme =
+        ts4_mod_manager_native::settings::CustomTheme::parse(&paired_theme_json().to_string())
+            .unwrap();
+    let settings = Settings {
+        theme: ts4_mod_manager_native::settings::Theme::Light,
+        active_custom_theme: Some(theme.name.clone()),
+        custom_themes: vec![theme],
+        ..Settings::default()
+    };
+    let mut controls = Controls::new(
+        dir.path().join("managed"),
+        dir.path().into(),
+        settings.clone(),
+        || {},
+    )
+    .unwrap();
+    controls.settings_page = true;
+    let ctx = egui::Context::default();
+    ui::setup(&ctx);
+    ui::apply_settings_theme(&ctx, &settings);
+    let mut catalog = Catalog::default();
+    let mut view = View::default();
+    for (mode, heading, old, new) in [
+        ("Light", "Light colors", "#64387A", "#554466"),
+        ("Dark", "Dark colors", "#B18BD0", "#CCAADD"),
+    ] {
+        frame(&ctx, &mut view, &mut controls, &mut catalog, vec![]);
+        let output = frame(&ctx, &mut view, &mut controls, &mut catalog, vec![]);
+        frame(
+            &ctx,
+            &mut view,
+            &mut controls,
+            &mut catalog,
+            click_text(&output, mode),
+        );
+        let output = frame(&ctx, &mut view, &mut controls, &mut catalog, vec![]);
+        assert!(has_text(&output, heading));
+        frame(
+            &ctx,
+            &mut view,
+            &mut controls,
+            &mut catalog,
+            click_text(&output, old),
+        );
+        let modifiers = egui::Modifiers {
+            ctrl: true,
+            command: true,
+            ..Default::default()
+        };
+        frame(
+            &ctx,
+            &mut view,
+            &mut controls,
+            &mut catalog,
+            vec![
+                egui::Event::Key {
+                    key: egui::Key::A,
+                    physical_key: None,
+                    pressed: true,
+                    repeat: false,
+                    modifiers,
+                },
+                egui::Event::Text(new.into()),
+            ],
+        );
+        let output = frame(&ctx, &mut view, &mut controls, &mut catalog, vec![]);
+        assert!(has_text(&output, new));
+    }
+    let output = frame(&ctx, &mut view, &mut controls, &mut catalog, vec![]);
+    frame(
+        &ctx,
+        &mut view,
+        &mut controls,
+        &mut catalog,
+        click_text(&output, "Light"),
+    );
+    let output = frame(&ctx, &mut view, &mut controls, &mut catalog, vec![]);
+    assert!(has_text(&output, "#554466"));
+    frame(
+        &ctx,
+        &mut view,
+        &mut controls,
+        &mut catalog,
+        click_text(&output, "Save settings"),
+    );
+    let saved = Settings::load(&dir.path().join(".config/ts4-mod-manager/settings.json")).unwrap();
+    assert_eq!(saved.custom_themes[0].light.accent, "#554466");
+    assert_eq!(saved.custom_themes[0].dark.accent, "#CCAADD");
+    let restarted = egui::Context::default();
+    ui::setup(&restarted);
+    ui::apply_settings_theme(&restarted, &saved);
+    assert_eq!(
+        restarted
+            .style_of(egui::Theme::Light)
+            .visuals
+            .hyperlink_color,
+        egui::Color32::from_rgb(0x55, 0x44, 0x66)
+    );
+    assert_eq!(
+        restarted
+            .style_of(egui::Theme::Dark)
+            .visuals
+            .hyperlink_color,
+        egui::Color32::from_rgb(0xCC, 0xAA, 0xDD)
+    );
+}
+
+#[test]
+fn reset_changes_only_the_visible_palette_and_copy_exports_both_versions() {
+    let dir = tempfile::tempdir().unwrap();
+    let settings = Settings {
+        theme: ts4_mod_manager_native::settings::Theme::Dark,
+        active_custom_theme: Some("Plum".into()),
+        custom_themes: vec![
+            ts4_mod_manager_native::settings::CustomTheme::parse(&paired_theme_json().to_string())
+                .unwrap(),
+        ],
+        ..Settings::default()
+    };
+    let mut controls = Controls::new(
+        dir.path().join("managed"),
+        dir.path().into(),
+        settings.clone(),
+        || {},
+    )
+    .unwrap();
+    controls.settings_page = true;
+    let ctx = egui::Context::default();
+    ui::setup(&ctx);
+    ui::apply_settings_theme(&ctx, &settings);
+    let mut catalog = Catalog::default();
+    let mut view = View::default();
+    let mut render = |events| {
+        let mut output = ctx.run_ui(
+            egui::RawInput {
+                screen_rect: Some(egui::Rect::from_min_size(
+                    egui::Pos2::ZERO,
+                    egui::vec2(1200.0, 1100.0),
+                )),
+                events,
+                ..Default::default()
+            },
+            |ui| {
+                view.show_with_controls(ui, &mut catalog, &mut controls);
+            },
+        );
+        output.textures_delta.clear();
+        output
+    };
+    render(vec![]);
+    let output = render(vec![]);
+    render(click_text(&output, "Reset colors"));
+    let output = render(vec![]);
+    let copied = render(click_text(&output, "Copy theme JSON"));
+    let json = copied
+        .platform_output
+        .commands
+        .iter()
+        .find_map(|command| match command {
+            egui::OutputCommand::CopyText(text) => {
+                Some(serde_json::from_str::<serde_json::Value>(text).unwrap())
+            }
+            _ => None,
+        })
+        .expect("copy a paired theme");
+    assert_eq!(json["light"], paired_theme_json()["light"]);
+    assert_eq!(
+        json["dark"],
+        serde_json::to_value(ts4_mod_manager_native::settings::ThemeColors::base(true)).unwrap()
+    );
+    let output = render(vec![]);
+    render(click_text(&output, "Save settings"));
+    let saved = Settings::load(&dir.path().join(".config/ts4-mod-manager/settings.json")).unwrap();
+    assert_eq!(serde_json::to_value(&saved.custom_themes[0]).unwrap(), json);
+}
+
 fn click_text(output: &egui::FullOutput, label: &str) -> Vec<egui::Event> {
     let pos = output
         .shapes
@@ -268,7 +525,7 @@ fn settings_save_button_stays_visible_above_scrolling_content() {
 #[test]
 fn settings_transfer_remains_compatible_with_the_previous_app() {
     let mut settings = Settings::default();
-    let theme = ts4_mod_manager_native::settings::CustomTheme::base(true);
+    let theme = ts4_mod_manager_native::settings::CustomTheme::base();
     settings.active_custom_theme = Some(theme.name.clone());
     settings.custom_themes.push(theme);
     let dir = tempfile::tempdir().unwrap();

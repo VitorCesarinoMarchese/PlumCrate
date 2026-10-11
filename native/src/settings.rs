@@ -22,6 +22,25 @@ pub struct ThemeColors {
     pub border: String,
 }
 impl ThemeColors {
+    pub fn base(dark: bool) -> Self {
+        let values = if dark {
+            [
+                "#E8CF95", "#131315", "#1B1B1E", "#F5F3EE", "#B3B1AB", "#39393D",
+            ]
+        } else {
+            [
+                "#533D14", "#F6F4EF", "#FFFFFF", "#1F1E1B", "#656056", "#DAD5C9",
+            ]
+        };
+        Self {
+            accent: values[0].into(),
+            background: values[1].into(),
+            surface: values[2].into(),
+            text: values[3].into(),
+            muted_text: values[4].into(),
+            border: values[5].into(),
+        }
+    }
     pub fn fields(&mut self) -> [(&'static str, &mut String); 6] {
         [
             ("Accent", &mut self.accent),
@@ -49,12 +68,49 @@ impl ThemeColors {
         })
     }
 }
-#[derive(Clone, Serialize, Deserialize)]
-#[serde(deny_unknown_fields)]
+#[derive(Clone, Serialize)]
 pub struct CustomTheme {
     pub name: String,
-    pub colors: ThemeColors,
+    pub light: ThemeColors,
+    pub dark: ThemeColors,
 }
+
+#[derive(Deserialize)]
+#[serde(untagged, deny_unknown_fields)]
+enum ThemeTransfer {
+    Paired {
+        name: String,
+        light: ThemeColors,
+        dark: ThemeColors,
+    },
+    Legacy {
+        name: String,
+        colors: ThemeColors,
+    },
+}
+
+impl<'de> Deserialize<'de> for CustomTheme {
+    fn deserialize<D: serde::Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
+        Ok(match ThemeTransfer::deserialize(deserializer)? {
+            ThemeTransfer::Paired { name, light, dark } => Self { name, light, dark },
+            ThemeTransfer::Legacy { name, colors } => {
+                let mut theme = Self::base();
+                theme.name = name;
+                let dark = u32::from_str_radix(colors.background.trim_start_matches('#'), 16)
+                    .map(|rgb| {
+                        let red = (rgb >> 16) & 255;
+                        let green = (rgb >> 8) & 255;
+                        let blue = rgb & 255;
+                        299 * red + 587 * green + 114 * blue < 128_000
+                    })
+                    .unwrap_or(true);
+                *theme.palette_mut(dark) = colors;
+                theme
+            }
+        })
+    }
+}
+
 impl CustomTheme {
     pub fn parse(raw: &str) -> Result<Self, String> {
         if raw.len() as u64 > MAX_TRANSFER_BYTES {
@@ -68,31 +124,29 @@ impl CustomTheme {
         if self.name.trim().is_empty() || self.name.len() > 100 {
             return Err("Theme name must contain 1–100 characters".into());
         }
-        if !self.colors.valid() {
-            return Err("Theme colors must use #RRGGBB".into());
+        if !self.light.valid() {
+            return Err("Light colors must use #RRGGBB".into());
+        }
+        if !self.dark.valid() {
+            return Err("Dark colors must use #RRGGBB".into());
         }
         Ok(())
     }
-    pub fn base(dark: bool) -> Self {
-        let values = if dark {
-            [
-                "#E8CF95", "#131315", "#1B1B1E", "#F5F3EE", "#B3B1AB", "#39393D",
-            ]
-        } else {
-            [
-                "#533D14", "#F6F4EF", "#FFFFFF", "#1F1E1B", "#656056", "#DAD5C9",
-            ]
-        };
+    pub fn base() -> Self {
         Self {
             name: "Custom theme".into(),
-            colors: ThemeColors {
-                accent: values[0].into(),
-                background: values[1].into(),
-                surface: values[2].into(),
-                text: values[3].into(),
-                muted_text: values[4].into(),
-                border: values[5].into(),
-            },
+            light: ThemeColors::base(false),
+            dark: ThemeColors::base(true),
+        }
+    }
+    pub fn palette(&self, dark: bool) -> &ThemeColors {
+        if dark { &self.dark } else { &self.light }
+    }
+    pub fn palette_mut(&mut self, dark: bool) -> &mut ThemeColors {
+        if dark {
+            &mut self.dark
+        } else {
+            &mut self.light
         }
     }
 }
