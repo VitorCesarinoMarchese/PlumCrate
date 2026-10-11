@@ -68,6 +68,7 @@ fn base_style(ctx: &egui::Context) {
         } else {
             Color32::from_rgb(83, 61, 20)
         };
+        style.visuals.hyperlink_color = style.visuals.selection.stroke.color;
         style.spacing.item_spacing = egui::vec2(10.0, 8.0);
         style.spacing.button_padding = egui::vec2(12.0, 8.0);
         style.spacing.interact_size.y = 34.0;
@@ -133,6 +134,7 @@ pub fn apply_settings_theme(ctx: &egui::Context, settings: &crate::settings::Set
         };
         ctx.all_styles_mut(|style| {
             let colors = theme.palette(style.visuals.dark_mode);
+            if !colors.contrast_warnings().is_empty() { return; }
             let Some([accent, background, surface, text, muted, border]) = [
                 &colors.accent,
                 &colors.background,
@@ -202,6 +204,7 @@ pub struct View {
     pub stats: RenderStats,
     detail_open: Option<EntryId>,
     editing_root: bool,
+    help_open: bool,
     copied: Option<(EntryId, f64)>,
     source_copied: Option<(EntryId, f64)>,
     previews: crate::preview::Previews,
@@ -246,6 +249,11 @@ impl View {
         let mut scan_root = None;
         let narrow = ui.available_width() < 1040.0;
         let foreground = ui.visuals().text_color();
+        let review_open = controls.as_ref().is_some_and(|c| c.review_open() || c.busy());
+        let search_requested = !review_open && !controls.as_ref().is_some_and(|c| c.settings_page)
+            && ui.input_mut(|input| input.consume_key(egui::Modifiers::CTRL, egui::Key::F));
+        if search_requested { self.detail_open = None; self.help_open = false; }
+        if !review_open && ui.input_mut(|input| input.consume_key(egui::Modifiers::NONE, egui::Key::F1)) { self.help_open = true; }
         egui::Panel::top("catalog-header")
             .resizable(false)
             .frame(
@@ -269,6 +277,7 @@ impl View {
                         {
                             c.settings_page = !c.settings_page;
                         }
+                        if ui.button("Help").on_hover_text("Tasks and keyboard shortcuts (F1)").clicked() { self.help_open = true; }
                         let dark = ui.visuals().dark_mode;
                         let icon = if dark { Icon::Sun } else { Icon::Moon };
                         let label = if dark { "Light" } else { "Dark" };
@@ -472,15 +481,7 @@ impl View {
                         }
                         ui.add_space(4.0);
                     }
-                    ui.add_space(24.0);
-                    ui.separator();
-                    ui.add_space(16.0);
-                    ui.label(RichText::new("The Sims 4").size(13.0).strong());
-                    ui.label(
-                        RichText::new("Your mods and custom content, together.")
-                            .size(12.0)
-                            .color(ui.visuals().weak_text_color()),
-                    );
+
                 });
         }
 
@@ -498,7 +499,7 @@ impl View {
                 }
                 ui.horizontal(|ui| {
                     ui.label(RichText::new("Mod library").size(27.0).strong());
-                    ui.label(RichText::new(format!("{}", catalog.mods.len())).size(14.0).color(ui.visuals().weak_text_color()));
+                    ui.label(RichText::new(format!("{} mods", catalog.visible.len())).size(14.0).color(ui.visuals().weak_text_color()));
                     ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
                         if ui.add_enabled(catalog.root.is_some() && !catalog.loading,
                             egui::Button::image_and_text(Icon::Refresh.image(foreground, 16.0), "Rescan")).clicked() {
@@ -506,7 +507,6 @@ impl View {
                         }
                     });
                 });
-                ui.label(RichText::new("Manage the mods and custom content in your local collection.").size(13.0).color(ui.visuals().weak_text_color()));
                 ui.add_space(12.0);
                 if let Some(c) = controls.as_deref_mut() { c.toolbar(ui, catalog); ui.add_space(12.0); }
                 egui::Frame::new()
@@ -525,6 +525,8 @@ impl View {
                                     .frame(egui::Frame::NONE.inner_margin(egui::Margin::symmetric(0, 11))),
                             );
                             self.stats.search = Some(response.rect);
+                            if search_requested { response.request_focus(); }
+                            response.clone().on_hover_text("Search mods or filenames (Ctrl+F)");
                             if response.changed() { catalog.search(query); }
                         });
                     });
@@ -537,7 +539,7 @@ impl View {
                             }
                         }
                     } else {
-                        ui.label(RichText::new(format!("{} · {} mods", catalog.installation_filter.label(), catalog.visible.len())).size(13.0).color(ui.visuals().weak_text_color()));
+                        ui.label(RichText::new(catalog.installation_filter.label()).size(13.0).color(ui.visuals().weak_text_color()));
                     }
                     ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
                         let list = ui.add(egui::Button::image_and_text(Icon::List.image(foreground, 16.0), "List").selected(self.layout == LibraryLayout::List)).on_hover_text("List view");
@@ -549,9 +551,6 @@ impl View {
                     });
                 });
                 ui.add_space(12.0);
-                if !catalog.query.is_empty() {
-                    ui.label(RichText::new(format!("{} matching mods", catalog.visible.len())).size(12.0).color(ui.visuals().weak_text_color()));
-                }
                 if catalog.visible.is_empty() {
                     ui.add_space(32.0);
                     let (title, message) = if catalog.loading {
@@ -578,12 +577,30 @@ impl View {
             self.detail_open = None;
         }
         if !settings_page
+            && !self.help_open
             && self.detail_open.is_some()
             && !controls
                 .as_ref()
                 .is_some_and(|c| c.review_open() || c.busy())
         {
             self.details_popup(ui.ctx(), catalog, controls);
+        }
+        if self.help_open && !review_open {
+            let popup = crate::popup::show(ui.ctx(), "task-help", "Using your mod library", |ui| {
+                egui::ScrollArea::vertical().max_height(crate::popup::body_height(ui.ctx())).show(ui, |ui| {
+                    for (title, body) in [
+                        ("Add mods", "Choose your Sims 4 game folder, then Import folder or Import ZIP. Originals stay in place. Open the imported mod and Enable it when ready."),
+                        ("Inspect and organize", "Click a card or list row for details. Use Previous/Next to browse. Right-click a mod for rename, source and trash actions. Trash remains recoverable."),
+                        ("Save a source", "Find source uses your locally saved CurseForge key. No match? Attach a known URL manually. Review every attachment before saving."),
+                        ("Change appearance", "Settings previews your choices. Save settings keeps them; Discard restores saved values. The header Light/Dark switch saves immediately."),
+                        ("Keyboard shortcuts", "Ctrl+F searches · Alt+Left/Right browses open mod details · Tab moves focus · Enter/Space activates buttons · Escape closes popups · F1 opens Help."),
+                    ] {
+                        ui.label(RichText::new(title).strong()); ui.label(body); ui.add_space(12.0);
+                    }
+                });
+                crate::popup::close(ui).clicked()
+            });
+            if popup.inner || popup.should_close() { self.help_open = false; }
         }
         scan_root
     }
@@ -597,7 +614,8 @@ impl View {
         let gap = 16.0;
         let columns = ((ui.available_width() + gap) / 236.0).floor().max(1.0) as usize;
         let width = (ui.available_width() - gap * (columns - 1) as f32) / columns as f32;
-        let height = 262.0;
+        let photo_height = if catalog.visible.iter().any(|index| catalog.mods[*index].preview.is_some()) { 150.0 } else { 88.0 };
+        let height = photo_height + 112.0;
         let rows = catalog.visible.len().div_ceil(columns);
         ui.spacing_mut().item_spacing.y = gap;
         egui::ScrollArea::vertical()
@@ -644,7 +662,7 @@ impl View {
                                     );
                                     let image_rect = egui::Rect::from_min_max(
                                         rect.min + egui::vec2(8.0, 8.0),
-                                        egui::pos2(rect.right() - 8.0, rect.top() + 158.0),
+                                        egui::pos2(rect.right() - 8.0, rect.top() + photo_height + 8.0),
                                     );
                                     self.paint_preview(
                                         ui,
@@ -654,7 +672,7 @@ impl View {
                                         true,
                                     );
                                     let title_rect = egui::Rect::from_min_max(
-                                        rect.min + egui::vec2(14.0, 172.0),
+                                        rect.min + egui::vec2(14.0, photo_height + 22.0),
                                         rect.max - egui::vec2(14.0, 46.0),
                                     );
                                     let mut text = ui.new_child(
@@ -755,7 +773,7 @@ impl View {
                                 response.context_menu(|ui| c.mod_menu(ui, catalog));
                             }
                             if self.stats.first_row.is_none() {
-                                self.stats.first_row = Some(response.rect);
+                                self.stats.first_row = Some(response.rect.intersect(ui.clip_rect()));
                             }
                             self.stats.rows += 1;
                             if response.clicked() {
@@ -868,7 +886,7 @@ impl View {
                         response.context_menu(|ui| c.mod_menu(ui, catalog));
                     }
                     if self.stats.first_row.is_none() {
-                        self.stats.first_row = Some(response.rect);
+                        self.stats.first_row = Some(response.rect.intersect(ui.clip_rect()));
                     }
                     self.stats.rows += 1;
                     if response.clicked() {
@@ -882,13 +900,20 @@ impl View {
     fn details_popup(
         &mut self,
         ctx: &egui::Context,
-        catalog: &Catalog,
+        catalog: &mut Catalog,
         controls: Option<&mut crate::controls::Controls>,
     ) {
         let Some(entry) = catalog.selected_mod() else {
             return;
         };
-        let popup = crate::popup::show_width(ctx, "mod-details", &entry.name, 600.0, |ui| {
+        let title = entry.name.clone();
+        let position = catalog.visible.iter().position(|index| Some(EntryId::of(&catalog.mods[*index])) == catalog.selected);
+        let mut direction = 0;
+        if !egui::Popup::is_any_open(ctx) {
+            if ctx.input_mut(|input| input.consume_key(egui::Modifiers::ALT, egui::Key::ArrowLeft)) { direction = -1; }
+            if ctx.input_mut(|input| input.consume_key(egui::Modifiers::ALT, egui::Key::ArrowRight)) { direction = 1; }
+        }
+        let popup = crate::popup::show_width(ctx, "mod-details", &title, 600.0, |ui| {
             if let Some(c) = controls {
                 c.selected_actions(ui, catalog);
                 ui.add_space(16.0);
@@ -900,12 +925,20 @@ impl View {
                 egui::Layout::top_down(egui::Align::Min),
                 |ui| self.details(ui, catalog),
             );
-            let close = crate::popup::close(ui);
-            self.stats.detail_close = Some(close.rect);
-            close.clicked()
+            ui.add_space(16.0);
+            ui.allocate_ui_with_layout(egui::vec2(ui.available_width(), 36.0), egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                let close = ui.add_sized([80.0, 36.0], egui::Button::new("Close"));
+                self.stats.detail_close = Some(close.rect);
+                if ui.add_enabled(position.is_some_and(|i| i + 1 < catalog.visible.len()), egui::Button::new("Next").min_size(egui::vec2(80.0, 36.0))).on_hover_text("Next mod (Alt+Right)").clicked() { direction = 1; }
+                if ui.add_enabled(position.is_some_and(|i| i > 0), egui::Button::new("Previous").min_size(egui::vec2(80.0, 36.0))).on_hover_text("Previous mod (Alt+Left)").clicked() { direction = -1; }
+                close.clicked()
+            }).inner
         });
         if popup.inner || popup.should_close() {
             self.detail_open = None;
+        } else if let Some(index) = position.and_then(|i| i.checked_add_signed(direction)).filter(|i| *i < catalog.visible.len()) && direction != 0 {
+            catalog.select(catalog.visible[index]);
+            self.detail_open = catalog.selected.clone();
         }
     }
 
@@ -1126,6 +1159,18 @@ impl View {
 mod tests {
     use super::*;
     #[test]
+    fn unreadable_custom_colors_keep_the_app_usable_with_builtin_colors() {
+        let ctx = egui::Context::default();
+        setup(&ctx);
+        let mut theme = crate::settings::CustomTheme::base();
+        theme.light.text = theme.light.surface.clone();
+        let settings = crate::settings::Settings { theme: crate::settings::Theme::Light, active_custom_theme: Some(theme.name.clone()), custom_themes: vec![theme], ..Default::default() };
+        apply_settings_theme(&ctx, &settings);
+        let visuals = &ctx.style_of(egui::Theme::Light).visuals;
+        assert_ne!(visuals.text_color(), visuals.extreme_bg_color, "a 1:1 theme must not hide its own recovery controls");
+    }
+
+    #[test]
     fn secondary_text_meets_contrast_on_all_library_surfaces() {
         fn luminance(color: [f32; 3]) -> f32 {
             let linear = color.map(|channel| {
@@ -1141,7 +1186,8 @@ mod tests {
         setup(&ctx);
         for theme in [egui::Theme::Light, egui::Theme::Dark] {
             let visuals = &ctx.style_of(theme).visuals;
-            let foreground = visuals.weak_text_color().to_array();
+            for foreground in [visuals.weak_text_color(), visuals.hyperlink_color] {
+            let foreground = foreground.to_array();
             for background in [
                 visuals.panel_fill,
                 visuals.extreme_bg_color,
@@ -1157,8 +1203,9 @@ mod tests {
                 let contrast = (a.max(b) + 0.05) / (a.min(b) + 0.05);
                 assert!(
                     contrast >= 4.5,
-                    "secondary contrast {contrast:.2} in {theme:?}"
+                    "text/link contrast {contrast:.2} in {theme:?}"
                 );
+            }
             }
         }
     }
@@ -1186,7 +1233,7 @@ mod tests {
         render(&ctx, &mut view, &mut catalog, vec![], 1200.0);
         render(&ctx, &mut view, &mut catalog, vec![], 1200.0);
         let card = view.stats.first_row.expect("card");
-        assert!(card.height() >= 220.0, "default should be photo cards");
+        assert!(card.height() >= 180.0, "default should remain cards even without previews");
         assert!(view.stats.rows < 30);
         let pos = view.stats.list_switch.expect("list switch").center();
         render(
@@ -1383,6 +1430,57 @@ mod tests {
     }
 
     #[test]
+    fn collections_without_previews_use_compact_cards() {
+        let ctx = egui::Context::default();
+        setup(&ctx);
+        let mut view = View::default();
+        let mut catalog = populated_catalog();
+        render(&ctx, &mut view, &mut catalog, vec![], 1200.0);
+        render(&ctx, &mut view, &mut catalog, vec![], 1200.0);
+        assert!(view.stats.first_row.unwrap().height() <= 200.0, "missing previews should not dominate the collection");
+    }
+
+    #[test]
+    fn detail_shortcuts_follow_filtered_order_and_help_dismisses_safely() {
+        let ctx = egui::Context::default();
+        setup(&ctx);
+        let mut view = View::default();
+        let mut catalog = populated_catalog();
+        catalog.search("0000".into());
+        let first = catalog.visible[0];
+        let next = catalog.visible[1];
+        catalog.select(first);
+        view.detail_open = catalog.selected.clone();
+        render(&ctx, &mut view, &mut catalog, vec![], 1200.0);
+        render(&ctx, &mut view, &mut catalog, vec![egui::Event::Key { key: egui::Key::ArrowRight, physical_key: None, pressed: true, repeat: false, modifiers: egui::Modifiers::ALT }], 1200.0);
+        assert_eq!(catalog.selected, Some(EntryId::of(&catalog.mods[next])));
+        render(&ctx, &mut view, &mut catalog, vec![egui::Event::Key { key: egui::Key::F1, physical_key: None, pressed: true, repeat: false, modifiers: egui::Modifiers::NONE }], 1200.0);
+        let output = render(&ctx, &mut view, &mut catalog, vec![], 1200.0);
+        assert!(view.help_open);
+        assert!(output.shapes.iter().any(|shape| matches!(&shape.shape, egui::epaint::Shape::Text(text) if text.galley.text() == "Using your mod library")));
+        render(&ctx, &mut view, &mut catalog, vec![egui::Event::Key { key: egui::Key::Escape, physical_key: None, pressed: true, repeat: false, modifiers: egui::Modifiers::NONE }], 1200.0);
+        assert!(!view.help_open);
+        assert_eq!(view.detail_open, catalog.selected);
+    }
+
+    #[test]
+    fn control_f_focuses_search_and_leaves_details_without_losing_selection() {
+        let ctx = egui::Context::default();
+        setup(&ctx);
+        let mut view = View::default();
+        let mut catalog = populated_catalog();
+        catalog.select(0);
+        view.detail_open = catalog.selected.clone();
+        render(&ctx, &mut view, &mut catalog, vec![], 1200.0);
+        render(&ctx, &mut view, &mut catalog, vec![], 1200.0);
+        render(&ctx, &mut view, &mut catalog, vec![egui::Event::Key { key: egui::Key::F, physical_key: None, pressed: true, repeat: false, modifiers: egui::Modifiers::CTRL }], 1200.0);
+        render(&ctx, &mut view, &mut catalog, vec![egui::Event::Text("mod 00001".into())], 1200.0);
+        assert_eq!(catalog.query, "mod 00001");
+        assert!(view.detail_open.is_none());
+        assert!(catalog.selected.is_some());
+    }
+
+    #[test]
     fn search_has_a_comfortable_input_target_in_both_layouts() {
         for width in [680.0, 940.0, 1200.0] {
             let mut catalog = populated_catalog();
@@ -1413,6 +1511,25 @@ mod tests {
                 modifiers: Default::default(),
             },
         ]
+    }
+
+    #[test]
+    fn the_shared_details_scroll_reaches_the_last_file_without_rendering_every_file() {
+        let ctx = egui::Context::default();
+        setup(&ctx);
+        let mut view = View::default();
+        let mut catalog = populated_catalog();
+        catalog.select(0);
+        view.detail_open = catalog.selected.clone();
+        render(&ctx, &mut view, &mut catalog, vec![], 1200.0);
+        render(&ctx, &mut view, &mut catalog, vec![], 1200.0);
+        let position = view.stats.copy.unwrap().center();
+        render(&ctx, &mut view, &mut catalog, vec![egui::Event::PointerMoved(position), egui::Event::MouseWheel { unit: egui::MouseWheelUnit::Point, delta: egui::vec2(0.0, -1_000_000.0), phase: egui::TouchPhase::Move, modifiers: Default::default() }], 1200.0);
+        for _ in 0..6 { render(&ctx, &mut view, &mut catalog, vec![], 1200.0); }
+        let output = render(&ctx, &mut view, &mut catalog, vec![], 1200.0);
+        assert!(view.stats.files > 0 && view.stats.files < 40);
+        let last = catalog.selected_mod().unwrap().files.last().unwrap().rsplit('/').next().unwrap();
+        assert!(output.shapes.iter().any(|shape| matches!(&shape.shape, egui::epaint::Shape::Text(text) if text.galley.text() == last)), "one body scroll must reach the final file");
     }
 
     #[test]

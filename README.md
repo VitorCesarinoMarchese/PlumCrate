@@ -10,7 +10,7 @@ Browse your collection by photo, find a file by name, and choose which mods are 
 
 [Getting started](#getting-started) · [Documentation](docs/README.md) · [Report a bug](https://github.com/VitorCesarinoMarchese/TS4ModManager/issues) · [Releases](https://github.com/VitorCesarinoMarchese/TS4ModManager/releases)
 
-![Sims 4 Mod Manager in dark mode, showing the mod library and file inspector](docs/images/library-dark.png)
+![Sims 4 Mod Manager in dark mode, showing the mod library with photo cards](docs/images/library-dark.png)
 
 *The app running with sample mods. The screenshot uses synthetic test data.*
 

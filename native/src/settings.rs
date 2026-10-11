@@ -51,6 +51,41 @@ impl ThemeColors {
             ("Border", &mut self.border),
         ]
     }
+    pub fn contrast_warnings(&self) -> Vec<String> {
+        if !self.valid() { return vec![]; }
+        let rgb = |value: &str| {
+            let value = u32::from_str_radix(&value[1..], 16).expect("validated hex color");
+            [(value >> 16) as u8, (value >> 8) as u8, value as u8]
+        };
+        let luminance = |color: [u8; 3]| {
+            let linear = color.map(|channel| {
+                let channel = f64::from(channel) / 255.0;
+                if channel <= 0.04045 { channel / 12.92 } else { ((channel + 0.055) / 1.055).powf(2.4) }
+            });
+            linear[0] * 0.2126 + linear[1] * 0.7152 + linear[2] * 0.0722
+        };
+        let surface = rgb(&self.surface);
+        let accent = rgb(&self.accent);
+        let mut warnings = vec![];
+        for (label, foreground, background) in [
+            ("Text on background", rgb(&self.text), rgb(&self.background)),
+            ("Text on surface", rgb(&self.text), surface),
+            ("Muted text on background", rgb(&self.muted_text), rgb(&self.background)),
+            ("Muted text on surface", rgb(&self.muted_text), surface),
+            ("Links on surface", accent, surface),
+        ].into_iter().chain([0.06, 0.13, 0.20].into_iter().flat_map(|ratio| {
+            let fill = std::array::from_fn(|i| (f64::from(surface[i]) * (1.0 - ratio) + f64::from(accent[i]) * ratio) as u8);
+            std::iter::once(("Text on controls", rgb(&self.text), fill)).chain((ratio == 0.06).then_some(("Muted text on controls", rgb(&self.muted_text), fill)))
+        })) {
+            let a = luminance(foreground);
+            let b = luminance(background);
+            let ratio = (a.max(b) + 0.05) / (a.min(b) + 0.05);
+            if ratio < 4.5 { warnings.push(format!("{label}: {ratio:.1}:1 (needs 4.5:1)")); }
+        }
+        warnings.sort();
+        warnings.dedup();
+        warnings
+    }
     pub fn valid(&self) -> bool {
         [
             &self.accent,

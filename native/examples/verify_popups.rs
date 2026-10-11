@@ -23,6 +23,10 @@ mod controls {
         controls.dialog = None;
         controls.candidates = None;
         controls.trash_entries = None;
+        controls.settings_page = (17..=19).contains(&case);
+        controls.settings = Settings::default();
+        controls.theme_edit = None;
+        controls.theme_edit_original = None;
         let identity = controls.identity(catalog).unwrap();
         match case {
             0..=3 => controls.picked(PickPurpose::Import(identity, case != 3), Some(if case == 3 { source.with_extension("") } else { source }), catalog),
@@ -32,7 +36,19 @@ mod controls {
             7 => controls.dialog = Some(Dialog::SettingsImport(Settings::default(), false)),
             8 => controls.candidates = Some((identity, vec![])),
             9 => controls.trash_entries = Some((identity, vec![])),
-            10..=14 => {},
+            10..=16 | 20 => {},
+            17..=18 => {
+                let mut theme = crate::settings::CustomTheme::base();
+                theme.name = "Contrast check".into();
+                theme.light.text = theme.light.surface.clone();
+                theme.dark.text = theme.dark.surface.clone();
+                controls.settings.active_custom_theme = Some(theme.name.clone());
+                controls.settings.custom_themes = vec![theme.clone()];
+                controls.theme_edit = Some(theme);
+            },
+            19 => {
+                controls.settings.game_roots.push(catalog.root.as_ref().unwrap().display().to_string());
+            },
             _ => unreachable!(),
         }
     }
@@ -43,7 +59,7 @@ mod controls {
     }
 }
 
-const CASES: [(&str, bool, [f32; 2]); 15] = [
+const CASES: [(&str, bool, [f32; 2]); 21] = [
     ("import-zip-light", false, [1200.0, 800.0]),
     ("import-zip-dark", true, [1200.0, 800.0]),
     ("import-zip-small", false, [640.0, 480.0]),
@@ -59,6 +75,12 @@ const CASES: [(&str, bool, [f32; 2]); 15] = [
     ("mod-details-narrow", true, [680.0, 760.0]),
     ("mod-details-small", false, [640.0, 480.0]),
     ("mod-details-long", true, [680.0, 760.0]),
+    ("help-light", false, [1200.0, 800.0]),
+    ("help-small-dark", true, [640.0, 480.0]),
+    ("theme-contrast-light", false, [680.0, 760.0]),
+    ("theme-contrast-small-dark", true, [640.0, 480.0]),
+    ("settings-draft-light", false, [1200.0, 800.0]),
+    ("compact-no-previews", false, [680.0, 760.0]),
 ];
 
 struct Capture {
@@ -96,7 +118,10 @@ impl Capture {
             self.case,
             self.source.clone(),
         );
-        self.opened = false;
+        self.view = ui::View::default();
+        self.view.scan_ms = Some(0.0);
+        self.opened = self.case >= 17;
+        if self.case == 20 { for entry in &mut self.catalog.mods { entry.preview = None; } }
         self.catalog.mods[0].name = if self.case == 14 {
             "Synthetic collection with a very long name, release date, and additional pack details"
                 .into()
@@ -111,7 +136,13 @@ impl Capture {
 
 impl eframe::App for Capture {
     fn raw_input_hook(&mut self, _ctx: &egui::Context, input: &mut egui::RawInput) {
-        if self.case >= 10
+        if (15..=16).contains(&self.case) && !self.opened && self.stable_frames >= 2 {
+            input.events.push(egui::Event::Key { key: egui::Key::F1, physical_key: None, pressed: true, repeat: false, modifiers: egui::Modifiers::NONE });
+            self.opened = true;
+            self.stable_frames = 0;
+            self.staged = Instant::now();
+        }
+        if (10..=14).contains(&self.case)
             && !self.opened
             && self.stable_frames >= 2
             && let Some(row) = self.view.stats.first_row
@@ -158,6 +189,10 @@ impl eframe::App for Capture {
                 .iter()
                 .flat_map(|pixel| pixel.to_array())
                 .collect::<Vec<_>>();
+            if (10..=14).contains(&self.case) {
+                let preview_pixels = image.pixels.iter().filter(|pixel| pixel.to_array() == [30, 120, 95, 255]).count();
+                assert!(preview_pixels >= 15_000, "details preview must remain readable, including in a short window");
+            }
             let path = self.directory.join(format!("{}.png", CASES[self.case].0));
             let size = CASES[self.case].2;
             assert_eq!(image.size, [size[0] as usize, size[1] as usize]);
@@ -185,6 +220,10 @@ impl eframe::App for Capture {
                 && !ctx.has_pending_images()
                 && (self.case < 10 || self.opened)
             {
+                if (10..=14).contains(&self.case) {
+                    let close = self.view.stats.detail_close.expect("details must actually open before capture");
+                    assert!(ctx.content_rect().contains_rect(close));
+                }
                 ctx.send_viewport_cmd(egui::ViewportCommand::Screenshot(Default::default()));
                 self.requested = true;
             }
@@ -263,6 +302,6 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         std::fs::read(source_check)?,
         b"synthetic capture fixture, never imported"
     );
-    println!("15 production popup captures; no operations approved or settings saved");
+    println!("{} production popup captures; no operations approved or settings saved", CASES.len());
     Ok(())
 }

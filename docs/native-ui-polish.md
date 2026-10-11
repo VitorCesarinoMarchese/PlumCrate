@@ -1,0 +1,41 @@
+# Native UI polish verification
+
+The alpha UI fixes address the five priority areas from the full-app critique.
+
+| Area | Result |
+| --- | --- |
+| Settings save boundary | Settings keeps a separate saved snapshot. Save settings commits the draft; Discard restores saved preferences. Header Light/Dark saves only the mode. Leaving Settings retains drafts. Source lookup and settings exports use saved preferences. |
+| Accessibility | Cards/List have visible, accessible names. Review inputs, theme fields, swatches, theme JSON and the API-key field connect to their visible labels. Native AccessKit output verifies layout names and review-label relationships. |
+| Short details popups | Summary, source and files share one scroll area. The preview shrinks to 120 points in short windows. Actions, navigation and Close remain pinned. File rows stay virtualized, including when scrolling to file 10,000. |
+| Operation guidance | Import reviews explain storage, unchanged originals and separate enabling. Migration explains moving files and preserving installed links. Confirmations name their action. Empty candidate results offer manual attachment with review. Saved sources have Open source and Copy URL actions; files have Copy file paths. |
+| Browsing | Repeated introductory copy and counts were reduced. Views with no saved previews use shorter cards. Ctrl+F focuses search; Previous/Next and Alt+Left/Right follow filtered order. Help opens task guidance and shortcuts in a popup. |
+
+Custom theme warnings check text, metadata and links against a 4.5:1 threshold. The affected palette uses built-in colors until corrected, preserving the stored palette for editing. Warnings and Reset colors precede the color fields. Built-in links use the theme gold and pass the same contrast test as metadata.
+
+## Validation
+
+All eight repository-required checks passed:
+
+| Check | Evidence |
+| --- | --- |
+| Core Rust tests | 120 unit tests and 36 integration tests passed. Live provider tests remain opt-in. |
+| Native Rust tests | 55 unit tests, 10 management tests and 13 navigation tests passed. |
+| Clippy | All native targets passed with warnings denied. |
+| Release build | Built `native/target/release/ts4-mod-manager-native` with the locked dependencies. |
+| Python tests | All 10 tests passed. |
+| Binary verifier | 100, 1,000 and 10,000-mod fixtures passed search, path and unchanged-input checks. The 10,000-mod scan took about 55 ms in this run. |
+| Management workflows | 18 operations passed using temporary fixtures, including imports, two-instance toggles, migration, source confirmation and trash/restore. |
+| Package verifier | Packaged executable, desktop assets, licenses, catalog inspection and management workflows passed. |
+
+Visual verification inspected 32 native captures together, followed by one confirmation round: 11 library/settings/custom-theme views and 21 popup, recovery and compact-library views. Captures include light/dark, narrow, long-content and 640×480 cases. Details capture checks require an actual open popup, visible Close and at least 15,000 preview pixels. No capture approved an operation or saved settings.
+
+Run the capture tools from a graphical desktop:
+
+```sh
+python3 native/verify_navigation.py --binary native/target/release/ts4-mod-manager-native --capture-dir native/target/ui-navigation
+cargo run --manifest-path native/Cargo.toml --locked --example verify_popups -- native/target/ui-popups
+```
+
+The [native app guide](native-app.md) documents the full validation commands. The README uses the refreshed [library screenshot](images/library-dark.png). The [short-window details capture](images/mod-details-small.png) shows the pinned popup controls.
+
+A real screen-reader walkthrough still needs a manual check; this pass verifies AccessKit metadata and native keyboard interaction.

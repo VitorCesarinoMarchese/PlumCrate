@@ -188,9 +188,9 @@ impl Controls {
             PickPurpose::SettingsImport => match Settings::read_transfer(&path) {
                 Ok(mut settings) => {
                     let included = settings.curseforge_api_key.is_some();
-                    settings.preserve_omitted_key(&self.settings);
+                    settings.preserve_omitted_key(&self.saved_settings);
                     if settings.custom_themes.is_empty() {
-                        settings.custom_themes = self.settings.custom_themes.clone();
+                        settings.custom_themes = self.saved_settings.custom_themes.clone();
                     }
                     self.dialog = Some(Dialog::SettingsImport(settings, included));
                 }
@@ -563,7 +563,7 @@ impl Controls {
                                 && let Some(id) = self.identity(catalog)
                             {
                                 ui.close();
-                                self.submit(id, Action::Lookup(self.settings.curseforge_api_key.clone()))
+                                self.submit(id, Action::Lookup(self.saved_settings.curseforge_api_key.clone()))
                             }
                             if ui.button("Attach URL").clicked()
                                 && let Some(identity) = self.identity(catalog)
@@ -729,6 +729,15 @@ impl Controls {
                 ui.label(egui::RichText::new(if dark { "Dark colors" } else { "Light colors" }).strong());
                 ui.label(egui::RichText::new("Choose Light or Dark above to edit each version.").color(ui.visuals().weak_text_color()));
                 ui.add_space(8.0);
+                for (mode, palette) in [("Light", &theme.light), ("Dark", &theme.dark)] {
+                    let warnings = palette.contrast_warnings();
+                    if !warnings.is_empty() {
+                        ui.label(egui::RichText::new(format!("{mode} colors need more contrast. Built-in colors keep that mode readable until corrected.")).strong());
+                        ui.collapsing(format!("{mode} contrast details"), |ui| { for warning in warnings { ui.label(warning); } });
+                    }
+                }
+                if ui.button("Reset colors").clicked() { *theme.palette_mut(dark) = crate::settings::ThemeColors::base(dark); }
+                ui.add_space(8.0);
                 egui::Grid::new(("theme-colors", dark)).num_columns(3).spacing([16.0, 10.0]).show(ui, |ui| {
                     for (label, value) in theme.palette_mut(dark).fields() {
                         let field_label = ui.label(label);
@@ -743,7 +752,6 @@ impl Controls {
                 let valid = theme.validate().is_ok();
                 if let Err(error) = theme.validate() { ui.colored_label(ui.visuals().error_fg_color, error); }
                 ui.horizontal_wrapped(|ui| {
-                    if ui.button("Reset colors").clicked() { *theme.palette_mut(dark) = crate::settings::ThemeColors::base(dark); }
                     if ui.add_enabled(valid, egui::Button::new("Copy theme JSON")).clicked() {
                         match serde_json::to_string_pretty(theme) { Ok(json) => { ctx.copy_text(json.clone()); self.theme_json = json; }, Err(_) => self.error = Some("Cannot export theme".into()) }
                     }
@@ -781,12 +789,12 @@ impl Controls {
             ui.add_space(16.0);
             ui.add_space(24.0); ui.separator(); ui.add_space(16.0);
             ui.collapsing("Import and export settings", |ui| {
-                ui.label("Custom colors use the separate theme JSON export above.");
+                ui.label("Exports saved preferences. Save pending changes first. Custom colors use the separate theme JSON export above.");
                 ui.checkbox(&mut self.include_key, "Include API key in export");
                 ui.horizontal_wrapped(|ui| {
                     let ready = self.picker.is_none();
                     if ui.add_enabled(ready, egui::Button::new("Export settings")).clicked() {
-                        let mut exported = self.settings.clone();
+                        let mut exported = self.saved_settings.clone();
                         if !self.include_key { exported.curseforge_api_key = None; }
                         self.start_picker(PickPurpose::SettingsExport(exported), ui.ctx(), None);
                     }
@@ -798,6 +806,10 @@ impl Controls {
         });
     }
     pub fn activity(&mut self, ui: &mut egui::Ui) {
+        if let Some(theme) = self.settings.custom_themes.iter().find(|theme| Some(&theme.name) == self.settings.active_custom_theme.as_ref())
+            && !theme.palette(ui.visuals().dark_mode).contrast_warnings().is_empty() {
+            ui.label("Custom colors need more contrast. Built-in colors are active; correct or reset the palette in Settings.");
+        }
         if self.recovering {
             ui.label("Checking interrupted operations. Waiting for other app writes if needed.");
         } else if self.busy() {
@@ -1017,7 +1029,7 @@ impl Controls {
                             (action.label(), current)
                         }
                         Dialog::SettingsImport(settings, key_included) => {
-                            ui.label("Version 1 settings");
+                            ui.label("Replaces saved preferences and any unsaved drafts after confirmation.");
                             ui.label(format!("Theme: {}", match settings.theme {
                                 Theme::Light => "light", Theme::Dark => "dark", Theme::System => "system",
                             }));

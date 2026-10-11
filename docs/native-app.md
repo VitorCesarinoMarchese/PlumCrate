@@ -129,3 +129,9 @@ Preview textures retain at most 32 image URIs and reset on Rescan or a game-fold
 The reviewed library design and tokens are recorded in [DESIGN.md](native-design.md) and [the native design manifest](../.impeccable/design.json). The [surface brief](../.impeccable/surfaces/native-library.md) records the approved direction. This is a Linux egui UI; the HTML/CSS design detector does not apply.
 
 Navigation and Settings validation passed 46 native tests, native clippy and the release build. The earlier migration also validated the React/Tauri app before its retirement. Current validation uses the commands in the [development guide](development.md). Nine native navigation captures passed independent design review with a ship disposition. The 100, 1,000 and 10,000-group catalog checks preserved their input files; the packaged executable passed its 18-operation workflow check. These checks do not certify untested hardware or screen-reader behavior.
+
+### Browsing and readability
+
+Cards and List have visible labels. Ctrl+F focuses search; details have Previous/Next controls and Alt+Left/Right shortcuts that follow the current filter. Help (F1) explains imports, sources, recoverable removal, settings and keyboard controls. Views without saved previews use smaller cards.
+
+Custom palettes below 4.5:1 for their text, metadata or links display contrast warnings. The affected mode uses built-in colors until corrected, preserving the stored palette for editing. Reset colors restores the displayed version. Settings exports and source lookup use saved preferences.
