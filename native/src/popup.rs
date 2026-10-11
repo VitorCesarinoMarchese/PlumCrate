@@ -68,12 +68,13 @@ pub fn close(ui: &mut Ui) -> Response {
     .inner
 }
 
-pub fn text_field(ui: &mut Ui, value: &mut String) -> Response {
+pub fn text_field(ui: &mut Ui, label: &str, value: &mut String) -> Response {
+    let label = ui.label(label);
     let fill = ui.visuals().widgets.inactive.weak_bg_fill;
     ui.add_sized(
         [ui.available_width(), 36.0],
         egui::TextEdit::singleline(value)
             .background_color(fill)
             .margin(egui::vec2(10.0, 8.0)),
-    )
+    ).labelled_by(label.id)
 }

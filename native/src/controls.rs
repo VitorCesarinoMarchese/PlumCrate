@@ -558,6 +558,7 @@ impl Controls {
                                 ui.close();
                                 self.dialog = Some(Dialog::Rename(identity, entry.name.clone()))
                             }
+                            ui.separator();
                             if ui.button("Find source").clicked()
                                 && let Some(id) = self.identity(catalog)
                             {
@@ -574,6 +575,7 @@ impl Controls {
                                 ui.close();
                                 self.confirm(catalog, Action::RemoveSource, "Remove source", vec![entry.source_url.clone().unwrap()])
                             }
+                            ui.separator();
                             if ui.button("Move to trash").clicked() {
                                 ui.close();
                                 self.confirm(
@@ -588,7 +590,7 @@ impl Controls {
                             }
                         } else if ui.button("Manage external mod").clicked() {
                             ui.close();
-                            self.confirm(catalog, Action::Migrate { files: entry.files.clone() }, "Review external migration", entry.files.iter().map(|f| catalog.root.as_ref().unwrap().join("Mods").join(f).display().to_string()).collect())
+                            self.confirm(catalog, Action::Migrate { files: entry.files.clone() }, "Review external migration", std::iter::once("These external files will move into managed storage. Verified links will keep them installed in this game folder. Other files stay untouched.".into()).chain(entry.files.iter().map(|f| catalog.root.as_ref().unwrap().join("Mods").join(f).display().to_string())).collect())
                         }
             }
         });
@@ -720,8 +722,8 @@ impl Controls {
             }
             if let Some(theme) = &mut self.theme_edit {
                 ui.add_space(16.0);
-                ui.label("Theme name");
-                ui.add(egui::TextEdit::singleline(&mut theme.name).desired_width(300.0).min_size(egui::vec2(200.0, 34.0)).margin(egui::vec2(10.0, 9.0)));
+                let name_label = ui.label("Theme name");
+                ui.add(egui::TextEdit::singleline(&mut theme.name).desired_width(300.0).min_size(egui::vec2(200.0, 34.0)).margin(egui::vec2(10.0, 9.0))).labelled_by(name_label.id);
                 ui.add_space(16.0);
                 let dark = ui.visuals().dark_mode;
                 ui.label(egui::RichText::new(if dark { "Dark colors" } else { "Light colors" }).strong());
@@ -729,11 +731,11 @@ impl Controls {
                 ui.add_space(8.0);
                 egui::Grid::new(("theme-colors", dark)).num_columns(3).spacing([16.0, 10.0]).show(ui, |ui| {
                     for (label, value) in theme.palette_mut(dark).fields() {
-                        ui.label(label);
-                        ui.add(egui::TextEdit::singleline(value).desired_width(112.0).min_size(egui::vec2(112.0, 34.0)).margin(egui::vec2(10.0, 9.0)).char_limit(7));
+                        let field_label = ui.label(label);
+                        ui.add(egui::TextEdit::singleline(value).desired_width(112.0).min_size(egui::vec2(112.0, 34.0)).margin(egui::vec2(10.0, 9.0)).char_limit(7)).labelled_by(field_label.id);
                         if let Some(color) = crate::ui::hex_color(value) {
                             let mut rgb = [color.r(), color.g(), color.b()];
-                            if ui.color_edit_button_srgb(&mut rgb).changed() { *value = format!("#{:02X}{:02X}{:02X}", rgb[0], rgb[1], rgb[2]); }
+                            if ui.color_edit_button_srgb(&mut rgb).labelled_by(field_label.id).changed() { *value = format!("#{:02X}{:02X}{:02X}", rgb[0], rgb[1], rgb[2]); }
                         } else { ui.label("#RRGGBB"); }
                         ui.end_row();
                     }
@@ -750,8 +752,8 @@ impl Controls {
             }
             ui.add_space(12.0);
             ui.collapsing("Import a theme", |ui| {
-                ui.label("Paste a theme JSON exported from this app or the previous version.");
-                ui.add(egui::TextEdit::multiline(&mut self.theme_json).desired_width(ui.available_width()).desired_rows(5));
+                let json_label = ui.label("Paste theme JSON exported from this app or the previous version.");
+                ui.add(egui::TextEdit::multiline(&mut self.theme_json).desired_width(ui.available_width()).desired_rows(5)).labelled_by(json_label.id);
                 if ui.button("Load theme for editing").clicked() {
                     match crate::settings::CustomTheme::parse(&self.theme_json) {
                         Ok(theme) => { self.theme_edit_original = self.settings.custom_themes.iter().find(|t| t.name == theme.name).map(|t| t.name.clone()); self.theme_edit = Some(theme); self.error = None; }
@@ -770,9 +772,9 @@ impl Controls {
             }
             ui.add_space(24.0); ui.separator(); ui.add_space(16.0);
             ui.heading("Source lookup");
-            ui.label("CurseForge API key");
+            let key_label = ui.label("CurseForge API key");
             let mut key = self.settings.curseforge_api_key.clone().unwrap_or_default();
-            if ui.add(egui::TextEdit::singleline(&mut key).password(true).desired_width(400.0).min_size(egui::vec2(200.0, 34.0)).margin(egui::vec2(10.0, 9.0))).changed() {
+            if ui.add(egui::TextEdit::singleline(&mut key).password(true).desired_width(400.0).min_size(egui::vec2(200.0, 34.0)).margin(egui::vec2(10.0, 9.0))).labelled_by(key_label.id).changed() {
                 self.settings.curseforge_api_key = (!key.is_empty()).then_some(key);
             }
             ui.label(egui::RichText::new("Stored only in local settings. Source attachment always needs your confirmation.").color(ui.visuals().weak_text_color()));
@@ -821,13 +823,13 @@ impl Controls {
                         .show(ui, |ui| {
                             for operation in self.operations.iter().rev() {
                                 ui.horizontal(|ui| {
-                                    ui.label(format!(
+                                    ui.add(egui::Label::new(format!(
                                         "#{} · {} · {} · {}",
                                         operation.job.identity.operation,
                                         operation.job.action.label(),
                                         operation.job.identity.root.display(),
                                         operation.status
-                                    ));
+                                    )).wrap());
                                     if operation.error && ui.button("Retry").clicked() {
                                         retry = Some(operation.job.clone())
                                     }
@@ -867,7 +869,12 @@ impl Controls {
             let mut keep = true;
             let popup = crate::popup::show(ctx, "source-candidates", "Source candidates", |ui| {
                 if candidates.is_empty() {
-                    ui.label("No real provider candidates were found.");
+                    ui.label("No source matches found.");
+                    ui.label("If you know the project URL, attach it manually and review it before saving.");
+                    if ui.button("Attach a URL manually").clicked() {
+                        self.dialog = Some(Dialog::Manual(identity.clone(), String::new()));
+                        keep = false;
+                    }
                 }
                 egui::ScrollArea::vertical().max_height(crate::popup::body_height(ctx)).show(ui, |ui| {
                     for candidate in &candidates {
@@ -982,8 +989,10 @@ impl Controls {
                             ui.label(if *zip { "ZIP path" } else { "Folder path" });
                             ui.label(egui::RichText::new(path.display().to_string()).color(ui.visuals().weak_text_color()));
                             ui.add_space(12.0);
-                            ui.label("Mod name");
-                            crate::popup::text_field(ui, name);
+                            ui.label("A copy goes into your managed library. The original stays where it is. Enable the mod separately to install it in this game folder.");
+                            ui.collapsing("Storage location", |ui| { ui.label(self.managed.join("mods").display().to_string()); });
+                            ui.add_space(12.0);
+                            crate::popup::text_field(ui, "Mod name", name);
                             let current = identity.current(catalog.root.as_ref(), catalog.selected.as_ref(), catalog.generation());
                             if !current {
                                 ui.colored_label(ui.visuals().error_fg_color, "Game folder or selection changed. Cancel and choose the import again.");
@@ -991,22 +1000,21 @@ impl Controls {
                             ("Import", current && !path.as_os_str().is_empty() && !name.trim().is_empty())
                         }
                         Dialog::Rename(identity, name) => {
-                            ui.label("Display name");
-                            crate::popup::text_field(ui, name);
+                            crate::popup::text_field(ui, "Display name", name);
                             ("Save name", identity.current(catalog.root.as_ref(), catalog.selected.as_ref(), catalog.generation()) && !name.trim().is_empty())
                         }
                         Dialog::Manual(identity, url) => {
-                            ui.label("Source URL. Manual attachments carry no verified match claim.");
-                            crate::popup::text_field(ui, url);
+                            ui.label("Manual attachments carry no verified match claim.");
+                            crate::popup::text_field(ui, "Source URL", url);
                             ("Review URL attachment", identity.current(catalog.root.as_ref(), catalog.selected.as_ref(), catalog.generation()) && !url.trim().is_empty())
                         }
-                        Dialog::Confirm { identity, lines, .. } => {
+                        Dialog::Confirm { identity, action, lines, .. } => {
                             for line in lines { ui.label(line.as_str()); }
                             let current = identity.current(catalog.root.as_ref(), catalog.selected.as_ref(), catalog.generation());
                             if !current {
                                 ui.colored_label(ui.visuals().error_fg_color, "Selection or catalog changed. Close and review again.");
                             }
-                            ("Confirm", current)
+                            (action.label(), current)
                         }
                         Dialog::SettingsImport(settings, key_included) => {
                             ui.label("Version 1 settings");
@@ -1414,6 +1422,23 @@ mod tests {
         assert_eq!(std::fs::read(path).unwrap(), bytes);
         assert!(controls.error.as_deref().unwrap().contains("unused"));
     }
+    #[test]
+    fn review_text_fields_are_associated_with_visible_labels() {
+        let fixture = tempfile::tempdir().unwrap();
+        let mut catalog = Catalog::default();
+        let generation = catalog.begin_scan(fixture.path().join("game"));
+        catalog.accept_scan(generation, Ok(vec![]));
+        let mut controls = Controls::new(fixture.path().join("managed"), fixture.path().into(), Settings::default(), || {}).unwrap();
+        let identity = controls.identity(&catalog).unwrap();
+        controls.dialog = Some(Dialog::Rename(identity, "Draft name".into()));
+        let ctx = egui::Context::default();
+        ctx.enable_accesskit();
+        let mut output = ctx.run_ui(egui::RawInput::default(), |ui| controls.show_dialogs(ui.ctx(), &catalog));
+        output.textures_delta.clear();
+        let tree = output.platform_output.accesskit_update.unwrap();
+        assert!(tree.nodes.iter().any(|(_, node)| !node.labelled_by().is_empty()), "review fields need a label relationship");
+    }
+
     #[test]
     fn header_mode_switch_does_not_save_unrelated_settings_drafts() {
         let fixture = tempfile::tempdir().unwrap();

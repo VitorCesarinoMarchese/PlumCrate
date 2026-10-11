@@ -203,6 +203,7 @@ pub struct View {
     detail_open: Option<EntryId>,
     editing_root: bool,
     copied: Option<(EntryId, f64)>,
+    source_copied: Option<(EntryId, f64)>,
     previews: crate::preview::Previews,
     layout: LibraryLayout,
 }
@@ -539,10 +540,10 @@ impl View {
                         ui.label(RichText::new(format!("{} · {} mods", catalog.installation_filter.label(), catalog.visible.len())).size(13.0).color(ui.visuals().weak_text_color()));
                     }
                     ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                        let list = ui.add(egui::Button::image(Icon::List.image(foreground, 16.0)).selected(self.layout == LibraryLayout::List)).on_hover_text("List view");
+                        let list = ui.add(egui::Button::image_and_text(Icon::List.image(foreground, 16.0), "List").selected(self.layout == LibraryLayout::List)).on_hover_text("List view");
                         self.stats.list_switch = Some(list.rect);
                         if list.clicked() { self.layout = LibraryLayout::List; }
-                        if ui.add(egui::Button::image(Icon::Grid.image(foreground, 16.0)).selected(self.layout == LibraryLayout::Cards)).on_hover_text("Card view").clicked() {
+                        if ui.add(egui::Button::image_and_text(Icon::Grid.image(foreground, 16.0), "Cards").selected(self.layout == LibraryLayout::Cards)).on_hover_text("Card view").clicked() {
                             self.layout = LibraryLayout::Cards;
                         }
                     });
@@ -912,10 +913,10 @@ impl View {
         let Some(entry) = catalog.selected_mod() else {
             return;
         };
+        let compact = ui.available_height() < 320.0;
         egui::ScrollArea::vertical()
-            .id_salt(("detail-summary", EntryId::of(entry)))
-            .max_height((ui.available_height() - 150.0).max(80.0))
-            .auto_shrink([false, true])
+            .id_salt(("detail-body", catalog.root.clone(), EntryId::of(entry)))
+            .auto_shrink([false, false])
             .show(ui, |ui| {
                 let state = if entry.enabled {
                     "Installed in this game folder"
@@ -933,9 +934,9 @@ impl View {
                                 .color(ui.visuals().weak_text_color()),
                         );
                     });
-                ui.add_space(24.0);
+                ui.add_space(16.0);
                 let (photo, response) = ui.allocate_exact_size(
-                    egui::vec2(ui.available_width(), 180.0),
+                    egui::vec2(ui.available_width(), if compact { 120.0 } else { 180.0 }),
                     egui::Sense::hover(),
                 );
                 self.paint_preview(
@@ -979,9 +980,19 @@ impl View {
                         .selectable(true)
                         .wrap(),
                     );
-                    ui.add_space(24.0);
+                    let identity = EntryId::of(entry);
+                    let now = ui.input(|input| input.time);
+                    let copied = self.source_copied.as_ref().is_some_and(|(id, until)| *id == identity && now < *until);
+                    ui.horizontal_wrapped(|ui| {
+                        ui.hyperlink_to("Open source", source);
+                        if ui.button(if copied { "URL copied" } else { "Copy URL" }).clicked() {
+                            ui.ctx().copy_text(source.clone());
+                            self.source_copied = Some((identity, now + 2.0));
+                            ui.ctx().request_repaint_after(std::time::Duration::from_secs(2));
+                        }
+                    });
+                    ui.add_space(16.0);
                 }
-            });
         ui.add_space(12.0);
         ui.separator();
         ui.add_space(12.0);
@@ -1002,7 +1013,7 @@ impl View {
                 let icon = if copied { Icon::Check } else { Icon::Copy };
                 let copy = ui.add(egui::Button::image_and_text(
                     icon.image(ui.visuals().text_color(), 14.0),
-                    if copied { "Copied" } else { "Copy" },
+                    if copied { "Paths copied" } else { "Copy file paths" },
                 ));
                 self.stats.copy = Some(copy.rect);
                 if copy.clicked() {
@@ -1014,11 +1025,12 @@ impl View {
             });
         });
         ui.add_space(12.0);
-        egui::ScrollArea::vertical()
-            .id_salt(("files", catalog.root.clone(), identity))
-            .auto_shrink([false, false])
-            .show_rows(ui, 48.0, entry.files.len(), |ui, range| {
-                for index in range {
+        let stride = 48.0 + ui.spacing().item_spacing.y;
+        let origin = ui.next_widget_position().y;
+        let start = (((ui.clip_rect().top() - origin) / stride).floor().max(0.0) as usize).min(entry.files.len());
+        let end = ((((ui.clip_rect().bottom() - origin) / stride).ceil().max(0.0) as usize) + 1).min(entry.files.len()).max(start);
+        if start > 0 { ui.add_space(start as f32 * stride); }
+                for index in start..end {
                     let file = &entry.files[index];
                     let (parent, basename) = file.rsplit_once(['/', '\\']).unwrap_or(("", file));
                     let (rect, _) = ui.allocate_exact_size(
@@ -1053,6 +1065,7 @@ impl View {
                     });
                     self.stats.files += 1;
                 }
+        if end < entry.files.len() { ui.add_space((entry.files.len() - end) as f32 * stride); }
             });
     }
 
@@ -1355,6 +1368,21 @@ mod tests {
     }
 
     #[test]
+    fn library_layout_controls_have_accessible_names() {
+        let ctx = egui::Context::default();
+        setup(&ctx);
+        ctx.enable_accesskit();
+        let mut view = View::default();
+        let mut catalog = populated_catalog();
+        render(&ctx, &mut view, &mut catalog, vec![], 1200.0);
+        let output = render(&ctx, &mut view, &mut catalog, vec![], 1200.0);
+        let tree = output.platform_output.accesskit_update.unwrap();
+        for label in ["Cards", "List"] {
+            assert!(tree.nodes.iter().any(|(_, node)| node.label() == Some(label)), "missing accessible {label} control");
+        }
+    }
+
+    #[test]
     fn search_has_a_comfortable_input_target_in_both_layouts() {
         for width in [680.0, 940.0, 1200.0] {
             let mut catalog = populated_catalog();
@@ -1385,6 +1413,28 @@ mod tests {
                 modifiers: Default::default(),
             },
         ]
+    }
+
+    #[test]
+    fn short_details_popup_shows_a_readable_preview_and_keeps_close_visible() {
+        let ctx = egui::Context::default();
+        setup(&ctx);
+        let mut view = View::default();
+        let mut catalog = populated_catalog();
+        catalog.select(0);
+        view.detail_open = catalog.selected.clone();
+        let screen = egui::Rect::from_min_size(egui::Pos2::ZERO, egui::vec2(640.0, 480.0));
+        let mut output = None;
+        for _ in 0..3 {
+            let mut frame = ctx.run_ui(egui::RawInput { screen_rect: Some(screen), ..Default::default() }, |ui| { view.show(ui, &mut catalog); });
+            frame.textures_delta.clear();
+            output = Some(frame);
+        }
+        let popup = ctx.read_response(egui::Id::new(("mod-details", &catalog.selected_mod().unwrap().name))).unwrap().rect;
+        assert!(screen.contains_rect(popup));
+        assert!(screen.contains_rect(view.stats.detail_close.unwrap()));
+        assert!(output.unwrap().shapes.iter().any(|shape| matches!(&shape.shape, egui::epaint::Shape::Text(text)
+            if text.galley.text() == "No Preview" && popup.contains(text.pos) && shape.clip_rect.contains(text.pos + text.galley.rect.center().to_vec2()) && shape.clip_rect.height() >= 120.0)), "preview must be visible in the popup body, not clipped to a strip");
     }
 
     #[test]
