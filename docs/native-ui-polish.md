@@ -19,7 +19,7 @@ All eight repository-required checks passed:
 | Check | Evidence |
 | --- | --- |
 | Core Rust tests | 120 unit tests and 36 integration tests passed. Live provider tests remain opt-in. |
-| Native Rust tests | 58 unit tests, 10 management tests and 13 navigation tests passed. |
+| Native Rust tests | 58 unit tests, 10 management tests and 14 navigation tests passed. |
 | Clippy | All native targets passed with warnings denied. |
 | Release build | Built `native/target/release/ts4-mod-manager-native` with the locked dependencies. |
 | Python tests | All 10 tests passed. |
@@ -34,6 +34,8 @@ A follow-up preview refinement removes the full-width colored strip behind loade
 The component polish increases tall-window details previews to 240 points and lets shorter entries shrink to their content. Source metadata has tighter spacing, section headings share a 16-point size, source actions use full-height buttons, and Enable uses the selection fill. The footer separates Previous/Next from Close. Regression coverage checks a one-file popup's height and image size, footer placement, exact source URL opening/copying and clipboard feedback. Existing tests still reach file 10,000, preserve full file paths and keep Close visible at 640×480.
 
 All eight checks passed for this component pass. The harness now captures 25 views, adding one-file details with an author in dark and synthetic amber themes. Eight affected layouts were inspected together, followed by one confirmation batch. The first batch verifies light/dark, narrow, long-title and 640×480 layouts; the confirmation verifies the amber palette. The [amber details capture](images/mod-details-amber.png) uses synthetic content, not a downloaded mod.
+
+Escape now returns from Settings to the library without saving or discarding drafts, even while a field is focused or background recovery is pending. It leaves an open menu, Help or management review to handle Escape first. Navigation tests exercise Help → Settings → library, action menu → details, and review cancellation → details, preserving drafts, selection and search without quitting or cancelling background work. All eight required checks passed after this change.
 
 Run the capture tools from a graphical desktop:
 

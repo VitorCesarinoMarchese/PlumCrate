@@ -250,6 +250,18 @@ impl View {
         let narrow = ui.available_width() < 1040.0;
         let foreground = ui.visuals().text_color();
         let review_open = controls.as_ref().is_some_and(|c| c.review_open() || c.busy());
+        if !self.help_open
+            && !egui::Popup::is_any_open(ui.ctx())
+            && let Some(c) = controls.as_deref_mut().filter(|c| c.settings_page && !c.review_open())
+            && ui.input_mut(|input| input.consume_key(egui::Modifiers::NONE, egui::Key::Escape))
+        {
+            c.settings_page = false;
+            ui.memory_mut(|memory| {
+                if let Some(id) = memory.focused() {
+                    memory.surrender_focus(id);
+                }
+            });
+        }
         let search_requested = !review_open && !controls.as_ref().is_some_and(|c| c.settings_page)
             && ui.input_mut(|input| input.consume_key(egui::Modifiers::CTRL, egui::Key::F));
         if search_requested { self.detail_open = None; self.help_open = false; }
@@ -593,7 +605,7 @@ impl View {
                         ("Inspect and organize", "Click a card or list row for details. Use Previous/Next to browse. Right-click a mod for rename, source and trash actions. Trash remains recoverable."),
                         ("Save a source", "Find source uses your locally saved CurseForge key. No match? Attach a known URL manually. Review every attachment before saving."),
                         ("Change appearance", "Settings previews your choices. Save settings keeps them; Discard restores saved values. The header Light/Dark switch saves immediately."),
-                        ("Keyboard shortcuts", "Ctrl+F searches · Alt+Left/Right browses open mod details · Tab moves focus · Enter/Space activates buttons · Escape closes popups · F1 opens Help."),
+                        ("Keyboard shortcuts", "Ctrl+F searches · Alt+Left/Right browses open mod details · Tab moves focus · Enter/Space activates buttons · Escape goes back one level · F1 opens Help."),
                     ] {
                         ui.label(RichText::new(title).strong()); ui.label(body); ui.add_space(12.0);
                     }

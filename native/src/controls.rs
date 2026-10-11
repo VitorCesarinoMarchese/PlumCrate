@@ -679,7 +679,7 @@ impl Controls {
                 if ui.add_enabled(self.settings_dirty(), egui::Button::new("Discard")).clicked() {
                     self.discard_preferences(&ctx);
                 }
-                if ui.button("Back to library").clicked() {
+                if ui.button("Back to library").on_hover_text("Back to library (Escape)").clicked() {
                     self.settings_page = false;
                 }
             });

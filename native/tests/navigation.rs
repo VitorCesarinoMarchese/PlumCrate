@@ -35,6 +35,141 @@ fn has_text(output: &egui::FullOutput, value: &str) -> bool {
         .iter()
         .any(|s| matches!(&s.shape, egui::epaint::Shape::Text(t) if t.galley.text() == value))
 }
+fn escape() -> Vec<egui::Event> {
+    vec![egui::Event::Key {
+        key: egui::Key::Escape,
+        physical_key: None,
+        pressed: true,
+        repeat: false,
+        modifiers: Default::default(),
+    }]
+}
+
+#[test]
+fn escape_goes_back_one_level_and_keeps_settings_drafts_and_library_state() {
+    let fixture = tempfile::tempdir().unwrap();
+    let mut controls = Controls::new(
+        fixture.path().join("managed"),
+        fixture.path().into(),
+        Settings::default(),
+        || {},
+    )
+    .unwrap();
+    let mut catalog = Catalog::default();
+    let generation = catalog.begin_scan(fixture.path().join("game"));
+    catalog.accept_scan(
+        generation,
+        Ok(vec![serde_json::from_value(serde_json::json!({
+        "key":"fixture", "id":"fixture", "name":"Synthetic collection", "files":["a.package"],
+        "mod_files":["a.package"], "source":"managed", "enabled":false, "group_path":[]
+    })).unwrap()]),
+    );
+    catalog.select(0);
+    catalog.search("Synthetic".into());
+    let selected = catalog.selected.clone();
+    let draft_root = fixture.path().join("draft-game").display().to_string();
+    controls.settings.game_roots.push(draft_root.clone());
+    controls.settings_page = true;
+    let ctx = egui::Context::default();
+    ui::setup(&ctx);
+    let mut view = View::default();
+    assert!(controls.busy(), "the worker starts with recovery pending");
+    frame(&ctx, &mut view, &mut controls, &mut catalog, vec![]);
+    frame(&ctx, &mut view, &mut controls, &mut catalog, escape());
+    assert!(
+        !controls.settings_page,
+        "background work must not block going back from Settings"
+    );
+    assert!(
+        controls.busy(),
+        "going back must not cancel background work"
+    );
+    controls.settings_page = true;
+    let deadline = std::time::Instant::now() + std::time::Duration::from_secs(5);
+    while controls.busy() {
+        controls.poll(&catalog);
+        assert!(std::time::Instant::now() < deadline);
+        std::thread::sleep(std::time::Duration::from_millis(2));
+    }
+    frame(&ctx, &mut view, &mut controls, &mut catalog, vec![]);
+    frame(
+        &ctx,
+        &mut view,
+        &mut controls,
+        &mut catalog,
+        vec![egui::Event::Key {
+            key: egui::Key::F1,
+            physical_key: None,
+            pressed: true,
+            repeat: false,
+            modifiers: Default::default(),
+        }],
+    );
+    frame(&ctx, &mut view, &mut controls, &mut catalog, vec![]);
+    frame(&ctx, &mut view, &mut controls, &mut catalog, escape());
+    let output = frame(&ctx, &mut view, &mut controls, &mut catalog, vec![]);
+    assert!(
+        controls.settings_page,
+        "Escape from Help must return to Settings first"
+    );
+    assert!(!has_text(&output, "Using your mod library"));
+    frame(
+        &ctx,
+        &mut view,
+        &mut controls,
+        &mut catalog,
+        click_text(&output, "Create custom theme"),
+    );
+    let output = frame(&ctx, &mut view, &mut controls, &mut catalog, vec![]);
+    frame(
+        &ctx,
+        &mut view,
+        &mut controls,
+        &mut catalog,
+        click_text(&output, "Custom theme 1"),
+    );
+    assert!(
+        ctx.memory(|memory| memory.focused().is_some()),
+        "exercise Escape with an active settings text field"
+    );
+    frame(&ctx, &mut view, &mut controls, &mut catalog, escape());
+    let output = frame(&ctx, &mut view, &mut controls, &mut catalog, vec![]);
+    assert!(
+        !controls.settings_page,
+        "Escape from Settings must return to the library"
+    );
+    assert!(has_text(&output, "Mod library"));
+    assert!(controls.settings_dirty());
+    assert_eq!(controls.settings.game_roots, vec![draft_root]);
+    assert_eq!(catalog.selected, selected);
+    assert_eq!(catalog.query, "Synthetic");
+    controls.settings_page = true;
+    let output = frame(&ctx, &mut view, &mut controls, &mut catalog, vec![]);
+    assert!(
+        has_text(&output, "Custom theme 1"),
+        "returning to Settings must preserve the theme draft"
+    );
+    frame(&ctx, &mut view, &mut controls, &mut catalog, escape());
+    let output = frame(&ctx, &mut view, &mut controls, &mut catalog, escape());
+    assert!(!controls.settings_page);
+    assert_eq!(catalog.selected, selected);
+    assert_eq!(catalog.query, "Synthetic");
+    assert!(
+        !output
+            .viewport_output
+            .values()
+            .any(|viewport| viewport.commands.contains(&egui::ViewportCommand::Close)),
+        "Escape at the library must not quit"
+    );
+    assert!(
+        !fixture
+            .path()
+            .join(".config/ts4-mod-manager/settings.json")
+            .exists(),
+        "going back must not save drafts"
+    );
+}
+
 #[test]
 fn settings_occupies_page_without_library_or_floating_window() {
     let dir = tempfile::tempdir().unwrap();
@@ -634,6 +769,12 @@ fn details_popup_yields_to_reviews_and_returns_after_cancel() {
             &mut catalog,
             click_text(&output, "More actions"),
         );
+        frame(&ctx, &mut view, &mut controls, &mut catalog, vec![]);
+        frame(&ctx, &mut view, &mut controls, &mut catalog, escape());
+        let output = frame(&ctx, &mut view, &mut controls, &mut catalog, vec![]);
+        assert!(!egui::Popup::is_any_open(&ctx), "Escape closes the action menu first");
+        assert!(view.stats.detail_close.is_some(), "closing the menu must keep mod details open");
+        frame(&ctx, &mut view, &mut controls, &mut catalog, click_text(&output, "More actions"));
         frame(&ctx, &mut view, &mut controls, &mut catalog, vec![]);
         let output = frame(&ctx, &mut view, &mut controls, &mut catalog, vec![]);
         frame(

@@ -132,6 +132,6 @@ Navigation and Settings validation passed 46 native tests, native clippy and the
 
 ### Browsing and readability
 
-Cards and List have visible labels. Ctrl+F focuses search; details have Previous/Next controls and Alt+Left/Right shortcuts that follow the current filter. Help (F1) explains imports, sources, recoverable removal, settings and keyboard controls. Views without saved previews use smaller cards.
+Cards and List have visible labels. Ctrl+F focuses search; details have Previous/Next controls and Alt+Left/Right shortcuts that follow the current filter. Help (F1) explains imports, sources, recoverable removal, settings and keyboard controls. Escape goes back one level: an open menu closes first; Help and management reviews return to the underlying page or mod details; mod details return to the library. From Settings, Escape returns to the library even with a text field focused or background work running. Unsaved settings drafts, search and selection stay intact. At the library, Escape keeps the app open. Views without saved previews use smaller cards.
 
 Custom palettes below 4.5:1 for their text, metadata or links display contrast warnings. The affected mode uses built-in colors until corrected, preserving the stored palette for editing. Reset colors restores the displayed version. Settings exports and source lookup use saved preferences.
