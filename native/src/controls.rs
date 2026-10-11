@@ -518,7 +518,11 @@ impl Controls {
                 if let Some(entry) = catalog.selected_mod().filter(|entry| {
                     catalog.root.is_some() && !catalog.loading && entry.id.is_some()
                 }) && ui
-                    .button(if entry.enabled { "Disable" } else { "Enable" })
+                    .add(if entry.enabled {
+                        egui::Button::new("Disable")
+                    } else {
+                        egui::Button::new("Enable").fill(ui.visuals().selection.bg_fill)
+                    })
                     .clicked()
                     && let Some(id) = self.identity(catalog)
                 {

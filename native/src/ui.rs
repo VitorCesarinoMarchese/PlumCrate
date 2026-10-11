@@ -907,49 +907,83 @@ impl View {
             return;
         };
         let title = entry.name.clone();
-        let position = catalog.visible.iter().position(|index| Some(EntryId::of(&catalog.mods[*index])) == catalog.selected);
+        let position = catalog
+            .visible
+            .iter()
+            .position(|index| Some(EntryId::of(&catalog.mods[*index])) == catalog.selected);
         let mut direction = 0;
         if !egui::Popup::is_any_open(ctx) {
-            if ctx.input_mut(|input| input.consume_key(egui::Modifiers::ALT, egui::Key::ArrowLeft)) { direction = -1; }
-            if ctx.input_mut(|input| input.consume_key(egui::Modifiers::ALT, egui::Key::ArrowRight)) { direction = 1; }
+            if ctx.input_mut(|input| input.consume_key(egui::Modifiers::ALT, egui::Key::ArrowLeft))
+            {
+                direction = -1;
+            }
+            if ctx.input_mut(|input| input.consume_key(egui::Modifiers::ALT, egui::Key::ArrowRight))
+            {
+                direction = 1;
+            }
         }
         let popup = crate::popup::show_width(ctx, "mod-details", &title, 600.0, |ui| {
             if let Some(c) = controls {
                 c.selected_actions(ui, catalog);
-                ui.add_space(16.0);
+                ui.add_space(8.0);
             }
             let height =
-                (ctx.content_rect().height() - ui.min_rect().height() - 148.0).clamp(120.0, 560.0);
-            ui.allocate_ui_with_layout(
-                egui::vec2(ui.available_width(), height),
-                egui::Layout::top_down(egui::Align::Min),
-                |ui| self.details(ui, catalog),
-            );
-            ui.add_space(16.0);
-            ui.allocate_ui_with_layout(egui::vec2(ui.available_width(), 36.0), egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                let close = ui.add_sized([80.0, 36.0], egui::Button::new("Close"));
-                self.stats.detail_close = Some(close.rect);
-                if ui.add_enabled(position.is_some_and(|i| i + 1 < catalog.visible.len()), egui::Button::new("Next").min_size(egui::vec2(80.0, 36.0))).on_hover_text("Next mod (Alt+Right)").clicked() { direction = 1; }
-                if ui.add_enabled(position.is_some_and(|i| i > 0), egui::Button::new("Previous").min_size(egui::vec2(80.0, 36.0))).on_hover_text("Previous mod (Alt+Left)").clicked() { direction = -1; }
-                close.clicked()
-            }).inner
+                (ctx.content_rect().height() - ui.min_rect().height() - 164.0).clamp(120.0, 560.0);
+            self.details(ui, catalog, height);
+            ui.add_space(12.0);
+            ui.separator();
+            ui.add_space(8.0);
+            ui.horizontal(|ui| {
+                if ui
+                    .add_enabled(
+                        position.is_some_and(|i| i > 0),
+                        egui::Button::new("Previous").min_size(egui::vec2(80.0, 36.0)),
+                    )
+                    .on_hover_text("Previous mod (Alt+Left)")
+                    .clicked()
+                {
+                    direction = -1;
+                }
+                if ui
+                    .add_enabled(
+                        position.is_some_and(|i| i + 1 < catalog.visible.len()),
+                        egui::Button::new("Next").min_size(egui::vec2(80.0, 36.0)),
+                    )
+                    .on_hover_text("Next mod (Alt+Right)")
+                    .clicked()
+                {
+                    direction = 1;
+                }
+                ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                    let close = ui.add_sized([80.0, 36.0], egui::Button::new("Close"));
+                    self.stats.detail_close = Some(close.rect);
+                    close.clicked()
+                })
+                .inner
+            })
+            .inner
         });
         if popup.inner || popup.should_close() {
             self.detail_open = None;
-        } else if let Some(index) = position.and_then(|i| i.checked_add_signed(direction)).filter(|i| *i < catalog.visible.len()) && direction != 0 {
+        } else if let Some(index) = position
+            .and_then(|i| i.checked_add_signed(direction))
+            .filter(|i| *i < catalog.visible.len())
+            && direction != 0
+        {
             catalog.select(catalog.visible[index]);
             self.detail_open = catalog.selected.clone();
         }
     }
 
-    fn details(&mut self, ui: &mut egui::Ui, catalog: &Catalog) {
+    fn details(&mut self, ui: &mut egui::Ui, catalog: &Catalog, height: f32) {
         let Some(entry) = catalog.selected_mod() else {
             return;
         };
-        let compact = ui.available_height() < 320.0;
+        let compact = height < 320.0;
         egui::ScrollArea::vertical()
             .id_salt(("detail-body", catalog.root.clone(), EntryId::of(entry)))
-            .auto_shrink([false, false])
+            .max_height(height)
+            .auto_shrink([false, true])
             .show(ui, |ui| {
                 let state = if entry.enabled {
                     "Installed in this game folder"
@@ -967,9 +1001,9 @@ impl View {
                                 .color(ui.visuals().weak_text_color()),
                         );
                     });
-                ui.add_space(16.0);
+                ui.add_space(8.0);
                 let (photo, response) = ui.allocate_exact_size(
-                    egui::vec2(ui.available_width(), if compact { 120.0 } else { 180.0 }),
+                    egui::vec2(ui.available_width(), if compact { 120.0 } else { 240.0 }),
                     egui::Sense::hover(),
                 );
                 self.paint_preview(
@@ -986,83 +1020,119 @@ impl View {
                         format!("Preview of {}", entry.name),
                     )
                 });
-                ui.add_space(24.0);
+                ui.add_space(16.0);
                 if let Some(source) = &entry.source_url {
-                    ui.label(RichText::new("Saved source").size(14.0).strong());
-                    if let Some(attachment) = &entry.source_attachment {
-                        if let Some(author) = &attachment.author {
-                            ui.label(
-                                RichText::new(author)
-                                    .size(13.0)
+                    ui.scope(|ui| {
+                        ui.spacing_mut().item_spacing.y = 4.0;
+                        ui.label(RichText::new("Saved source").size(16.0).strong());
+                        if let Some(attachment) = &entry.source_attachment {
+                            if let Some(author) = &attachment.author {
+                                ui.label(
+                                    RichText::new(author)
+                                        .size(13.0)
+                                        .color(ui.visuals().weak_text_color()),
+                                );
+                            }
+                            if attachment
+                                .confidence
+                                .is_some_and(|confidence| confidence < 70)
+                            {
+                                ui.label(
+                                    "Low confidence. Verify this source before relying on it.",
+                                );
+                            }
+                        }
+                        ui.add(
+                            egui::Label::new(
+                                RichText::new(source)
+                                    .size(12.0)
                                     .color(ui.visuals().weak_text_color()),
-                            );
-                        }
-                        if attachment
-                            .confidence
-                            .is_some_and(|confidence| confidence < 70)
-                        {
-                            ui.label("Low confidence. Verify this source before relying on it.");
-                        }
-                    }
-                    ui.add(
-                        egui::Label::new(
-                            RichText::new(source)
-                                .size(12.0)
-                                .color(ui.visuals().weak_text_color()),
-                        )
-                        .selectable(true)
-                        .wrap(),
+                            )
+                            .selectable(true)
+                            .wrap(),
+                        );
+                        let identity = EntryId::of(entry);
+                        let now = ui.input(|input| input.time);
+                        let copied = self
+                            .source_copied
+                            .as_ref()
+                            .is_some_and(|(id, until)| *id == identity && now < *until);
+                        ui.add_space(4.0);
+                        ui.horizontal_wrapped(|ui| {
+                            if ui
+                                .button(
+                                    RichText::new("Open source")
+                                        .color(ui.visuals().hyperlink_color),
+                                )
+                                .clicked()
+                            {
+                                ui.ctx().open_url(egui::OpenUrl::new_tab(source));
+                            }
+                            let icon = if copied { Icon::Check } else { Icon::Copy };
+                            if ui
+                                .add(egui::Button::image_and_text(
+                                    icon.image(ui.visuals().text_color(), 14.0),
+                                    if copied { "URL copied" } else { "Copy URL" },
+                                ))
+                                .clicked()
+                            {
+                                ui.ctx().copy_text(source.clone());
+                                self.source_copied = Some((identity, now + 2.0));
+                                ui.ctx()
+                                    .request_repaint_after(std::time::Duration::from_secs(2));
+                            }
+                        });
+                    });
+                    ui.add_space(12.0);
+                }
+                ui.separator();
+                ui.add_space(8.0);
+                let identity = EntryId::of(entry);
+                let now = ui.input(|input| input.time);
+                let copied = self
+                    .copied
+                    .as_ref()
+                    .is_some_and(|(id, until)| *id == identity && now < *until);
+                ui.horizontal(|ui| {
+                    ui.label(RichText::new("Files").size(16.0).strong());
+                    ui.label(
+                        RichText::new(format!("{}", entry.files.len()))
+                            .size(13.0)
+                            .color(ui.visuals().weak_text_color()),
                     );
-                    let identity = EntryId::of(entry);
-                    let now = ui.input(|input| input.time);
-                    let copied = self.source_copied.as_ref().is_some_and(|(id, until)| *id == identity && now < *until);
-                    ui.horizontal_wrapped(|ui| {
-                        ui.hyperlink_to("Open source", source);
-                        if ui.button(if copied { "URL copied" } else { "Copy URL" }).clicked() {
-                            ui.ctx().copy_text(source.clone());
-                            self.source_copied = Some((identity, now + 2.0));
-                            ui.ctx().request_repaint_after(std::time::Duration::from_secs(2));
+                    ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                        let icon = if copied { Icon::Check } else { Icon::Copy };
+                        let copy = ui.add(egui::Button::image_and_text(
+                            icon.image(ui.visuals().text_color(), 14.0),
+                            if copied {
+                                "Paths copied"
+                            } else {
+                                "Copy file paths"
+                            },
+                        ));
+                        self.stats.copy = Some(copy.rect);
+                        if copy.clicked() {
+                            ui.ctx().copy_text(entry.files.join("\n"));
+                            self.copied = Some((identity.clone(), now + 2.0));
+                            ui.ctx()
+                                .request_repaint_after(std::time::Duration::from_secs(2));
                         }
                     });
-                    ui.add_space(16.0);
+                });
+                ui.add_space(4.0);
+                let stride = 48.0 + ui.spacing().item_spacing.y;
+                let origin = ui.next_widget_position().y;
+                let start = (((ui.clip_rect().top() - origin) / stride).floor().max(0.0) as usize)
+                    .min(entry.files.len());
+                let end = ((((ui.clip_rect().bottom() - origin) / stride)
+                    .ceil()
+                    .max(0.0) as usize)
+                    + 1)
+                .min(entry.files.len())
+                .max(start);
+                if start > 0 {
+                    ui.add_space(start as f32 * stride);
                 }
-        ui.add_space(12.0);
-        ui.separator();
-        ui.add_space(12.0);
-        let identity = EntryId::of(entry);
-        let now = ui.input(|input| input.time);
-        let copied = self
-            .copied
-            .as_ref()
-            .is_some_and(|(id, until)| *id == identity && now < *until);
-        ui.horizontal(|ui| {
-            ui.label(RichText::new("Files").size(16.0).strong());
-            ui.label(
-                RichText::new(format!("{}", entry.files.len()))
-                    .size(13.0)
-                    .color(ui.visuals().weak_text_color()),
-            );
-            ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                let icon = if copied { Icon::Check } else { Icon::Copy };
-                let copy = ui.add(egui::Button::image_and_text(
-                    icon.image(ui.visuals().text_color(), 14.0),
-                    if copied { "Paths copied" } else { "Copy file paths" },
-                ));
-                self.stats.copy = Some(copy.rect);
-                if copy.clicked() {
-                    ui.ctx().copy_text(entry.files.join("\n"));
-                    self.copied = Some((identity.clone(), now + 2.0));
-                    ui.ctx()
-                        .request_repaint_after(std::time::Duration::from_secs(2));
-                }
-            });
-        });
-        ui.add_space(12.0);
-        let stride = 48.0 + ui.spacing().item_spacing.y;
-        let origin = ui.next_widget_position().y;
-        let start = (((ui.clip_rect().top() - origin) / stride).floor().max(0.0) as usize).min(entry.files.len());
-        let end = ((((ui.clip_rect().bottom() - origin) / stride).ceil().max(0.0) as usize) + 1).min(entry.files.len()).max(start);
-        if start > 0 { ui.add_space(start as f32 * stride); }
                 for index in start..end {
                     let file = &entry.files[index];
                     let (parent, basename) = file.rsplit_once(['/', '\\']).unwrap_or(("", file));
@@ -1098,7 +1168,9 @@ impl View {
                     });
                     self.stats.files += 1;
                 }
-        if end < entry.files.len() { ui.add_space((entry.files.len() - end) as f32 * stride); }
+                if end < entry.files.len() {
+                    ui.add_space((entry.files.len() - end) as f32 * stride);
+                }
             });
     }
 
@@ -1572,6 +1644,120 @@ mod tests {
         assert!(view.stats.files > 0 && view.stats.files < 40);
         let last = catalog.selected_mod().unwrap().files.last().unwrap().rsplit('/').next().unwrap();
         assert!(output.shapes.iter().any(|shape| matches!(&shape.shape, egui::epaint::Shape::Text(text) if text.galley.text() == last)), "one body scroll must reach the final file");
+    }
+
+    #[test]
+    fn details_source_actions_have_comfortable_targets_and_preserve_the_saved_url() {
+        let ctx = egui::Context::default();
+        setup(&ctx);
+        let mut view = View::default();
+        let mut catalog = populated_catalog();
+        let source = "https://example.com/a-saved-source?file=42&name=Original";
+        catalog.mods[0].source_url = Some(source.into());
+        catalog.mods[0].files = vec!["One.package".into()];
+        view.detail_open = catalog.selected.clone();
+        for _ in 0..3 {
+            render(&ctx, &mut view, &mut catalog, vec![], 1200.0);
+        }
+        let output = render(&ctx, &mut view, &mut catalog, vec![], 1200.0);
+        let position = |output: &egui::FullOutput, label: &str| {
+            output
+                .shapes
+                .iter()
+                .find_map(|shape| match &shape.shape {
+                    egui::epaint::Shape::Text(text) if text.galley.text() == label => {
+                        Some(text.pos + text.galley.rect.center().to_vec2())
+                    }
+                    _ => None,
+                })
+                .unwrap()
+        };
+        let output = render(
+            &ctx,
+            &mut view,
+            &mut catalog,
+            click(position(&output, "Open source") + egui::vec2(0.0, 9.0)),
+            1200.0,
+        );
+        assert!(output.platform_output.commands.iter().any(
+            |command| matches!(command, egui::OutputCommand::OpenUrl(url) if url.url == source)
+        ));
+        let output = render(
+            &ctx,
+            &mut view,
+            &mut catalog,
+            click(position(&output, "Copy URL")),
+            1200.0,
+        );
+        assert!(output.platform_output.commands.iter().any(
+            |command| matches!(command, egui::OutputCommand::CopyText(text) if text == source)
+        ));
+        let output = render(&ctx, &mut view, &mut catalog, vec![], 1200.0);
+        assert!(output.shapes.iter().any(|shape| matches!(&shape.shape, egui::epaint::Shape::Text(text) if text.galley.text() == "URL copied")));
+    }
+
+    #[test]
+    fn short_mod_details_shrink_to_content_and_give_the_preview_more_space() {
+        let ctx = egui::Context::default();
+        setup(&ctx);
+        let mut view = View::default();
+        let mut catalog = populated_catalog();
+        catalog.mods[0].files = vec!["One.package".into()];
+        catalog.mods[0].source_url = None;
+        catalog.select(0);
+        view.detail_open = catalog.selected.clone();
+        for _ in 0..3 {
+            render(&ctx, &mut view, &mut catalog, vec![], 1200.0);
+        }
+        let output = render(&ctx, &mut view, &mut catalog, vec![], 1200.0);
+        let popup = ctx
+            .read_response(egui::Id::new((
+                "mod-details",
+                &catalog.selected_mod().unwrap().name,
+            )))
+            .unwrap()
+            .rect;
+        assert!(
+            popup.height() < 650.0,
+            "one-file details should not reserve space for a long list: {popup:?}"
+        );
+        let preview = output
+            .shapes
+            .iter()
+            .find_map(|shape| match &shape.shape {
+                egui::epaint::Shape::Rect(rect)
+                    if popup.contains_rect(rect.rect)
+                        && rect.rect.width() > 400.0
+                        && rect.rect.height() >= 120.0
+                        && rect.rect.height() < 300.0 =>
+                {
+                    Some(rect.rect)
+                }
+                _ => None,
+            })
+            .expect("preview placeholder");
+        assert!(
+            preview.height() >= 240.0,
+            "tall windows should give the mod preview more presence"
+        );
+        let previous = output
+            .shapes
+            .iter()
+            .find_map(|shape| match &shape.shape {
+                egui::epaint::Shape::Text(text) if text.galley.text() == "Previous" => {
+                    Some(text.pos)
+                }
+                _ => None,
+            })
+            .unwrap();
+        assert!(
+            previous.x < popup.left() + popup.width() / 2.0,
+            "navigation belongs on the left of the footer"
+        );
+        assert!(
+            ctx.content_rect()
+                .contains_rect(view.stats.detail_close.unwrap())
+        );
     }
 
     #[test]

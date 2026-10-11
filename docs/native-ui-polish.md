@@ -19,7 +19,7 @@ All eight repository-required checks passed:
 | Check | Evidence |
 | --- | --- |
 | Core Rust tests | 120 unit tests and 36 integration tests passed. Live provider tests remain opt-in. |
-| Native Rust tests | 56 unit tests, 10 management tests and 13 navigation tests passed. |
+| Native Rust tests | 58 unit tests, 10 management tests and 13 navigation tests passed. |
 | Clippy | All native targets passed with warnings denied. |
 | Release build | Built `native/target/release/ts4-mod-manager-native` with the locked dependencies. |
 | Python tests | All 10 tests passed. |
@@ -30,6 +30,10 @@ All eight repository-required checks passed:
 Visual verification inspected 32 native captures together, followed by one confirmation round: 11 library/settings/custom-theme views and 21 popup, recovery and compact-library views. Captures include light/dark, narrow, long-content and 640×480 cases. Details capture checks require an actual open popup, visible Close and at least 15,000 preview pixels. No capture approved an operation or saved settings.
 
 A follow-up preview refinement removes the full-width colored strip behind loaded details images. Square, portrait and landscape images retain their proportions and remain centered; thumbnails and missing-image placeholders keep their backgrounds. The regression test first failed on the empty side gutters, then passed after the fix. All eight checks were rerun. The popup harness captured 23 views, adding square-image cases in light and dark; six affected detail layouts were inspected together, including 640×480 and long titles. See the [square preview capture](images/mod-details-square.png).
+
+The component polish increases tall-window details previews to 240 points and lets shorter entries shrink to their content. Source metadata has tighter spacing, section headings share a 16-point size, source actions use full-height buttons, and Enable uses the selection fill. The footer separates Previous/Next from Close. Regression coverage checks a one-file popup's height and image size, footer placement, exact source URL opening/copying and clipboard feedback. Existing tests still reach file 10,000, preserve full file paths and keep Close visible at 640×480.
+
+All eight checks passed for this component pass. The harness now captures 25 views, adding one-file details with an author in dark and synthetic amber themes. Eight affected layouts were inspected together, followed by one confirmation batch. The first batch verifies light/dark, narrow, long-title and 640×480 layouts; the confirmation verifies the amber palette. The [amber details capture](images/mod-details-amber.png) uses synthetic content, not a downloaded mod.
 
 Run the capture tools from a graphical desktop:
 

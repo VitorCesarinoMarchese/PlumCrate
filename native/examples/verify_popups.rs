@@ -36,7 +36,7 @@ mod controls {
             7 => controls.dialog = Some(Dialog::SettingsImport(Settings::default(), false)),
             8 => controls.candidates = Some((identity, vec![])),
             9 => controls.trash_entries = Some((identity, vec![])),
-            10..=16 | 20..=22 => {},
+            10..=16 | 20..=23 => {},
             17..=18 => {
                 let mut theme = crate::settings::CustomTheme::base();
                 theme.name = "Contrast check".into();
@@ -45,6 +45,17 @@ mod controls {
                 controls.settings.active_custom_theme = Some(theme.name.clone());
                 controls.settings.custom_themes = vec![theme.clone()];
                 controls.theme_edit = Some(theme);
+            },
+            24 => {
+                let mut theme = crate::settings::CustomTheme::base();
+                theme.name = "Synthetic amber palette".into();
+                theme.dark = crate::settings::ThemeColors {
+                    accent: "#F3CC3E".into(), background: "#241C0D".into(), surface: "#483B18".into(),
+                    text: "#F4EED9".into(), muted_text: "#C4B890".into(), border: "#75633A".into(),
+                };
+                assert!(theme.dark.contrast_warnings().is_empty());
+                controls.settings.active_custom_theme = Some(theme.name.clone());
+                controls.settings.custom_themes = vec![theme];
             },
             19 => {
                 controls.settings.game_roots.push(catalog.root.as_ref().unwrap().display().to_string());
@@ -59,7 +70,7 @@ mod controls {
     }
 }
 
-const CASES: [(&str, bool, [f32; 2]); 23] = [
+const CASES: [(&str, bool, [f32; 2]); 25] = [
     ("import-zip-light", false, [1200.0, 800.0]),
     ("import-zip-dark", true, [1200.0, 800.0]),
     ("import-zip-small", false, [640.0, 480.0]),
@@ -83,6 +94,8 @@ const CASES: [(&str, bool, [f32; 2]); 23] = [
     ("compact-no-previews", false, [680.0, 760.0]),
     ("mod-details-square-light", false, [1200.0, 800.0]),
     ("mod-details-square-dark", true, [680.0, 760.0]),
+    ("mod-details-one-file", true, [1200.0, 800.0]),
+    ("mod-details-one-file-amber", true, [680.0, 800.0]),
 ];
 
 struct Capture {
@@ -120,10 +133,21 @@ impl Capture {
             self.case,
             self.source.clone(),
         );
+        if self.case == 24 {
+            ui::apply_settings_theme(ctx, &self.controls.settings);
+            ctx.set_theme(egui::Theme::Dark);
+        }
         self.view = ui::View::default();
         self.view.scan_ms = Some(0.0);
         self.opened = (17..=20).contains(&self.case);
         if self.case >= 21 { self.catalog.mods[0].preview = Some(self.source.with_file_name("square-preview.png").display().to_string()); }
+        if self.case >= 23 {
+            self.catalog.mods[0].files = vec!["Synthetic collection.package".into()];
+            self.catalog.mods[0].source_attachment = Some(serde_json::from_value(serde_json::json!({
+                "providerId":"fixture", "sourceUrl":"https://example.com/synthetic-collection", "title":"Synthetic collection",
+                "author":"Synthetic creator", "attachedBy":"user", "attachedAt":"2026-10-11T00:00:00Z"
+            })).unwrap());
+        }
         if self.case == 20 { for entry in &mut self.catalog.mods { entry.preview = None; } }
         self.catalog.mods[0].name = if self.case == 14 {
             "Synthetic collection with a very long name, release date, and additional pack details"
@@ -145,7 +169,7 @@ impl eframe::App for Capture {
             self.stable_frames = 0;
             self.staged = Instant::now();
         }
-        if ((10..=14).contains(&self.case) || (21..=22).contains(&self.case))
+        if ((10..=14).contains(&self.case) || (21..=24).contains(&self.case))
             && !self.opened
             && self.stable_frames >= 2
             && let Some(row) = self.view.stats.first_row
@@ -192,7 +216,7 @@ impl eframe::App for Capture {
                 .iter()
                 .flat_map(|pixel| pixel.to_array())
                 .collect::<Vec<_>>();
-            if (10..=14).contains(&self.case) || (21..=22).contains(&self.case) {
+            if (10..=14).contains(&self.case) || (21..=24).contains(&self.case) {
                 let preview_pixels = image.pixels.iter().filter(|pixel| pixel.to_array() == [30, 120, 95, 255]).count();
                 assert!(preview_pixels >= 15_000, "details preview must remain readable, including in a short window");
             }
@@ -223,7 +247,7 @@ impl eframe::App for Capture {
                 && !ctx.has_pending_images()
                 && (self.case < 10 || self.opened)
             {
-                if (10..=14).contains(&self.case) || (21..=22).contains(&self.case) {
+                if (10..=14).contains(&self.case) || (21..=24).contains(&self.case) {
                     let close = self.view.stats.detail_close.expect("details must actually open before capture");
                     assert!(ctx.content_rect().contains_rect(close));
                 }
