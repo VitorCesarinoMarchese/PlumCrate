@@ -1110,9 +1110,12 @@ impl View {
         rect: egui::Rect,
         thumbnail: bool,
     ) {
-        ui.painter()
-            .rect_filled(rect, 6.0, ui.visuals().widgets.inactive.weak_bg_fill);
-        match self.previews.load(ui.ctx(), preview, root) {
+        let state = self.previews.load(ui.ctx(), preview, root);
+        if thumbnail || !matches!(state, crate::preview::State::Ready(_)) {
+            ui.painter()
+                .rect_filled(rect, 6.0, ui.visuals().widgets.inactive.weak_bg_fill);
+        }
+        match state {
             crate::preview::State::Ready(texture) => {
                 let image = egui::Image::new(texture).corner_radius(6);
                 if thumbnail {
@@ -1372,6 +1375,45 @@ mod tests {
         assert!(view.stats.files > 0 && view.stats.files < 40);
         render(&ctx, &mut view, &mut catalog, vec![], 680.0);
         assert!(view.stats.rows < 30);
+    }
+
+    #[test]
+    fn detail_photos_keep_their_proportions_without_a_full_width_tray() {
+        let temp = tempfile::tempdir().unwrap();
+        for (width, height) in [(80, 80), (40, 80), (160, 80)] {
+            let path = temp.path().join(format!("{width}x{height}.png"));
+            image::RgbaImage::from_pixel(width, height, image::Rgba([10, 100, 80, 255]))
+                .save(&path).unwrap();
+            let ctx = egui::Context::default();
+            setup(&ctx);
+            let mut view = View::default();
+            let deadline = std::time::Instant::now() + std::time::Duration::from_secs(5);
+            let texture = loop {
+                if let crate::preview::State::Ready(texture) = view.previews.load(&ctx, path.to_str(), None) {
+                    break texture;
+                }
+                assert!(std::time::Instant::now() < deadline, "photo did not load");
+                std::thread::sleep(std::time::Duration::from_millis(5));
+            };
+            for (preview, thumbnail) in [(path.to_str(), false), (path.to_str(), true), (None, false)] {
+                let mut rect = egui::Rect::NOTHING;
+                let mut output = ctx.run_ui(egui::RawInput::default(), |ui| {
+                    rect = ui.allocate_exact_size(egui::vec2(600.0, 180.0), egui::Sense::hover()).0;
+                    view.paint_preview(ui, preview, None, rect, thumbnail);
+                });
+                output.textures_delta.clear();
+                let has_tray = output.shapes.iter().any(|shape| matches!(&shape.shape,
+                    egui::epaint::Shape::Rect(background) if background.rect == rect && background.fill != egui::Color32::TRANSPARENT));
+                assert_eq!(has_tray, thumbnail || preview.is_none(), "loaded detail photos must not paint empty side gutters");
+                if preview.is_some() && !thumbnail {
+                    let photo = output.shapes.iter().find(|shape| shape.shape.texture_id() == texture.id).unwrap();
+                    let bounds = photo.shape.visual_bounding_rect();
+                    assert!((bounds.width() / bounds.height() - width as f32 / height as f32).abs() < 0.01);
+                    assert!(bounds.center().distance(rect.center()) < 0.1);
+                    assert!(rect.contains_rect(bounds));
+                }
+            }
+        }
     }
 
     #[test]

@@ -36,7 +36,7 @@ mod controls {
             7 => controls.dialog = Some(Dialog::SettingsImport(Settings::default(), false)),
             8 => controls.candidates = Some((identity, vec![])),
             9 => controls.trash_entries = Some((identity, vec![])),
-            10..=16 | 20 => {},
+            10..=16 | 20..=22 => {},
             17..=18 => {
                 let mut theme = crate::settings::CustomTheme::base();
                 theme.name = "Contrast check".into();
@@ -59,7 +59,7 @@ mod controls {
     }
 }
 
-const CASES: [(&str, bool, [f32; 2]); 21] = [
+const CASES: [(&str, bool, [f32; 2]); 23] = [
     ("import-zip-light", false, [1200.0, 800.0]),
     ("import-zip-dark", true, [1200.0, 800.0]),
     ("import-zip-small", false, [640.0, 480.0]),
@@ -81,6 +81,8 @@ const CASES: [(&str, bool, [f32; 2]); 21] = [
     ("theme-contrast-small-dark", true, [640.0, 480.0]),
     ("settings-draft-light", false, [1200.0, 800.0]),
     ("compact-no-previews", false, [680.0, 760.0]),
+    ("mod-details-square-light", false, [1200.0, 800.0]),
+    ("mod-details-square-dark", true, [680.0, 760.0]),
 ];
 
 struct Capture {
@@ -120,7 +122,8 @@ impl Capture {
         );
         self.view = ui::View::default();
         self.view.scan_ms = Some(0.0);
-        self.opened = self.case >= 17;
+        self.opened = (17..=20).contains(&self.case);
+        if self.case >= 21 { self.catalog.mods[0].preview = Some(self.source.with_file_name("square-preview.png").display().to_string()); }
         if self.case == 20 { for entry in &mut self.catalog.mods { entry.preview = None; } }
         self.catalog.mods[0].name = if self.case == 14 {
             "Synthetic collection with a very long name, release date, and additional pack details"
@@ -142,7 +145,7 @@ impl eframe::App for Capture {
             self.stable_frames = 0;
             self.staged = Instant::now();
         }
-        if (10..=14).contains(&self.case)
+        if ((10..=14).contains(&self.case) || (21..=22).contains(&self.case))
             && !self.opened
             && self.stable_frames >= 2
             && let Some(row) = self.view.stats.first_row
@@ -189,7 +192,7 @@ impl eframe::App for Capture {
                 .iter()
                 .flat_map(|pixel| pixel.to_array())
                 .collect::<Vec<_>>();
-            if (10..=14).contains(&self.case) {
+            if (10..=14).contains(&self.case) || (21..=22).contains(&self.case) {
                 let preview_pixels = image.pixels.iter().filter(|pixel| pixel.to_array() == [30, 120, 95, 255]).count();
                 assert!(preview_pixels >= 15_000, "details preview must remain readable, including in a short window");
             }
@@ -220,7 +223,7 @@ impl eframe::App for Capture {
                 && !ctx.has_pending_images()
                 && (self.case < 10 || self.opened)
             {
-                if (10..=14).contains(&self.case) {
+                if (10..=14).contains(&self.case) || (21..=22).contains(&self.case) {
                     let close = self.view.stats.detail_close.expect("details must actually open before capture");
                     assert!(ctx.content_rect().contains_rect(close));
                 }
@@ -249,6 +252,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let source = fixture.path().join("Downloads").join("Synthetic very long archive name with a release date and extra collection details (461347).zip");
     std::fs::create_dir_all(source.parent().unwrap())?;
     std::fs::write(&source, b"synthetic capture fixture, never imported")?;
+    image::RgbaImage::from_pixel(320, 320, image::Rgba([30, 120, 95, 255])).save(source.with_file_name("square-preview.png"))?;
     std::fs::create_dir_all(source.with_extension(""))?;
     let source_check = source.clone();
     let mut catalog = catalog::Catalog::default();
