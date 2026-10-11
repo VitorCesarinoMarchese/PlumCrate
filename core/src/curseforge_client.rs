@@ -154,6 +154,13 @@ impl<T: CurseForgeTransport> CurseForgeClient<T> {
         classify_status(status)?;
         parse_files_response(&body)
     }
+
+    pub(crate) fn get_update_response(&self, path: &str) -> Result<(u16, String), SourceLookupError> {
+        self.transport.get(&CurseForgeRequest {
+            url: format!("{CURSEFORGE_API_BASE}/v1/{path}"),
+            api_key: self.api_key.clone(),
+        })
+    }
 }
 
 pub fn build_search_request(api_key: Option<&str>, search_filter: &str) -> Result<CurseForgeRequest, SourceLookupError> {

@@ -551,7 +551,7 @@ impl View {
                     });
                 });
                 ui.add_space(12.0);
-                if let Some(c) = controls.as_deref_mut() { c.toolbar(ui, catalog); ui.add_space(12.0); }
+                if let Some(c) = controls.as_deref_mut() { c.toolbar(ui, catalog); c.update_summary(ui); ui.add_space(12.0); }
                 egui::Frame::new()
                     .fill(ui.visuals().extreme_bg_color)
                     .stroke(ui.visuals().widgets.noninteractive.bg_stroke)
@@ -637,6 +637,7 @@ impl View {
                         ("Inspect and organize", "Click a card or list row for details. Use Previous/Next to browse. Right-click a mod for rename, source and trash actions. Trash remains recoverable."),
                         ("Browse CurseForge", "Browse mods searches The Sims 4 mods and custom content on CurseForge. Save your API key in Settings, then search, filter by category or sort. Open a project to read its summary and view screenshots. Browsing does not install mods or attach sources."),
                         ("Save a source", "Find source uses your locally saved CurseForge key. No match? Attach a known URL manually. Review every attachment before saving."),
+                        ("Check updates", "Attach a CurseForge source, then choose Check updates. Record the release you installed to compare versions. Update notices link to the mod page; download there, replace your local files, and record the new release."),
                         ("Change appearance", "Settings previews your choices. Save settings keeps them; Discard restores saved values. The header Light/Dark switch saves immediately."),
                         ("Keyboard shortcuts", "Ctrl+F searches · Alt+Left/Right browses open mod details · Tab moves focus · Enter/Space activates buttons · Escape goes back one level · F1 opens Help."),
                     ] {
@@ -716,6 +717,11 @@ impl View {
                                         image_rect,
                                         true,
                                     );
+                                    if entry.id.as_ref().is_some_and(|id| controls.as_ref().is_some_and(|c| c.updates.available(id))) {
+                                        let badge = egui::Rect::from_min_size(image_rect.min + egui::vec2(6.0, 6.0), egui::vec2(132.0, 24.0));
+                                        ui.painter().rect_filled(badge, 4, ui.visuals().selection.bg_fill);
+                                        ui.painter().text(badge.center(), egui::Align2::CENTER_CENTER, "Update available", egui::FontId::proportional(12.0), ui.visuals().selection.stroke.color);
+                                    }
                                     let title_rect = egui::Rect::from_min_max(
                                         rect.min + egui::vec2(14.0, photo_height + 22.0),
                                         rect.max - egui::vec2(14.0, 46.0),
@@ -853,10 +859,11 @@ impl View {
                     };
                     let state = if entry.enabled { "Installed" } else { "Stored" };
                     let count = entry.mod_files.len();
-                    let subtitle = format!(
+                    let mut subtitle = format!(
                         "{origin} · {count} {}",
                         if count == 1 { "mod file" } else { "mod files" }
                     );
+                    if entry.id.as_ref().is_some_and(|id| controls.as_ref().is_some_and(|c| c.updates.available(id))) { subtitle.push_str(" · Update available"); }
                     let selected = catalog.selected.as_ref() == Some(&identity);
                     let response = ui
                         .push_id(identity, |ui| {
@@ -946,7 +953,7 @@ impl View {
         &mut self,
         ctx: &egui::Context,
         catalog: &mut Catalog,
-        controls: Option<&mut crate::controls::Controls>,
+        mut controls: Option<&mut crate::controls::Controls>,
     ) {
         let Some(entry) = catalog.selected_mod() else {
             return;
@@ -968,13 +975,13 @@ impl View {
             }
         }
         let popup = crate::popup::show_width(ctx, "mod-details", &title, 600.0, |ui| {
-            if let Some(c) = controls {
+            if let Some(c) = controls.as_deref_mut() {
                 c.selected_actions(ui, catalog);
                 ui.add_space(8.0);
             }
             let height =
                 (ctx.content_rect().height() - ui.min_rect().height() - 164.0).clamp(120.0, 560.0);
-            self.details(ui, catalog, height);
+            self.details(ui, catalog, height, controls);
             ui.add_space(12.0);
             ui.separator();
             ui.add_space(8.0);
@@ -1020,7 +1027,7 @@ impl View {
         }
     }
 
-    fn details(&mut self, ui: &mut egui::Ui, catalog: &Catalog, height: f32) {
+    fn details(&mut self, ui: &mut egui::Ui, catalog: &Catalog, height: f32, controls: Option<&mut crate::controls::Controls>) {
         let Some(entry) = catalog.selected_mod() else {
             return;
         };
@@ -1047,6 +1054,10 @@ impl View {
                         );
                     });
                 ui.add_space(8.0);
+                if let Some(c) = controls
+                    && entry.id.is_some()
+                    && entry.source_attachment.as_ref().is_some_and(|source| source.provider_id == "curseforge" && source.project_id.is_some())
+                { c.update_details(ui, catalog); ui.add_space(12.0); }
                 let (photo, response) = ui.allocate_exact_size(
                     egui::vec2(ui.available_width(), if compact { 120.0 } else { 240.0 }),
                     egui::Sense::hover(),

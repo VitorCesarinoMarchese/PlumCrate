@@ -37,6 +37,11 @@ struct PendingPicker {
     receiver: std::sync::mpsc::Receiver<Option<PathBuf>>,
 }
 pub struct Controls {
+    pub updates: crate::updates::UpdateState,
+    pub check_updates_rect: Option<egui::Rect>,
+    pub record_release_rect: Option<egui::Rect>,
+    pub open_update_page_rect: Option<egui::Rect>,
+    release_choice: Option<(String, u64)>,
     pub settings_page: bool,
     theme_json: String,
     theme_edit: Option<crate::settings::CustomTheme>,
@@ -83,6 +88,11 @@ impl Controls {
             .cloned();
         let theme_edit_original = settings.active_custom_theme.clone();
         Ok(Self {
+            updates: crate::updates::UpdateState::default(),
+            check_updates_rect: None,
+            record_release_rect: None,
+            open_update_page_rect: None,
+            release_choice: None,
             settings_page: false,
             theme_json: String::new(),
             theme_edit,
@@ -114,6 +124,126 @@ impl Controls {
         })
     }
     pub fn source_api_key(&self) -> Option<&str> { self.saved_settings.curseforge_api_key.as_deref() }
+    pub fn check_updates(&mut self, catalog: &Catalog, mod_ids: Vec<String>) {
+        self.updates.sync(catalog, self.saved_settings.curseforge_api_key.as_deref());
+        if self.updates.pending || catalog.loading || mod_ids.is_empty() { return; }
+        if self.source_api_key().is_none() {
+            self.settings_page = true;
+            self.notice = Some("Save your CurseForge API key, then check for updates.".into());
+            return;
+        }
+        if let Some(mut identity) = self.identity(catalog) {
+            identity.entry = None;
+            let token = self.updates.begin();
+            self.release_choice = None;
+            let operation = identity.operation;
+            self.submit(identity, Action::CheckUpdates {
+                mod_ids,
+                api_key: self.saved_settings.curseforge_api_key.clone(),
+                epoch: self.updates.epoch.clone(),
+                token,
+            });
+            if !self.operations.last().is_some_and(|job| job.job.identity.operation == operation) { self.updates.pending = false; }
+        }
+    }
+    pub fn update_summary(&self, ui: &mut egui::Ui) {
+        if self.updates.pending {
+            ui.horizontal(|ui| { ui.spinner(); ui.label("Checking CurseForge releases..."); });
+        } else if !self.updates.reports.is_empty() {
+            let available = self.updates.reports.keys().filter(|id| self.updates.available(id)).count();
+            let errors = self.updates.reports.values().filter(|r| r.is_err()).count();
+            let unknown = self.updates.reports.values().filter(|r| matches!(r, Ok(report) if matches!(report.status,
+                ts4_mod_manager_core::mod_updates::UpdateStatus::Untracked
+                | ts4_mod_manager_core::mod_updates::UpdateStatus::LocalContentChanged
+                | ts4_mod_manager_core::mod_updates::UpdateStatus::InstalledReleaseUnavailable
+                | ts4_mod_manager_core::mod_updates::UpdateStatus::Incomplete))).count();
+            ui.label(format!("Newer releases: {available} · Versions unknown: {unknown} · Failed checks: {errors}. Open a mod for details."));
+        }
+    }
+    pub fn update_details(&mut self, ui: &mut egui::Ui, catalog: &Catalog) {
+        use ts4_mod_manager_core::mod_updates::UpdateStatus;
+        self.record_release_rect = None;
+        self.open_update_page_rect = None;
+        let Some(entry) = catalog.selected_mod() else { return; };
+        let Some(mod_id) = entry.id.as_ref().filter(|_| entry.source_attachment.as_ref()
+            .is_some_and(|a| a.provider_id == "curseforge" && a.project_id.is_some())) else {
+            ui.label("Use Find source and confirm a CurseForge project to track its releases.");
+            return;
+        };
+        ui.horizontal(|ui| {
+            ui.label(egui::RichText::new("Updates").size(16.0).strong());
+            if ui.add_enabled(!catalog.loading && !self.updates.pending, egui::Button::new("Check this mod")).clicked() {
+                self.check_updates(catalog, vec![mod_id.clone()]);
+            }
+        });
+        let Some(result) = self.updates.reports.get(mod_id).cloned() else {
+            ui.label(if self.updates.pending { "Checking releases..." } else { "Not checked yet." });
+            return;
+        };
+        let report = match result {
+            Ok(report) => report,
+            Err(error) => { ui.label(egui::RichText::new("Check failed").strong()); ui.label(error); return; }
+        };
+        match &report.status {
+            UpdateStatus::Available(release) => {
+                ui.label(egui::RichText::new("Newer public project release available").strong()
+                    .color(ui.visuals().selection.stroke.color));
+                ui.label(format!("{} · {}", release.file_name, release.published_at.format("%Y-%m-%d")));
+                ui.label("Project releases may target other components or game versions.");
+            }
+            UpdateStatus::Untracked => { ui.label("Installed version unknown. Choose the release you installed below."); }
+            UpdateStatus::LocalContentChanged => { ui.label("Local files changed. Confirm the installed release again."); }
+            UpdateStatus::InstalledReleaseUnavailable => { ui.label("The recorded release is unavailable. Its version cannot be compared."); }
+            UpdateStatus::Incomplete => { ui.label("The release list is incomplete. Update status is unknown."); }
+            UpdateStatus::NoNewerRelease => { ui.label("No newer public release found."); }
+        }
+        if !report.complete { ui.label("Only part of the release history could be checked."); }
+        if let Some(installed) = &report.installed {
+            ui.label(format!("Recorded installed release: {}", installed.file_name));
+        }
+        let open = ui.button("Open mod page");
+        self.open_update_page_rect = Some(open.rect);
+        if open.clicked() { ui.ctx().open_url(egui::OpenUrl::new_tab(&report.source_url)); }
+
+        if !report.releases.is_empty() {
+            egui::CollapsingHeader::new("Record installed release").id_salt(("installed-release", mod_id))
+                .default_open(matches!(report.status, UpdateStatus::Untracked | UpdateStatus::LocalContentChanged | UpdateStatus::InstalledReleaseUnavailable))
+                .show(ui, |ui| {
+                    let mut selected = self.release_choice.as_ref().filter(|(id, _)| id == mod_id).map(|(_, file)| *file);
+                    let name = selected.and_then(|id| report.releases.iter().find(|r| r.file_id == id))
+                        .map(|r| r.file_name.as_str()).unwrap_or("Choose the release you installed");
+                    egui::ComboBox::from_id_salt(("release-choice", mod_id)).width(ui.available_width().min(480.0))
+                        .selected_text(name).show_ui(ui, |ui| {
+                            for release in &report.releases {
+                                ui.selectable_value(&mut selected, Some(release.file_id),
+                                    format!("{} · {}", release.file_name, release.published_at.format("%Y-%m-%d")));
+                            }
+                        });
+                    self.release_choice = selected.map(|id| (mod_id.clone(), id));
+                    let release = selected.and_then(|id| report.releases.iter().find(|r| r.file_id == id));
+                    let button = ui.add_enabled(release.is_some() && !catalog.loading && !self.busy(),
+                        egui::Button::new("Review installed release"));
+                    self.record_release_rect = Some(button.rect);
+                    if button.clicked() && let Some(release) = release {
+                        self.review_installed_release(catalog, &report, release);
+                    }
+                });
+        }
+        if matches!(report.status, UpdateStatus::Available(_)) {
+            ui.label("Download from the author's page, then record the release after replacing your local files.");
+        }
+    }
+    pub fn review_installed_release(&mut self, catalog: &Catalog, report: &ts4_mod_manager_core::mod_updates::UpdateReport, release: &ts4_mod_manager_core::mod_updates::Release) {
+        let Some(entry) = catalog.selected_mod() else { return; };
+        let mut lines = vec![entry.name.clone(), report.source_url.clone(), release.file_name.clone(),
+            "Confirm that this release describes the files you have installed.".into(),
+            "Notify me of newer stable public releases from this project. These may include other components or game versions.".into(),
+            "This records a version; it does not replace your local files.".into()];
+        if entry.source_attachment.as_ref().and_then(|a| a.confidence).is_some_and(|c| c < 70) {
+            lines.push("Low confidence source. Verify this project before recording a release.".into());
+        }
+        self.confirm(catalog, Action::RecordRelease { report: Box::new(report.clone()), release: release.clone(), token: self.updates.token() }, "Confirm installed release", lines);
+    }
     fn start_picker(
         &mut self,
         purpose: PickPurpose,
@@ -220,6 +350,10 @@ impl Controls {
             self.notice = Some("A source lookup is already running. Local actions remain available.".into());
             return;
         }
+        if !action.read_only() {
+            self.updates.invalidate();
+            self.release_choice = None;
+        }
         let job = Job {
             identity,
             managed: self.managed.clone(),
@@ -241,6 +375,9 @@ impl Controls {
         identity: &Identity,
         action: Action,
     ) -> Result<u64, String> {
+        if matches!(&action, Action::RecordRelease { token, .. } if *token != self.updates.token()) {
+            return Err("Update results changed. Check again before recording a release.".into());
+        }
         if !identity.current(
             catalog.root.as_ref(),
             catalog.selected.as_ref(),
@@ -331,9 +468,10 @@ impl Controls {
             || self
                 .operations
                 .iter()
-                .any(|o| !matches!(o.job.action, Action::Lookup(_)) && (o.status == "Queued" || o.status == "Running"))
+                .any(|o| !o.job.action.read_only() && (o.status == "Queued" || o.status == "Running"))
     }
     pub fn poll(&mut self, catalog: &Catalog) {
+        self.updates.sync(catalog, self.saved_settings.curseforge_api_key.as_deref());
         if let Some(picker) = &self.picker {
             match picker.receiver.try_recv() {
                 Ok(path) => {
@@ -379,6 +517,7 @@ impl Controls {
                     match result {
                         Err(e) => failure = Some(e),
                         Ok(Output::Changed(issues)) => {
+                            self.updates.invalidate();
                             self.refresh = catalog.root.clone();
                             if !issues.is_empty() {
                                 failure = Some(issues.join("\n"))
@@ -441,6 +580,12 @@ impl Controls {
                         {
                             self.candidates = Some((identity.clone(), candidates));
                         }
+                        Ok(Output::Updates { token, reports })
+                            if catalog.root.as_ref() == Some(&identity.root)
+                                && catalog.generation() == identity.generation =>
+                        {
+                            self.updates.accept(token, reports);
+                        }
                         Ok(Output::Trash(entries))
                             if identity.current(
                                 catalog.root.as_ref(),
@@ -483,6 +628,7 @@ impl Controls {
         self.show_dialogs(ui.ctx(), catalog);
     }
     pub fn toolbar(&mut self, ui: &mut egui::Ui, catalog: &Catalog) {
+        self.updates.sync(catalog, self.saved_settings.curseforge_api_key.as_deref());
         ui.horizontal_wrapped(|ui| {
             let ready = catalog.root.is_some() && !catalog.loading && self.picker.is_none();
             let import = ui.add_enabled(
@@ -511,6 +657,14 @@ impl Controls {
             {
                 self.submit(id, Action::ListTrash)
             }
+            let mod_ids: Vec<_> = catalog.mods.iter().filter(|entry| entry.source_attachment.as_ref()
+                .is_some_and(|source| source.provider_id == "curseforge" && source.project_id.is_some()))
+                .filter_map(|entry| entry.id.clone()).collect();
+            let check = ui.add_enabled(ready && !self.updates.pending && !mod_ids.is_empty(), egui::Button::new("Check updates"))
+                .on_hover_text("Check managed mods with a confirmed CurseForge source. Use Find source to link a mod first.");
+            self.check_updates_rect = Some(check.rect);
+            if check.clicked() { self.check_updates(catalog, mod_ids); }
+
         });
     }
     pub fn selected_actions(&mut self, ui: &mut egui::Ui, catalog: &Catalog) {

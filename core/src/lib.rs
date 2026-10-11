@@ -11,6 +11,7 @@ pub mod link_ownership;
 pub mod managed_storage;
 pub mod metadata_names;
 pub mod mod_scan;
+pub mod mod_updates;
 pub mod orphan;
 pub mod path_detection;
 pub mod source_candidates;

@@ -1,6 +1,6 @@
 {
   "schemaVersion": 2,
-  "generatedAt": "2026-10-11T15:12:19.467892+00:00",
+  "generatedAt": "2026-10-11T21:03:59.617648+00:00",
   "title": "Design System: Sims 4 Mod Manager native",
   "extensions": {
     "platform": "Linux Fastframe/egui",
@@ -12,7 +12,10 @@
       "native/src/settings.rs",
       "native/src/main.rs",
       "native/src/cli.rs",
-      "native/src/discovery.rs"
+      "native/src/discovery.rs",
+      "native/src/updates.rs",
+      "native/src/management.rs",
+      "core/src/mod_updates.rs"
     ],
     "units": "egui logical points",
     "colorMeta": {
@@ -212,6 +215,21 @@
         "name": "CurseForge project details",
         "source": "native/src/discovery.rs::DiscoverView::details",
         "description": "Pinned Back to results above full summary, categories, supplied links and screenshots in one scroll region."
+      },
+      {
+        "name": "Update-check toolbar and summary",
+        "source": "native/src/controls.rs::Controls::toolbar and Controls::update_summary",
+        "description": "Manual Check updates for explicitly attached CurseForge projects, pending spinner, and checked-result counts using existing native colors."
+      },
+      {
+        "name": "Mod update details",
+        "source": "native/src/controls.rs::Controls::update_details",
+        "description": "Check this mod, distinct version and failure states, a provider-page action, and installed-release selector using existing native controls."
+      },
+      {
+        "name": "Installed-release confirmation",
+        "source": "native/src/controls.rs::Controls::review_installed_release",
+        "description": "Existing confirmation popup after choosing and reviewing a provider release; only final confirmation records metadata."
       }
     ],
     "previewPolicy": {
@@ -349,6 +367,48 @@
         "independentDisposition": "ship with no material issues; all sixteen discovery/UI tests passed, including short-window scrolling to Clear filters",
         "liveProvider": "Passed core/tests/curseforge_browse.rs::live_browse_filters_respect_provider_taxonomy with a local ignored key: all nine content types, combined Mods / Gameplay / 1.128.90 filters, filtered pagination, real file-version evidence, Relevancy and Date released requests.",
         "nativeDetector": "Not applicable to the native egui UI."
+      }
+    },
+    "nativeUpdates": {
+      "theme": "Existing light/dark colors and native controls; no token changes.",
+      "scope": "Manual checks for managed mods with explicitly attached CurseForge projects and an API key saved in local Settings.",
+      "notices": "In-app summary and Update available on checked cards and list rows; no automatic startup checks or operating-system notifications.",
+      "details": "Check this mod distinguishes unknown installed version, changed local files, unavailable recorded release, incomplete history, operational failure, and comparison results.",
+      "comparison": "Publication dates of stable public project releases after user-confirmed installed identity; newer releases may target other components or game versions.",
+      "installedIdentity": "Record installed release selects a real provider release. Review installed release opens the existing confirmation popup; final Record installed release saves the project/file identity and managed-content digest in meta.json. Legacy source-suggestion fileId is not installed identity.",
+      "manualDownload": "Open mod page opens the validated provider project URL. Users download there and replace files themselves, then record the new release and check again.",
+      "safety": "Checks and page opening leave files and metadata unchanged. Confirmation writes metadata only. File changes make the recorded version unknown; changing or removing the source clears it.",
+      "invalidation": "Root, catalog generation, saved-key changes, and local management operations invalidate results.",
+      "verification": {
+        "captureSource": "native/examples/verify_updates.rs",
+        "captureDirectory": ".impeccable/review",
+        "captures": [
+          "updates-library-dark",
+          "updates-detail-dark",
+          "updates-detail-light",
+          "updates-unknown-small",
+          "updates-error-small",
+          "updates-detail-user",
+          "updates-confirm-small"
+        ],
+        "windowSizes": [
+          [
+            1200,
+            800
+          ],
+          [
+            640,
+            480
+          ],
+          [
+            1871,
+            1006
+          ]
+        ],
+        "fixtureContent": "Production widgets with synthetic provider responses; captures approve no operations.",
+        "independentDisposition": "ship; five-section finish review found no material fixes",
+        "fullValidation": "All eight AGENTS.md commands passed.",
+        "liveProvider": "Project and file metadata fields checked with a local untracked key; no mod-file downloads."
       }
     }
   },

@@ -2,6 +2,7 @@ use crate::catalog::EntryId;
 use std::{path::PathBuf, sync::mpsc, thread::JoinHandle};
 use ts4_mod_manager_core::{
     managed_storage as storage, source_candidates::SourceCandidate, toggle,
+    mod_updates::{Release, UpdateReport},
 };
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Identity {
@@ -35,8 +36,18 @@ pub enum Action {
     ListTrash,
     Restore(String),
     Lookup(Option<String>),
+    CheckUpdates {
+        mod_ids: Vec<String>,
+        api_key: Option<String>,
+        epoch: std::sync::Arc<std::sync::atomic::AtomicU64>,
+        token: u64,
+    },
+    RecordRelease { report: Box<UpdateReport>, release: Release, token: u64 },
 }
 impl Action {
+    pub fn read_only(&self) -> bool {
+        matches!(self, Self::Lookup(_) | Self::CheckUpdates { .. })
+    }
     pub fn label(&self) -> &str {
         match self {
             Self::ImportFolder { .. } => "Import folder",
@@ -53,6 +64,8 @@ impl Action {
             Self::ListTrash => "Read trash",
             Self::Restore(_) => "Restore",
             Self::Lookup(_) => "Find source",
+            Self::CheckUpdates { .. } => "Check updates",
+            Self::RecordRelease { .. } => "Record installed release",
         }
     }
 }
@@ -68,6 +81,7 @@ pub enum Output {
     Review(toggle::DryRunResult),
     Candidates(Vec<SourceCandidate>),
     Trash(Vec<ts4_mod_manager_core::lifecycle::TrashEntry>),
+    Updates { token: u64, reports: Vec<(String, Result<UpdateReport, String>)> },
 }
 pub enum Event {
     Recovered(Result<Vec<String>, String>),
@@ -145,7 +159,7 @@ impl Mutations {
         })
     }
     pub fn submit(&self, job: Job) -> Result<(), String> {
-        let sender = if matches!(job.action, Action::Lookup(_)) { &self.lookups } else { &self.sender };
+        let sender = if job.action.read_only() { &self.lookups } else { &self.sender };
         sender.as_ref()
             .ok_or("Management worker stopped")?
             .send(job)
@@ -285,6 +299,7 @@ pub fn execute(job: &Job) -> Result<Output, String> {
                     .collect(),
                 attached_by: "user".into(),
                 attached_at: chrono::Utc::now().to_rfc3339(),
+                installed_release: None,
             };
             storage::set_source_url(
                 managed,
@@ -301,6 +316,35 @@ pub fn execute(job: &Job) -> Result<Output, String> {
         Action::RemoveSource => {
             storage::remove_source_url(managed, id(job)?).map_err(error)?;
             changed()
+        }
+        Action::RecordRelease { report, release, .. } => {
+            ts4_mod_manager_core::mod_updates::confirm_installed_release(managed, id(job)?, report, release)
+                .map_err(error)?;
+            changed()
+        }
+        Action::CheckUpdates { mod_ids, api_key, epoch, token } => {
+            use std::sync::atomic::Ordering;
+            use ts4_mod_manager_core::curseforge_client::{CurseForgeClient, UreqCurseForgeTransport};
+            let started = std::time::Instant::now();
+            let client = CurseForgeClient::new(api_key.as_deref(), CachedTransport {
+                inner: UreqCurseForgeTransport::default(),
+                responses: std::cell::RefCell::default(),
+            });
+            let mut reports = Vec::new();
+            for mod_id in mod_ids {
+                if epoch.load(Ordering::Acquire) != *token { break; }
+                let report = if started.elapsed() > std::time::Duration::from_secs(25) {
+                    Err("Check timed out. Check this mod separately or try again.".into())
+                } else {
+                    match &client {
+                        Ok(client) => ts4_mod_manager_core::mod_updates::check_mod_updates(managed, mod_id, client)
+                            .map_err(update_error),
+                        Err(_) => Err("Save a valid CurseForge API key in Settings, then try again.".into()),
+                    }
+                };
+                reports.push((mod_id.clone(), report));
+            }
+            Ok(Output::Updates { token: *token, reports })
         }
         Action::Trash => {
             storage::read_managed_mod(managed, id(job)?).map_err(error)?;
@@ -335,6 +379,33 @@ pub fn execute(job: &Job) -> Result<Output, String> {
     }
 }
 
+fn update_error(error: ts4_mod_manager_core::error::ManagerError) -> String {
+    use ts4_mod_manager_core::error::ErrorCode;
+    match error.code {
+        ErrorCode::SourceMissingApiKey | ErrorCode::SourceUnauthorized => "CurseForge rejected the API key. Save a valid key in Settings, then try again.",
+        ErrorCode::SourceRateLimited => "CurseForge is limiting requests. Wait a moment, then try again.",
+        ErrorCode::SourceNetwork => "Could not reach CurseForge. Check your connection and try again.",
+        ErrorCode::SourceProviderUnavailable => "CurseForge is unavailable. Try again later.",
+        ErrorCode::SourceInvalidResponse => "CurseForge returned unexpected project data. Check the saved source with Find source, then try again.",
+        ErrorCode::SourceNoUsableEvidence => "Use Find source to attach a CurseForge project before checking updates.",
+        _ => "Could not read this mod's local files. Refresh the library and check again.",
+    }.into()
+}
+
+struct CachedTransport {
+    inner: ts4_mod_manager_core::curseforge_client::UreqCurseForgeTransport,
+    responses: std::cell::RefCell<std::collections::HashMap<String, (u16, String)>>,
+}
+impl ts4_mod_manager_core::curseforge_client::CurseForgeTransport for CachedTransport {
+    fn get(&self, request: &ts4_mod_manager_core::curseforge_client::CurseForgeRequest)
+        -> Result<(u16, String), ts4_mod_manager_core::curseforge_client::SourceLookupError> {
+        if let Some(response) = self.responses.borrow().get(&request.url) { return Ok(response.clone()); }
+        let response = self.inner.get(request)?;
+        if response.0 == 200 { self.responses.borrow_mut().insert(request.url.clone(), response.clone()); }
+        Ok(response)
+    }
+}
+
 #[cfg(test)]
 mod lookup_worker_tests {
     use super::*;
@@ -342,11 +413,20 @@ mod lookup_worker_tests {
 
     #[test]
     fn stalled_lookup_does_not_block_local_jobs_or_shutdown() {
+        verify_read_only_queue(Action::Lookup(None));
+    }
+
+    #[test]
+    fn stalled_update_check_does_not_block_local_jobs_or_shutdown() {
+        verify_read_only_queue(Action::CheckUpdates { mod_ids: vec!["fixture".into()], api_key: None, epoch: Arc::default(), token: 0 });
+    }
+
+    fn verify_read_only_queue(action: Action) {
         let (entered, started) = mpsc::channel();
         let (release, stalled) = mpsc::channel();
         let stalled = Arc::new(Mutex::new(stalled));
         let worker = Mutations::start_executor(None, || {}, move |job| {
-            if matches!(job.action, Action::Lookup(_)) {
+            if job.action.read_only() {
                 entered.send(()).unwrap();
                 stalled.lock().unwrap().recv().unwrap();
             }
@@ -356,7 +436,7 @@ mod lookup_worker_tests {
             identity: Identity {operation, root: "fixture".into(), entry: None, generation: 1},
             managed: "managed".into(), trash: "trash".into(), action,
         };
-        worker.submit(make_job(1, Action::Lookup(None))).unwrap();
+        worker.submit(make_job(1, action)).unwrap();
         started.recv_timeout(Duration::from_secs(1)).unwrap();
         worker.submit(make_job(2, Action::ListTrash)).unwrap();
         let deadline = std::time::Instant::now() + Duration::from_secs(1);
@@ -370,5 +450,17 @@ mod lookup_worker_tests {
         let result = done.recv_timeout(Duration::from_secs(1));
         release.send(()).unwrap();
         result.expect("shutdown must not wait for a read-only lookup");
+    }
+}
+
+#[cfg(test)]
+mod update_error_tests {
+    #[test]
+    fn provider_errors_explain_the_recovery_without_showing_keys() {
+        use ts4_mod_manager_core::error::{ErrorCode, ManagerError};
+        let message = super::update_error(ManagerError::new(ErrorCode::SourceUnauthorized, "sensitive provider payload"));
+        assert!(message.contains("Settings"));
+        assert!(!message.contains("sensitive"));
+        assert!(super::update_error(ManagerError::new(ErrorCode::SourceNoUsableEvidence, "missing")).contains("Find source"));
     }
 }

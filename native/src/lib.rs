@@ -15,3 +15,4 @@ mod file_picker;
 mod popup;
 
 pub mod discovery;
+pub mod updates;

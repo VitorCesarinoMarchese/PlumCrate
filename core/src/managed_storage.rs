@@ -24,6 +24,8 @@ pub struct SourceAttachmentMetadata {
     pub project_id: Option<u64>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub file_id: Option<u64>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub installed_release: Option<crate::mod_updates::InstalledRelease>,
     pub source_url: String,
     pub title: String,
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -276,6 +278,21 @@ pub fn set_source_url(
     }
 
     let normalized_provider = provider_id.filter(|provider| !provider.trim().is_empty());
+    let mut source_attachment = source_attachment;
+    if let Some(attachment) = source_attachment.as_mut() {
+        let provider = normalized_provider
+            .as_ref()
+            .unwrap_or(&attachment.provider_id);
+        attachment.installed_release = meta
+            .source_attachment
+            .as_ref()
+            .filter(|previous| {
+                previous.provider_id == *provider
+                    && previous.project_id == attachment.project_id
+                    && previous.source_url == trimmed
+            })
+            .and_then(|previous| previous.installed_release.clone());
+    }
 
     meta.source_url = Some(trimmed.to_string());
     if let Some(provider) = normalized_provider.clone() {
@@ -703,6 +720,7 @@ mod tests {
             provider_id: "curseforge".to_string(),
             project_id: Some(551680),
             file_id: Some(67890),
+            installed_release: None,
             source_url: "https://www.curseforge.com/sims4/mods/mc-command-center".to_string(),
             title: "MC Command Center".to_string(),
             author: Some("Deaderpool".to_string()),

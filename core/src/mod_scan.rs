@@ -707,6 +707,7 @@ mod tests {
                     provider_id: "curseforge".to_string(),
                     project_id: Some(551680),
                     file_id: Some(67890),
+                    installed_release: None,
                     source_url: "https://www.curseforge.com/sims4/mods/example".to_string(),
                     title: "Example".to_string(),
                     author: Some("Creator".to_string()),

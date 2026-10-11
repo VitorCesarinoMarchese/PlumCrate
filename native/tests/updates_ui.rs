@@ -1,0 +1,226 @@
+#[path = "support/updates.rs"]
+mod support;
+use egui::{Event, FullOutput};
+
+fn frame(ctx: &egui::Context, fixture: &mut support::Fixture, events: Vec<Event>) -> FullOutput {
+    let mut output = ctx.run_ui(
+        egui::RawInput {
+            screen_rect: Some(egui::Rect::from_min_size(
+                egui::Pos2::ZERO,
+                egui::vec2(1200.0, 800.0),
+            )),
+            time: Some(0.0),
+            events,
+            ..Default::default()
+        },
+        |ui| {
+            fixture
+                .view
+                .show_with_controls(ui, &mut fixture.catalog, &mut fixture.controls);
+            fixture.controls.show_dialogs(ui.ctx(), &fixture.catalog);
+        },
+    );
+    output.textures_delta.clear();
+    output
+}
+fn click(rect: egui::Rect) -> Vec<Event> {
+    let pos = rect.center();
+    vec![
+        Event::PointerMoved(pos),
+        Event::PointerButton {
+            pos,
+            button: egui::PointerButton::Primary,
+            pressed: true,
+            modifiers: Default::default(),
+        },
+        Event::PointerButton {
+            pos,
+            button: egui::PointerButton::Primary,
+            pressed: false,
+            modifiers: Default::default(),
+        },
+    ]
+}
+fn has_text(output: &FullOutput, label: &str) -> bool {
+    output.shapes.iter().any(|shape| matches!(&shape.shape,egui::epaint::Shape::Text(text) if text.galley.text().contains(label)))
+}
+
+#[test]
+fn library_offers_update_checks_and_detail_page_opens_without_changing_files() {
+    let mut fixture = support::fixture();
+    let id = fixture.catalog.mods[0].id.clone().unwrap();
+    let release = fixture
+        .report
+        .releases
+        .iter()
+        .find(|r| r.file_id == 200)
+        .unwrap()
+        .clone();
+    fixture
+        .controls
+        .updates
+        .reports
+        .get_mut(&id)
+        .unwrap()
+        .as_mut()
+        .unwrap()
+        .status = ts4_mod_manager_core::mod_updates::UpdateStatus::Available(release);
+    let metadata = fixture
+        .directory
+        .path()
+        .join("managed/mods")
+        .join(&id)
+        .join("meta.json");
+    let before = std::fs::read(&metadata).unwrap();
+    let ctx = egui::Context::default();
+    ts4_mod_manager_native::ui::setup(&ctx);
+    for _ in 0..3 {
+        frame(&ctx, &mut fixture, vec![]);
+    }
+    let output = frame(&ctx, &mut fixture, vec![]);
+    assert!(has_text(&output, "Check updates"));
+    let row = fixture.view.stats.first_row.unwrap();
+    frame(&ctx, &mut fixture, click(row));
+    let output = frame(&ctx, &mut fixture, vec![]);
+    assert!(has_text(&output, "Newer public project release available"));
+    let page = fixture
+        .controls
+        .open_update_page_rect
+        .expect("mod page action in details");
+    let output = frame(&ctx, &mut fixture, click(page));
+    assert!(output.platform_output.commands.iter().any(|command| matches!(command,egui::OutputCommand::OpenUrl(url) if url.url==fixture.report.source_url)));
+    assert_eq!(std::fs::read(metadata).unwrap(), before);
+    assert_eq!(
+        std::fs::read(
+            fixture
+                .directory
+                .path()
+                .join("managed/mods")
+                .join(id)
+                .join("files/fixture.package")
+        )
+        .unwrap(),
+        b"synthetic fixture bytes"
+    );
+}
+
+#[test]
+fn missing_saved_key_opens_settings_without_starting_a_check() {
+    let mut fixture = support::fixture();
+    let ctx = egui::Context::default();
+    ts4_mod_manager_native::ui::setup(&ctx);
+    for _ in 0..3 {
+        frame(&ctx, &mut fixture, vec![]);
+    }
+    let button = fixture
+        .controls
+        .check_updates_rect
+        .expect("library update button");
+    frame(&ctx, &mut fixture, click(button));
+    assert!(fixture.controls.settings_page);
+    assert!(!fixture.controls.updates.pending);
+}
+
+#[test]
+fn recording_a_release_writes_only_after_the_confirmation_button() {
+    let mut fixture = support::fixture();
+    let id = fixture.catalog.mods[0].id.clone().unwrap();
+    let metadata = fixture
+        .directory
+        .path()
+        .join("managed/mods")
+        .join(&id)
+        .join("meta.json");
+    let before = std::fs::read(&metadata).unwrap();
+    let release = fixture
+        .report
+        .releases
+        .iter()
+        .find(|r| r.file_id == 100)
+        .unwrap()
+        .clone();
+    fixture
+        .controls
+        .review_installed_release(&fixture.catalog, &fixture.report, &release);
+    let ctx = egui::Context::default();
+    ts4_mod_manager_native::ui::setup(&ctx);
+    for _ in 0..3 {
+        frame(&ctx, &mut fixture, vec![]);
+    }
+    assert_eq!(std::fs::read(&metadata).unwrap(), before);
+    let confirm = fixture
+        .controls
+        .confirm_rect
+        .expect("explicit confirmation");
+    frame(&ctx, &mut fixture, click(confirm));
+    let deadline = std::time::Instant::now() + std::time::Duration::from_secs(5);
+    while fixture.controls.busy() {
+        fixture.controls.poll(&fixture.catalog);
+        assert!(std::time::Instant::now() < deadline);
+        std::thread::sleep(std::time::Duration::from_millis(2));
+    }
+    let saved: serde_json::Value =
+        serde_json::from_slice(&std::fs::read(metadata).unwrap()).unwrap();
+    assert_eq!(saved["sourceAttachment"]["installedRelease"]["fileId"], 100);
+    assert_eq!(
+        std::fs::read(
+            fixture
+                .directory
+                .path()
+                .join("managed/mods")
+                .join(id)
+                .join("files/fixture.package")
+        )
+        .unwrap(),
+        b"synthetic fixture bytes"
+    );
+}
+
+fn text_rect(output: &FullOutput, label: &str) -> egui::Rect {
+    let texts: Vec<_> = output.shapes.iter().filter_map(|shape| match &shape.shape {
+        egui::epaint::Shape::Text(text) => Some(text), _ => None,
+    }).collect();
+    let text = texts.iter().find(|text| text.galley.text() == label)
+        .or_else(|| texts.iter().find(|text| text.galley.text().contains(label)))
+        .unwrap_or_else(|| panic!("visible text missing: {label}"));
+    text.galley.rect.translate(text.pos.to_vec2())
+}
+
+#[test]
+fn unknown_version_picker_requires_a_choice_before_review() {
+    let mut fixture = support::fixture();
+    let ctx = egui::Context::default();
+    ts4_mod_manager_native::ui::setup(&ctx);
+    ctx.all_styles_mut(|style| style.animation_time = 0.0);
+    for _ in 0..3 {
+        frame(&ctx, &mut fixture, vec![]);
+    }
+    let row = fixture.view.stats.first_row.unwrap();
+    frame(&ctx, &mut fixture, click(row));
+    let output = frame(&ctx, &mut fixture, vec![]);
+    let picker = text_rect(&output, "Choose the release you installed");
+    frame(&ctx, &mut fixture, click(picker));
+    let output = frame(&ctx, &mut fixture, vec![]);
+    let old = text_rect(&output, "Synthetic mod 1.0.zip");
+    frame(&ctx, &mut fixture, click(old));
+    frame(&ctx, &mut fixture, vec![]);
+    let review = fixture.controls.record_release_rect.unwrap();
+    frame(&ctx, &mut fixture, click(review));
+    let output = frame(&ctx, &mut fixture, vec![]);
+    assert!(has_text(&output, "Confirm installed release"));
+    assert!(fixture.controls.confirm_rect.is_some());
+    let id = fixture.catalog.mods[0].id.as_ref().unwrap();
+    let metadata: serde_json::Value = serde_json::from_slice(
+        &std::fs::read(
+            fixture
+                .directory
+                .path()
+                .join("managed/mods")
+                .join(id)
+                .join("meta.json"),
+        )
+        .unwrap(),
+    )
+    .unwrap();
+    assert!(metadata["sourceAttachment"]["installedRelease"].is_null());
+}

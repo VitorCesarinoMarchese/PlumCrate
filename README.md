@@ -23,6 +23,7 @@ Browse your collection by photo, find a file by name, and choose which mods are 
 | Bring your own mods | Import a local folder or ZIP archive, or review existing game mods before moving them into the managed library. |
 | Choose what loads | Review the files before enabling or disabling a managed mod. |
 | Keep track of sources | Save a source link yourself, or review CurseForge suggestions and confirm a match. |
+| Check for updates | Check attached CurseForge projects for newer public releases, then open the mod page to download manually. Record the release you installed before comparing versions. |
 | Recover removed mods | Move managed mods to trash and review where they will go before restoring them. |
 | Make it yours | Choose light, dark, or system appearance, create a custom theme, and remember your game folders. |
 
@@ -32,7 +33,7 @@ The first alpha, **0.01**, is being prepared. Expect rough edges and report prob
 
 Linux is the current supported platform. Windows and macOS have not been verified. Release downloads will appear on the [releases page](https://github.com/VitorCesarinoMarchese/TS4ModManager/releases) when published. Until then, use the [build and run guide](docs/development.md#run-the-app).
 
-The app manages mods you already have. It does not download or update them. CurseForge lookup is optional and needs your own API key in local Settings. Suggestions are saved only after you confirm them, and weak matches show a warning.
+The app manages local mods and checks attached CurseForge projects for newer releases on request. Update notices open the mod page for manual download; you replace your local files yourself. CurseForge browsing, lookup, and update checks need your own API key saved in local Settings. Suggestions and installed-release records are saved only after you confirm them, and weak source matches show a warning.
 
 ## Getting started
 
@@ -41,11 +42,11 @@ The app manages mods you already have. It does not download or update them. Curs
 3. Select a managed mod to inspect its files. Choose **Enable** or **Disable**, review the proposed changes, and confirm.
 4. Right-click a mod for more actions. Use **Restore from trash** to recover a removed managed mod.
 
-See the [app guide](docs/native-app.md) for settings, themes, source lookup, and folder selection.
+See the [app guide](docs/native-app.md) for settings, themes, source lookup, [update checks](docs/native-app.md#check-for-mod-updates), and folder selection.
 
 ## Your files stay yours
 
-Your library and settings stay on your computer. Local browsing and mod management work without CurseForge. Optional CurseForge browsing, source lookup, and remote preview images use network requests.
+Your library and settings stay on your computer. Local browsing and mod management work without CurseForge. Optional CurseForge browsing, source lookup, update checks, and remote preview images use network requests.
 
 Management actions require review. The app checks ownership before removing its links, leaves unmanaged files alone, and moves removed managed mods to recoverable trash. Read the [storage and safety details](docs/development.md#local-storage-and-safety) for locations and recovery behavior.
 

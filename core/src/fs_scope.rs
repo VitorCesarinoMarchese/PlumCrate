@@ -72,6 +72,110 @@ pub struct Directory {
 }
 #[cfg(unix)]
 impl Directory {
+    pub(crate) fn mod_content_digest(&self) -> Result<String, ManagerError> {
+        use sha2::{Digest, Sha256};
+        use std::os::{
+            fd::{AsRawFd, FromRawFd},
+            unix::{ffi::OsStrExt, fs::MetadataExt},
+        };
+        fn names(file: &fs::File) -> Result<Vec<std::ffi::OsString>, ManagerError> {
+            let mut names = fs::read_dir(format!("/proc/self/fd/{}", file.as_raw_fd()))
+                .map_err(io_error)?
+                .map(|entry| entry.map(|entry| entry.file_name()))
+                .collect::<Result<Vec<_>, _>>()
+                .map_err(io_error)?;
+            names.sort();
+            Ok(names)
+        }
+        fn hash_dir(file: &fs::File) -> Result<[u8; 32], ManagerError> {
+            let before = names(file)?;
+            let mut digest = Sha256::new();
+            digest.update(b"directory");
+            for name in &before {
+                let c_name = std::ffi::CString::new(name.as_bytes())
+                    .map_err(|_| ManagerError::new(ErrorCode::InvalidPath, "NUL in file name"))?;
+                let fd = unsafe {
+                    libc::openat(
+                        file.as_raw_fd(),
+                        c_name.as_ptr(),
+                        libc::O_RDONLY | libc::O_NOFOLLOW | libc::O_NONBLOCK | libc::O_CLOEXEC,
+                    )
+                };
+                if fd < 0 {
+                    return Err(ManagerError::new(
+                        ErrorCode::InvalidPath,
+                        "Cannot safely read managed content",
+                    ));
+                }
+                let mut child = unsafe { fs::File::from_raw_fd(fd) };
+                let metadata = child.metadata().map_err(io_error)?;
+                digest.update((name.as_bytes().len() as u64).to_le_bytes());
+                digest.update(name.as_bytes());
+                if metadata.is_dir() {
+                    digest.update(hash_dir(&child)?);
+                } else if metadata.is_file() {
+                    use std::io::Read;
+                    let mut content = Sha256::new();
+                    content.update(b"file");
+                    let mut buffer = [0; 65536];
+                    loop {
+                        let count = child.read(&mut buffer).map_err(io_error)?;
+                        if count == 0 {
+                            break;
+                        }
+                        content.update(&buffer[..count]);
+                    }
+                    let after = child.metadata().map_err(io_error)?;
+                    if (
+                        metadata.len(),
+                        metadata.mtime(),
+                        metadata.mtime_nsec(),
+                        metadata.ctime(),
+                        metadata.ctime_nsec(),
+                    ) != (
+                        after.len(),
+                        after.mtime(),
+                        after.mtime_nsec(),
+                        after.ctime(),
+                        after.ctime_nsec(),
+                    ) {
+                        return Err(ManagerError::new(
+                            ErrorCode::InvalidPath,
+                            "Managed content changed while reading",
+                        ));
+                    }
+                    digest.update(content.finalize());
+                } else {
+                    return Err(ManagerError::new(
+                        ErrorCode::InvalidPath,
+                        "Special files are not managed release content",
+                    ));
+                }
+                let current = fs::symlink_metadata(
+                    Path::new(&format!("/proc/self/fd/{}", file.as_raw_fd())).join(name),
+                )
+                .map_err(io_error)?;
+                if (metadata.dev(), metadata.ino()) != (current.dev(), current.ino()) {
+                    return Err(ManagerError::new(
+                        ErrorCode::InvalidPath,
+                        "Managed content was replaced while reading",
+                    ));
+                }
+            }
+            if names(file)? != before {
+                return Err(ManagerError::new(
+                    ErrorCode::InvalidPath,
+                    "Managed content changed while reading",
+                ));
+            }
+            Ok(digest.finalize().into())
+        }
+        Ok(hash_dir(&self.file)?
+            .iter()
+            .map(|byte| format!("{byte:02x}"))
+            .collect())
+    }
+
     pub fn open(path: &Path) -> Result<Self, ManagerError> {
         use std::os::unix::fs::OpenOptionsExt;
         let absolute = if path.is_absolute() {

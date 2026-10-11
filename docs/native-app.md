@@ -4,7 +4,7 @@ Run commands in this guide from the repository root. See the [development guide]
 
 The Fastframe/egui UI uses the existing Rust core to detect game folders, scan mods, search names and filenames, and manage local mods. Photo cards are the default library view; the card/list switch offers compact rows. Cards, catalog rows and file lists render only visible rows. A replaceable reader handles scans. A separate FIFO worker retains approved management operations and reports their queued, running, and finished states.
 
-Import folder is the primary action in the library toolbar, beside Import ZIP and Restore from trash. Settings in the header opens a full page. Select a managed mod for direct Enable/Disable controls in the details popup. More actions contains Enable/Disable, rename, source lookup/attachment/removal and trash. Right-click a photo card or list row to select that mod and open the same menu. External mods offer Manage external mod with a file review before migration. The compact bottom status shows local-library information, notices and errors; Activity expands operation history when present.
+Import folder is the primary action in the library toolbar, beside Import ZIP, Restore from trash, and Check updates. Settings in the header opens a full page. Select a managed mod for direct Enable/Disable controls in the details popup. More actions contains Enable/Disable, rename, source lookup/attachment/removal and trash. Right-click a photo card or list row to select that mod and open the same menu. External mods offer Manage external mod with a file review before migration. The compact bottom status shows local-library information, notices and errors; Activity expands operation history when present.
 
 Import folder and Import ZIP open your desktop's file picker. ZIP selection filters for ZIP archives. After selection, review the chosen path and edit the suggested mod name before selecting Import. Canceling the picker does not import anything. A changed game folder or selection invalidates a pending import selection.
 
@@ -78,9 +78,31 @@ native/target/debug/ts4-mod-manager-native \
 
 Enable and disable first show their exact paths and warnings. Confirmation revalidates the approved review. Migration shows the external file set. Trash accepts managed mods and requires confirmation. Restore lists recoverable entries and requires a destination review. An approved operation remains associated with its original root and entry after navigation. Closing the window waits for approved operations to finish.
 
-Find source uses real CurseForge provider results and reports a missing API key. Candidates show confidence, reasons, and evidence. Low-confidence warnings stay visible in attachment review. Manual URLs carry no verified-match claim. The native app does not download or update mods.
+Find source uses real CurseForge provider results and reports a missing API key. Candidates show confidence, reasons, and evidence. Low-confidence warnings stay visible in attachment review. Manual URLs carry no verified-match claim. Attached CurseForge projects support the [update-check workflow](#check-for-mod-updates).
 
 Startup asks the core to recover pending operations and displays recovery issues. Native toggle and migration hold the shared writer guard across revalidation and mutation. A forced process termination can interrupt approved work; core recovery preserves changed or ambiguous user paths and may require attention before further mutations. [Twelve core process-crash scenarios](process-crash-verification.md) cover real SIGKILL and fresh-process recovery. Desktop-window termination, reboot, touchpad, monitor, and screen-reader checks still need separate evidence.
+
+## Check for mod updates
+
+**Check updates** in the library toolbar checks managed mods with an explicitly attached CurseForge project. A manual source URL alone is not enough. Checks use the API key saved in local Settings; a missing key opens Settings. Results appear in a library summary, with **Update available** on cards and list rows. Mod details show the result and offer **Check this mod**.
+
+To establish the release you installed and check for a newer one:
+
+1. Use **Find source** and confirm the correct CurseForge project if the mod has no attached project.
+2. Select **Check updates**, then open the mod's details. The app reports an unknown installed version until you confirm a release.
+3. Under **Record installed release**, choose the provider release matching your local files.
+4. Select **Review installed release**, verify the project and release, then confirm with **Record installed release**.
+5. Select **Check this mod** again to compare the confirmed release with current public releases.
+6. If a newer release is available, select **Open mod page** to open the provider's project page in your browser. Download there and replace your local files yourself.
+7. After replacing files, check again, record the new installed release, and check once more to refresh the comparison.
+
+Checks compare publication dates of stable public project releases. A newer release may target another component or game version. A source suggestion's file ID does not identify your installed release. If you cannot identify the release you installed, leave the version unknown.
+
+Details distinguish an unknown installed version, changed local files, an unavailable recorded release, incomplete release history, and a failed check. **No newer public release found** requires complete release history. Checks run only when requested and produce in-app notices, without automatic startup checks or operating-system notifications.
+
+Checks and **Open mod page** leave mod files and metadata unchanged. Only the final installed-release confirmation saves a record in that mod's `meta.json`; it does not replace files. The record includes a digest of the managed files. Changed bytes, names, added files, or removed files make the recorded version unknown on the next check. Changing or removing the source clears the record. Rescans, folder changes, saved-key changes, and local management operations invalidate displayed results.
+
+The [update-check design](mod-updates.md) explains release identity, provider validation, and worker ownership.
 
 ## Settings and custom themes
 
@@ -118,6 +140,14 @@ python3 native/verify_navigation.py --capture-dir native/target/navigation-captu
 ```
 
 `verify_navigation.py` defaults to the release binary; pass `--binary PATH` to use another build. It creates isolated synthetic game, managed and home directories and produces eleven PNGs: four library views, three Settings views and four custom-theme editor views covering light and dark versions at wide and narrow sizes. It checks preview pixels in library captures and verifies that fixture inputs remain unchanged. Screenshot mode fixes the window size and quits after writing the PNG. Normal launches remain resizable. For release measurements, build with `cargo build --manifest-path native/Cargo.toml --release --locked` and pass `--binary native/target/release/ts4-mod-manager-native` to the script.
+
+Update-check captures use production widgets with synthetic provider responses and do not approve operations:
+
+```sh
+cargo run --manifest-path native/Cargo.toml --locked --example verify_updates -- native/target/ui-updates
+```
+
+Seven captures in `.impeccable/review/updates-*.png` cover the library, release details in both themes, the 1871-by-1006 user window, and unknown-version, failure, and confirmation states at 640 by 480. Independent finish review returned ship with no material fixes. The eight full project validation commands passed. Live API project and file metadata fields were checked with a local untracked key; no mod files were downloaded.
 
 ## Historical performance measurements
 

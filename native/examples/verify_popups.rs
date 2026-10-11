@@ -3,7 +3,7 @@ use std::{
     path::PathBuf,
     time::{Duration, Instant},
 };
-use ts4_mod_manager_native::{catalog, discovery, management, preview, settings};
+use ts4_mod_manager_native::{catalog, discovery, management, preview, settings, updates};
 
 #[allow(dead_code)]
 #[path = "../src/ui.rs"]
