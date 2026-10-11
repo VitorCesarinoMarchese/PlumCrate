@@ -532,6 +532,7 @@ impl View {
                 if self.browse_page {
                     let key = controls.as_ref().and_then(|c| c.source_api_key());
                     let settings_requested = self.discovery.show(ui, key, search_requested);
+                    if let Some(project_id) = self.discovery.take_import_request() && let Some(c) = controls.as_deref_mut() { c.prepare_browser_import(ui.ctx(), catalog, project_id); }
                     if settings_requested && let Some(c) = controls.as_deref_mut() { c.settings_page = true; }
                     return;
                 }
@@ -635,7 +636,7 @@ impl View {
                     for (title, body) in [
                         ("Add mods", "Choose your Sims 4 game folder, then Import folder or Import ZIP. Originals stay in place. Open the imported mod and Enable it when ready."),
                         ("Inspect and organize", "Click a card or list row for details. Use Previous/Next to browse. Right-click a mod for rename, source and trash actions. Trash remains recoverable."),
-                        ("Browse CurseForge", "Browse mods searches The Sims 4 mods and custom content on CurseForge. Save your API key in Settings, then search, filter by category or sort. Open a project to read its summary and view screenshots. Browsing does not install mods or attach sources."),
+                        ("Browse CurseForge", "Browse mods searches The Sims 4 mods and custom content on CurseForge. Save your API key in Settings, then search, filter by category or sort. Open a project to read its summary and view screenshots. Download via website lets you review a release, source and game folder. After you start, the app watches your Downloads folder and installs the verified file automatically."),
                         ("Save a source", "Find source uses your locally saved CurseForge key. No match? Attach a known URL manually. Review every attachment before saving."),
                         ("Check updates", "Attach a CurseForge source, then choose Check updates. Record the release you installed to compare versions. Update notices link to the mod page; download there, replace your local files, and record the new release."),
                         ("Change appearance", "Settings previews your choices. Save settings keeps them; Discard restores saved values. The header Light/Dark switch saves immediately."),

@@ -43,6 +43,7 @@ pub enum Action {
         token: u64,
     },
     RecordRelease { report: Box<UpdateReport>, release: Release, token: u64 },
+    ImportBrowser(Box<crate::browser_import::ReadyImport>),
 }
 impl Action {
     pub fn read_only(&self) -> bool {
@@ -66,6 +67,7 @@ impl Action {
             Self::Lookup(_) => "Find source",
             Self::CheckUpdates { .. } => "Check updates",
             Self::RecordRelease { .. } => "Record installed release",
+            Self::ImportBrowser(_) => "Import and enable browser download",
         }
     }
 }
@@ -82,6 +84,7 @@ pub enum Output {
     Candidates(Vec<SourceCandidate>),
     Trash(Vec<ts4_mod_manager_core::lifecycle::TrashEntry>),
     Updates { token: u64, reports: Vec<(String, Result<UpdateReport, String>)> },
+    BrowserImported { token: u64, metadata: Box<storage::ModMetadata> },
 }
 pub enum Event {
     Recovered(Result<Vec<String>, String>),
@@ -316,6 +319,11 @@ pub fn execute(job: &Job) -> Result<Output, String> {
         Action::RemoveSource => {
             storage::remove_source_url(managed, id(job)?).map_err(error)?;
             changed()
+        }
+        Action::ImportBrowser(request) => {
+            let metadata = ts4_mod_manager_core::browser_import::import_browser_download(managed, &request.root.join("Mods"), &request.project, &request.release, &request.matched, &request.permit)
+                .map_err(|error| error.message)?;
+            Ok(Output::BrowserImported { token: request.token, metadata: Box::new(metadata) })
         }
         Action::RecordRelease { report, release, .. } => {
             ts4_mod_manager_core::mod_updates::confirm_installed_release(managed, id(job)?, report, release)

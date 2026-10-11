@@ -7,6 +7,7 @@ use std::{
 
 pub enum Kind {
     GameFolder,
+    DownloadsFolder,
     ImportFolder,
     ImportZip,
     SettingsImport,
@@ -28,6 +29,7 @@ pub fn open(
                 Kind::GameFolder => dialog
                     .set_title("Choose The Sims 4 folder containing Mods")
                     .pick_folder(),
+                Kind::DownloadsFolder => dialog.set_title("Choose your browser Downloads folder").pick_folder(),
                 Kind::ImportFolder => dialog
                     .set_title("Choose a mod folder to import")
                     .pick_folder(),

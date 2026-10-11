@@ -25,7 +25,7 @@ fn run() -> Result<(), String> {
     }
     if options.help {
         println!(
-            "TS4 Mod Manager native manager\n\nUsage: ts4-mod-manager-native [--root PATH] [--managed-root PATH]\n\n  --root PATH          Sims 4 folder containing Mods\n  --home PATH          Home to use for detection and default managed path\n  --verify-workflows   Verify management using newly created temporary fixtures\n  --inspect            Print catalog JSON and exit; requires --root\n  --query TEXT         Initial name/filename search\n  --settings           Open the full Settings page\n  --dark               Start with dark theme\n  --size WIDTHxHEIGHT   Initial window size, default 1200x800\n  --screenshot PATH    Save a rendered PNG and exit; requires --root\n\nManage local mods with reviewed operations. No mod downloads or updates."
+            "TS4 Mod Manager native manager\n\nUsage: ts4-mod-manager-native [--root PATH] [--managed-root PATH]\n\n  --root PATH          Sims 4 folder containing Mods\n  --home PATH          Home to use for detection and default managed path\n  --verify-workflows   Verify management using newly created temporary fixtures\n  --inspect            Print catalog JSON and exit; requires --root\n  --query TEXT         Initial name/filename search\n  --settings           Open the full Settings page\n  --dark               Start with dark theme\n  --size WIDTHxHEIGHT   Initial window size, default 1200x800\n  --screenshot PATH    Save a rendered PNG and exit; requires --root\n\nManage local mods, check releases, and install verified browser downloads."
         );
         return Ok(());
     }

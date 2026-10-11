@@ -16,3 +16,5 @@ mod popup;
 
 pub mod discovery;
 pub mod updates;
+
+pub mod browser_import;

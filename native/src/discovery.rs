@@ -173,6 +173,7 @@ pub struct DiscoverView {
     pub game_versions: Vec<String>,
     pub selected: Option<BrowseProject>,
     pub stats: Stats,
+    import_request: Option<u64>,
     jobs: Option<Jobs>,
     key: Option<String>,
     category_error: Option<SourceLookupError>,
@@ -189,6 +190,7 @@ pub struct Stats {
     pub first_card_id: Option<egui::Id>,
     pub card_actions: Vec<egui::Rect>,
     pub back: Option<egui::Rect>,
+    pub browser_import: Option<egui::Rect>,
     pub next: Option<egui::Rect>,
     pub previous: Option<egui::Rect>,
     pub settings: Option<egui::Rect>,
@@ -205,6 +207,7 @@ pub struct Stats {
     pub category_control_id: Option<egui::Id>,
 }
 impl DiscoverView {
+    pub fn take_import_request(&mut self) -> Option<u64> { self.import_request.take() }
     pub fn with_cache(directory: std::path::PathBuf) -> Self {
         Self {
             previews: crate::preview::Previews::with_cache(directory),
@@ -867,6 +870,10 @@ impl DiscoverView {
                         if ui.button("Copy link").clicked() {
                             ui.ctx().copy_text(url.into());
                         }
+                        let download = ui.button("Download via website…");
+                        self.stats.browser_import = Some(download.rect);
+                        if download.clicked() { self.import_request = Some(project.id); }
+
                     });
                 }
                 ui.add_space(24.0);

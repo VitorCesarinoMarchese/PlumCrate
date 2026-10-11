@@ -29,6 +29,7 @@ enum Dialog {
 enum PickPurpose {
     Import(Identity, bool),
     GameFolder,
+    DownloadsFolder,
     SettingsImport,
     SettingsExport(Settings),
 }
@@ -38,6 +39,10 @@ struct PendingPicker {
 }
 pub struct Controls {
     pub updates: crate::updates::UpdateState,
+    pub browser_import: crate::browser_import::BrowserImport,
+    pub browser_start_rect: Option<egui::Rect>,
+    pub browser_cancel_rect: Option<egui::Rect>,
+    pub browser_release_rect: Option<egui::Rect>,
     pub check_updates_rect: Option<egui::Rect>,
     pub record_release_rect: Option<egui::Rect>,
     pub open_update_page_rect: Option<egui::Rect>,
@@ -89,6 +94,10 @@ impl Controls {
         let theme_edit_original = settings.active_custom_theme.clone();
         Ok(Self {
             updates: crate::updates::UpdateState::default(),
+            browser_import: crate::browser_import::BrowserImport::new(&home),
+            browser_start_rect: None,
+            browser_cancel_rect: None,
+            browser_release_rect: None,
             check_updates_rect: None,
             record_release_rect: None,
             open_update_page_rect: None,
@@ -244,6 +253,109 @@ impl Controls {
         }
         self.confirm(catalog, Action::RecordRelease { report: Box::new(report.clone()), release: release.clone(), token: self.updates.token() }, "Confirm installed release", lines);
     }
+    pub fn prepare_browser_import(&mut self, ctx: &egui::Context, catalog: &Catalog, project_id: u64) {
+        if self.browser_import.running() { self.notice = Some("Finish or cancel the current browser download first.".into()); return; }
+        let Some(root) = catalog.root.clone().filter(|_| !catalog.loading && !self.busy()) else {
+            self.notice = Some("Choose a Sims 4 game folder before downloading a mod.".into()); return;
+        };
+        let Some(key) = self.source_api_key().map(str::to_owned) else {
+            self.settings_page = true; self.notice = Some("Save your CurseForge API key before choosing a release.".into()); return;
+        };
+        self.browser_import.prepare(ctx, root, &key, project_id);
+    }
+    fn browser_import_review(&mut self, ctx: &egui::Context, catalog: &Catalog) {
+        use crate::browser_import::Phase;
+        self.browser_start_rect = None;
+        self.browser_cancel_rect = None;
+        self.browser_release_rect = None;
+        let popup = crate::popup::show(ctx, "browser-download-review", "Download via website and install", |ui| {
+            let mut choose_folder = false;
+            egui::ScrollArea::vertical()
+                .max_height((ctx.content_rect().height() - 280.0).clamp(80.0, 420.0))
+                .scroll_bar_visibility(egui::scroll_area::ScrollBarVisibility::AlwaysVisible)
+                .show(ui, |ui| {
+                if self.browser_import.phase == Phase::Loading {
+                    ui.horizontal(|ui| { ui.spinner(); ui.label("Loading verified releases from CurseForge…"); });
+                } else if let Some(project) = &self.browser_import.project {
+                    ui.label("Download in your browser. The app will verify the file, save this source, and install it in the selected game automatically.");
+                    ui.add_space(8.0);
+                    ui.label(egui::RichText::new(&project.title).strong());
+                    if let Some(author) = &project.author { ui.label(format!("By {author}")); }
+                    ui.add(egui::Label::new(&project.source_url).wrap());
+                    ui.add_space(12.0);
+                    ui.label("Release");
+                    let selected = self.browser_import.chosen.and_then(|id| project.releases.iter().find(|r| r.release.file_id == id));
+                    let combo = egui::ComboBox::from_id_salt("browser-download-release")
+                        .width(ui.available_width()).wrap_mode(egui::TextWrapMode::Truncate)
+                        .selected_text(selected.map(|r| r.release.file_name.as_str()).unwrap_or("No verified release available"))
+                        .show_ui(ui, |ui| {
+                            for file in &project.releases {
+                                ui.selectable_value(&mut self.browser_import.chosen, Some(file.release.file_id), format!("{} · {}", file.release.file_name, file.release.published_at.format("%Y-%m-%d")));
+                            }
+                        });
+                    self.browser_release_rect = Some(combo.response.rect);
+                    if project.releases.is_empty() { ui.label("Automatic installation needs a public ZIP, package, or ts4script release with a published file size and checksum. Use the project page and local import controls for other files."); }
+                    if !project.complete { ui.label("Only part of the release history is shown."); }
+                    if let Some(file) = selected {
+                        ui.label(format!("{} bytes · {}", file.length, file.release.published_at.format("%Y-%m-%d")));
+                        if !file.release.game_versions.is_empty() { ui.label(format!("Game versions: {}", file.release.game_versions.join(", "))); }
+                    }
+                    ui.add_space(12.0);
+                    ui.label("Browser Downloads folder");
+                    ui.add(egui::Label::new(self.browser_import.download_dir.display().to_string()).wrap());
+                    choose_folder = ui.button("Change Downloads folder").clicked();
+                    ui.add_space(12.0);
+                    ui.label("Starting confirms this CurseForge source and release. The app will copy the matching completed download into your library and enable it in this game automatically.");
+                    ui.label("Your original download stays in place. Existing game files will not be overwritten. A matching file already in Downloads can be used immediately.");
+                }
+                if let Some(error) = &self.browser_import.error { ui.label(error); }
+            });
+            if choose_folder { self.start_picker(PickPurpose::DownloadsFolder, ctx, Some(self.browser_import.download_dir.clone())); }
+            ui.add_space(12.0);
+            ui.label("Install in this Sims 4 folder");
+            if let Some(root) = &catalog.root { ui.add(egui::Label::new(root.join("Mods").display().to_string()).wrap()); }
+            let enabled = self.browser_import.phase == Phase::Review && self.browser_import.chosen.is_some() && !catalog.loading && !self.busy() && self.picker.is_none();
+            let (start, cancel) = crate::popup::actions(ui, "Start browser download", enabled);
+            self.browser_start_rect = Some(start.rect); self.browser_cancel_rect = Some(cancel.rect);
+            if start.clicked() {
+                match self.browser_import.start(ctx) {
+                    Ok(url) => ctx.open_url(egui::OpenUrl::new_tab(url)),
+                    Err(error) => self.browser_import.error = Some(error),
+                }
+            }
+            cancel.clicked()
+        });
+        if popup.inner || popup.should_close() { self.browser_import.cancel(); }
+        if self.browser_import.phase == Phase::Loading { ctx.request_repaint_after(std::time::Duration::from_millis(100)); }
+    }
+    fn browser_import_status(&mut self, ui: &mut egui::Ui) {
+        use crate::browser_import::Phase;
+        match self.browser_import.phase {
+            Phase::Waiting | Phase::Queued | Phase::Installing => {
+                ui.horizontal_wrapped(|ui| {
+                    ui.spinner();
+                    ui.label(match self.browser_import.phase { Phase::Waiting => "Waiting for the verified browser download…", Phase::Queued => "Download verified. Installation queued…", _ => "Finishing installation in the approved game folder…" });
+                    let cancel = ui.add_enabled(self.browser_import.phase != Phase::Installing, egui::Button::new("Cancel download import"));
+                    self.browser_cancel_rect = Some(cancel.rect);
+                    if cancel.clicked() { self.browser_import.cancel(); }
+                });
+                if let Some(project) = &self.browser_import.project {
+                    ui.label(format!("{} · watching {}", project.title, self.browser_import.download_dir.display()));
+                }
+            }
+            Phase::Failed | Phase::Cancelled => {
+                ui.horizontal_wrapped(|ui| {
+                    ui.label(if self.browser_import.phase == Phase::Cancelled { "Browser download import cancelled." } else { "Browser download import failed." });
+                    if self.browser_import.can_retry() && ui.button("Retry browser import").clicked() {
+                        match self.browser_import.retry(ui.ctx()) { Ok(url) => ui.ctx().open_url(egui::OpenUrl::new_tab(url)), Err(error) => self.notice = Some(error) }
+                    }
+                });
+                if let Some(error) = &self.browser_import.error { ui.label(error); }
+                if !self.browser_import.can_retry() { ui.label("Select Download via website on the project page to review a new request."); }
+            }
+            _ => {}
+        }
+    }
     fn start_picker(
         &mut self,
         purpose: PickPurpose,
@@ -257,6 +369,7 @@ impl Controls {
             PickPurpose::Import(_, true) => crate::file_picker::Kind::ImportZip,
             PickPurpose::Import(_, false) => crate::file_picker::Kind::ImportFolder,
             PickPurpose::GameFolder => crate::file_picker::Kind::GameFolder,
+            PickPurpose::DownloadsFolder => crate::file_picker::Kind::DownloadsFolder,
             PickPurpose::SettingsImport => crate::file_picker::Kind::SettingsImport,
             PickPurpose::SettingsExport(_) => crate::file_picker::Kind::SettingsExport,
         };
@@ -292,6 +405,9 @@ impl Controls {
         }
         match purpose {
             PickPurpose::GameFolder => self.roots_changed = Some(path),
+            PickPurpose::DownloadsFolder => {
+                if self.browser_import.phase == crate::browser_import::Phase::Review { self.browser_import.download_dir = path; }
+            },
             PickPurpose::Import(identity, zip) => {
                 if !identity.current(
                     catalog.root.as_ref(),
@@ -471,6 +587,17 @@ impl Controls {
                 .any(|o| !o.job.action.read_only() && (o.status == "Queued" || o.status == "Running"))
     }
     pub fn poll(&mut self, catalog: &Catalog) {
+        self.browser_import.sync(catalog.root.as_ref(), self.saved_settings.curseforge_api_key.as_deref());
+        if let Some(request) = self.browser_import.poll() {
+            let token = request.token;
+            let identity = Identity { operation: self.next, root: request.root.clone(), entry: None, generation: catalog.generation() };
+            self.next += 1;
+            let operation = identity.operation;
+            self.submit(identity, Action::ImportBrowser(Box::new(request)));
+            if !self.operations.last().is_some_and(|job| job.job.identity.operation == operation) {
+                self.browser_import.finish(token, Err("Could not queue the verified installation. Retry the download session.".into()));
+            }
+        }
         self.updates.sync(catalog, self.saved_settings.curseforge_api_key.as_deref());
         if let Some(picker) = &self.picker {
             match picker.receiver.try_recv() {
@@ -515,7 +642,20 @@ impl Controls {
                 Event::Finished(identity, result) => {
                     let mut failure = None;
                     match result {
-                        Err(e) => failure = Some(e),
+                        Err(e) => {
+                            if let Some(operation) = self.operations.iter().find(|op| op.job.identity.operation == identity.operation)
+                                && let Action::ImportBrowser(request) = &operation.job.action {
+                                self.browser_import.finish(request.token, Err(e.clone()));
+                                self.refresh = catalog.root.clone();
+                            }
+                            failure = Some(e);
+                        },
+                        Ok(Output::BrowserImported { token, metadata }) => {
+                            self.browser_import.finish(token, Ok(()));
+                            self.updates.invalidate();
+                            self.refresh = catalog.root.clone();
+                            self.notice = Some(format!("{} imported and enabled in {}", metadata.effective_display_name(), identity.root.display()));
+                        },
                         Ok(Output::Changed(issues)) => {
                             self.updates.invalidate();
                             self.refresh = catalog.root.clone();
@@ -984,6 +1124,7 @@ impl Controls {
         if let Some(error) = &self.error {
             ui.colored_label(ui.visuals().error_fg_color, error);
         }
+        self.browser_import_status(ui);
         let mut retry = None;
         if !self.operations.is_empty() {
             egui::CollapsingHeader::new("Activity")
@@ -1001,7 +1142,7 @@ impl Controls {
                                         operation.job.identity.root.display(),
                                         operation.status
                                     )).wrap());
-                                    if operation.error && ui.button("Retry").clicked() {
+                                    if operation.error && !matches!(operation.job.action, Action::ImportBrowser(_)) && ui.button("Retry").clicked() {
                                         retry = Some(operation.job.clone())
                                     }
                                 });
@@ -1021,10 +1162,12 @@ impl Controls {
         }
     }
     pub fn review_open(&self) -> bool {
-        self.dialog.is_some() || self.candidates.is_some() || self.trash_entries.is_some()
+        self.browser_import.is_review_open() || self.dialog.is_some() || self.candidates.is_some() || self.trash_entries.is_some()
     }
 
     pub fn show_dialogs(&mut self, ctx: &egui::Context, catalog: &Catalog) {
+        self.browser_import.sync(catalog.root.as_ref(), self.saved_settings.curseforge_api_key.as_deref());
+        if self.browser_import.is_review_open() { self.browser_import_review(ctx, catalog); return; }
         if self.candidates.as_ref().is_some_and(|(id, _)| {
             !id.current(
                 catalog.root.as_ref(),
