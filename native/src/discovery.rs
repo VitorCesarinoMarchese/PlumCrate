@@ -1,7 +1,9 @@
 use egui::{RichText, vec2};
 use std::sync::mpsc;
 use ts4_mod_manager_core::{
-    curseforge_browse::{BrowsePage, BrowseProject, BrowseQuery, BrowseSort, Category},
+    curseforge_browse::{
+        BrowsePage, BrowseProject, BrowseQuery, BrowseSort, Category, category_options,
+    },
     curseforge_client::{CurseForgeClient, SourceLookupError, UreqCurseForgeTransport},
 };
 
@@ -94,10 +96,12 @@ struct Request {
     generation: u64,
     query: BrowseQuery,
     key: String,
+    load_filters: bool,
 }
 enum Completion {
     Page(u64, Result<BrowsePage, SourceLookupError>),
     Categories(u64, Result<Vec<Category>, SourceLookupError>),
+    Versions(u64, Result<Vec<String>, SourceLookupError>),
 }
 struct Jobs {
     sender: mpsc::Sender<Request>,
@@ -129,9 +133,23 @@ impl Jobs {
                         break;
                     }
                     ctx.request_repaint();
-                    let categories = client.and_then(|client| client.browse_categories());
+                    if !request.load_filters {
+                        continue;
+                    }
+                    let categories = client
+                        .as_ref()
+                        .map_err(Clone::clone)
+                        .and_then(|client| client.browse_categories());
                     if results
                         .send(Completion::Categories(request.generation, categories))
+                        .is_err()
+                    {
+                        break;
+                    }
+                    ctx.request_repaint();
+                    let versions = client.and_then(|client| client.browse_game_versions());
+                    if results
+                        .send(Completion::Versions(request.generation, versions))
                         .is_err()
                     {
                         break;
@@ -149,12 +167,18 @@ pub struct DiscoverView {
     pub query: String,
     pub sort: BrowseSort,
     pub category: Option<u64>,
+    pub class_id: Option<u64>,
+    pub game_version: Option<String>,
     pub categories: Vec<Category>,
+    pub game_versions: Vec<String>,
     pub selected: Option<BrowseProject>,
     pub stats: Stats,
     jobs: Option<Jobs>,
     key: Option<String>,
     category_error: Option<SourceLookupError>,
+    version_error: Option<SourceLookupError>,
+    category_search: String,
+    version_search: String,
     previews: crate::preview::Previews,
 }
 #[derive(Default)]
@@ -169,6 +193,16 @@ pub struct Stats {
     pub previous: Option<egui::Rect>,
     pub settings: Option<egui::Rect>,
     pub cards: usize,
+    pub browse_by: Option<egui::Rect>,
+    pub category: Option<egui::Rect>,
+    pub game_version: Option<egui::Rect>,
+    pub sort: Option<egui::Rect>,
+    pub clear_filters: Option<egui::Rect>,
+    pub content_types: Vec<(u64, egui::Rect)>,
+    pub filters_toggle: Option<egui::Rect>,
+    pub filters_toggle_id: Option<egui::Id>,
+    pub browse_by_id: Option<egui::Id>,
+    pub category_control_id: Option<egui::Id>,
 }
 impl DiscoverView {
     pub fn with_cache(directory: std::path::PathBuf) -> Self {
@@ -204,6 +238,10 @@ impl DiscoverView {
                 generation,
                 query,
                 key,
+                load_filters: self.categories.is_empty()
+                    || self.game_versions.is_empty()
+                    || self.category_error.is_some()
+                    || self.version_error.is_some(),
             })
             .is_err()
         {
@@ -218,8 +256,9 @@ impl DiscoverView {
                 search: self.query.trim().into(),
                 sort: self.sort,
                 category: self.category,
+                class_id: self.class_id,
+                game_version: self.game_version.clone(),
                 index: 0,
-                ..Default::default()
             },
         );
     }
@@ -232,7 +271,9 @@ impl DiscoverView {
         if self.browser.generation == 0 || self.key != key {
             self.key = key;
             self.categories.clear();
+            self.game_versions.clear();
             self.category_error = None;
+            self.version_error = None;
             self.search(ui.ctx());
         }
         if let Some(jobs) = &self.jobs {
@@ -240,6 +281,17 @@ impl DiscoverView {
                 match event {
                     Completion::Page(generation, result) => {
                         self.browser.accept(generation, result);
+                    }
+                    Completion::Versions(generation, result)
+                        if generation == self.browser.generation =>
+                    {
+                        match result {
+                            Ok(versions) => {
+                                self.game_versions = versions;
+                                self.version_error = None;
+                            }
+                            Err(error) => self.version_error = Some(error),
+                        }
                     }
                     Completion::Categories(generation, result)
                         if generation == self.browser.generation =>
@@ -323,40 +375,25 @@ impl DiscoverView {
                 });
             });
         ui.add_space(12.0);
-        let old = (self.sort, self.category);
-        ui.horizontal_wrapped(|ui| {
-            ui.label("Category");
-            let name = self
-                .categories
-                .iter()
-                .find(|category| Some(category.id) == self.category)
-                .map(|category| category.name.as_str())
-                .unwrap_or("All categories");
-            egui::ComboBox::from_id_salt("browse-category")
-                .width(180.0)
-                .selected_text(name)
-                .show_ui(ui, |ui| {
-                    ui.selectable_value(&mut self.category, None, "All categories");
-                    for category in &self.categories {
-                        ui.selectable_value(&mut self.category, Some(category.id), &category.name);
-                    }
-                });
-            ui.label("Sort by");
-            egui::ComboBox::from_id_salt("browse-sort")
-                .width(150.0)
-                .selected_text(self.sort.label())
-                .show_ui(ui, |ui| {
-                    for sort in [
-                        BrowseSort::Popular,
-                        BrowseSort::Downloads,
-                        BrowseSort::Updated,
-                        BrowseSort::Name,
-                    ] {
-                        ui.selectable_value(&mut self.sort, sort, sort.label());
-                    }
-                });
-        });
-        if search || old != (self.sort, self.category) {
+        let filters_changed = if ui.ctx().content_rect().height() < 600.0 {
+            let count = [
+                self.class_id.is_some(),
+                self.category.is_some(),
+                self.game_version.is_some(),
+            ]
+            .into_iter()
+            .filter(|active| *active)
+            .count();
+            let response = egui::CollapsingHeader::new(format!("Filters ({count})"))
+                .id_salt("browse-filters")
+                .show(ui, |ui| self.filters(ui));
+            self.stats.filters_toggle = Some(response.header_response.rect);
+            self.stats.filters_toggle_id = Some(response.header_response.id);
+            response.body_returned.unwrap_or(false)
+        } else {
+            self.filters(ui)
+        };
+        if search || filters_changed {
             self.search(ui.ctx());
         }
         ui.add_space(16.0);
@@ -394,6 +431,15 @@ impl DiscoverView {
             ui.label(
                 RichText::new(format!("Categories unavailable. {}", error_message(error)))
                     .color(ui.visuals().warn_fg_color),
+            );
+        }
+        if let Some(error) = &self.version_error {
+            ui.label(
+                RichText::new(format!(
+                    "Game versions unavailable. {}",
+                    error_message(error)
+                ))
+                .color(ui.visuals().warn_fg_color),
             );
         }
         let Some(page) = self.browser.page.clone() else {
@@ -436,11 +482,199 @@ impl DiscoverView {
         if page.projects.is_empty() {
             ui.add_space(24.0);
             ui.heading("No matching mods");
-            ui.label("Try another name or select All categories.");
+            ui.label("Try another name or clear the filters.");
             return false;
         }
         self.cards(ui, &page.projects, scroll_cards);
         false
+    }
+
+    fn filters(&mut self, ui: &mut egui::Ui) -> bool {
+        let old = (
+            self.sort,
+            self.class_id,
+            self.category,
+            self.game_version.clone(),
+        );
+        ui.horizontal_wrapped(|ui| {
+            ui.allocate_ui_with_layout(
+                vec2(180.0, 60.0),
+                egui::Layout::top_down(egui::Align::Min),
+                |ui| {
+                    ui.set_width(180.0);
+                    let label = ui.label("Browse by");
+                    let name = self
+                        .categories
+                        .iter()
+                        .find(|c| Some(c.id) == self.class_id && c.is_class == Some(true))
+                        .map(|c| c.name.as_str())
+                        .unwrap_or("All");
+                    let response = egui::ComboBox::from_id_salt("browse-content-type")
+                        .width(180.0)
+                        .selected_text(name)
+                        .show_ui(ui, |ui| {
+                            ui.selectable_value(&mut self.class_id, None, "All");
+                            let mut classes: Vec<_> = self
+                                .categories
+                                .iter()
+                                .filter(|c| c.is_class == Some(true))
+                                .collect();
+                            classes.sort_by_key(|c| c.display_index.unwrap_or(u32::MAX));
+                            for class in classes {
+                                let response = ui.selectable_value(
+                                    &mut self.class_id,
+                                    Some(class.id),
+                                    &class.name,
+                                );
+                                self.stats.content_types.push((class.id, response.rect));
+                            }
+                        })
+                        .response
+                        .labelled_by(label.id);
+                    self.stats.browse_by = Some(response.rect);
+                    self.stats.browse_by_id = Some(response.id);
+                    if old.1 != self.class_id {
+                        self.category = None;
+                        self.category_search.clear();
+                    }
+                },
+            );
+            ui.allocate_ui_with_layout(
+                vec2(260.0, 60.0),
+                egui::Layout::top_down(egui::Align::Min),
+                |ui| {
+                    ui.set_width(260.0);
+                    let label = ui.label("Category");
+                    let options = self
+                        .class_id
+                        .map(|id| category_options(&self.categories, id))
+                        .unwrap_or_default();
+                    let name = options
+                        .iter()
+                        .find(|(id, _)| Some(*id) == self.category)
+                        .map(|(_, name)| name.as_str())
+                        .unwrap_or("All categories");
+                    let response = ui
+                        .add_enabled_ui(self.class_id.is_some() && !options.is_empty(), |ui| {
+                            egui::ComboBox::from_id_salt("browse-category")
+                                .width(260.0)
+                                .height(250.0)
+                                .selected_text(name)
+                                .show_ui(ui, |ui| {
+                                    ui.add(
+                                        egui::TextEdit::singleline(&mut self.category_search)
+                                            .hint_text("Find a category")
+                                            .desired_width(240.0),
+                                    );
+                                    ui.selectable_value(&mut self.category, None, "All categories");
+                                    let filter = self.category_search.trim().to_lowercase();
+                                    for (id, name) in &options {
+                                        if name.to_lowercase().contains(&filter) {
+                                            ui.selectable_value(
+                                                &mut self.category,
+                                                Some(*id),
+                                                name,
+                                            );
+                                        }
+                                    }
+                                })
+                                .response
+                        })
+                        .inner
+                        .labelled_by(label.id)
+                        .on_disabled_hover_text(
+                            "Choose a content type in Browse by to see its categories.",
+                        );
+                    self.stats.category = Some(response.rect);
+                    self.stats.category_control_id = Some(response.id);
+                },
+            );
+            ui.allocate_ui_with_layout(
+                vec2(142.0, 60.0),
+                egui::Layout::top_down(egui::Align::Min),
+                |ui| {
+                    ui.set_width(142.0);
+                    let label = ui.label("Game Version");
+                    let response = egui::ComboBox::from_id_salt("browse-version")
+                        .width(142.0)
+                        .height(250.0)
+                        .selected_text(self.game_version.as_deref().unwrap_or("All versions"))
+                        .show_ui(ui, |ui| {
+                            ui.add(
+                                egui::TextEdit::singleline(&mut self.version_search)
+                                    .hint_text("Find a version")
+                                    .desired_width(130.0),
+                            );
+                            ui.selectable_value(&mut self.game_version, None, "All versions");
+                            for version in &self.game_versions {
+                                if version.contains(self.version_search.trim()) {
+                                    ui.selectable_value(
+                                        &mut self.game_version,
+                                        Some(version.clone()),
+                                        version,
+                                    );
+                                }
+                            }
+                        })
+                        .response
+                        .labelled_by(label.id);
+                    self.stats.game_version = Some(response.rect);
+                },
+            );
+            ui.allocate_ui_with_layout(
+                vec2(155.0, 60.0),
+                egui::Layout::top_down(egui::Align::Min),
+                |ui| {
+                    ui.set_width(155.0);
+                    let label = ui.label("Sort by");
+                    let response = egui::ComboBox::from_id_salt("browse-sort")
+                        .width(155.0)
+                        .selected_text(self.sort.label())
+                        .show_ui(ui, |ui| {
+                            for sort in [
+                                BrowseSort::Relevance,
+                                BrowseSort::Popular,
+                                BrowseSort::Updated,
+                                BrowseSort::Created,
+                                BrowseSort::Downloads,
+                                BrowseSort::Name,
+                            ] {
+                                ui.selectable_value(&mut self.sort, sort, sort.label());
+                            }
+                        })
+                        .response
+                        .labelled_by(label.id);
+                    self.stats.sort = Some(response.rect);
+                },
+            );
+            ui.allocate_ui_with_layout(
+                vec2(104.0, 60.0),
+                egui::Layout::top_down(egui::Align::Min),
+                |ui| {
+                    ui.add_space(23.0);
+                    let response = ui.add_enabled(
+                        self.class_id.is_some()
+                            || self.category.is_some()
+                            || self.game_version.is_some(),
+                        egui::Button::new("Clear filters"),
+                    );
+                    self.stats.clear_filters = Some(response.rect);
+                    if response.clicked() {
+                        self.class_id = None;
+                        self.category = None;
+                        self.game_version = None;
+                        self.category_search.clear();
+                        self.version_search.clear();
+                    }
+                },
+            );
+        });
+        old != (
+            self.sort,
+            self.class_id,
+            self.category,
+            self.game_version.clone(),
+        )
     }
     fn cards(&mut self, ui: &mut egui::Ui, projects: &[BrowseProject], scroll: bool) {
         let columns = ((ui.available_width() + 16.0) / 280.0).floor().max(1.0) as usize;

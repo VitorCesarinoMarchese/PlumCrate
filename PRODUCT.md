@@ -16,7 +16,7 @@ Browse a local mod library, inspect photos and files, and manage installed state
 
 ## Capabilities and constraints
 
-Preserve all existing native management features: folder/ZIP import, reviewed enable/disable, external migration, rename, explicit source attachment/removal, trash/restore, settings transfer, search and photo previews. CurseForge browsing supports provider search, categories, sorting, pagination, summaries and screenshots, using a key saved in local Settings. No mod downloads or updates. Source candidates must come from real provider data and require user confirmation. Never permanently delete user files or remove unmanaged files.
+Preserve all existing native management features: folder/ZIP import, reviewed enable/disable, external migration, rename, explicit source attachment/removal, trash/restore, settings transfer, search and photo previews. CurseForge browsing supports provider search, content types, scoped categories, game versions, sorting, pagination, summaries and screenshots, using a key saved in local Settings. The current browser supports search and inspection. Product scope includes in-app mod downloads and updates initiated by the user. Source candidates must come from real provider data and require user confirmation. Never permanently delete user files or remove unmanaged files.
 
 ## Brand commitments
 

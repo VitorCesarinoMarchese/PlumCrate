@@ -226,3 +226,81 @@ fn provider_errors_do_not_become_empty_search_results() {
         assert_eq!(client.browse_mods(&BrowseQuery::default()), Err(expected));
     }
 }
+
+#[test]
+#[ignore = "requires CURSEFORGE_API_KEY in environment"]
+fn live_browse_filters_respect_provider_taxonomy() {
+    use ts4_mod_manager_core::curseforge_client::UreqCurseForgeTransport;
+    let key = std::env::var("CURSEFORGE_API_KEY").expect("local API key");
+    let client = CurseForgeClient::new(Some(&key), UreqCurseForgeTransport::default()).unwrap();
+    let categories = client.browse_categories().expect("live categories");
+    let versions = client.browse_game_versions().expect("live game versions");
+    assert!(!versions.is_empty());
+    let classes: Vec<_> = categories
+        .iter()
+        .filter(|c| c.is_class == Some(true))
+        .collect();
+    assert!(classes.iter().any(|c| c.name == "Create a Sim"));
+    assert!(classes.iter().any(|c| c.name == "Build / Buy"));
+    for class in &classes {
+        let page = client
+            .browse_mods(&BrowseQuery {
+                class_id: Some(class.id),
+                ..Default::default()
+            })
+            .expect("live content type");
+        assert!(page.projects.iter().all(|p| p
+            .categories
+            .iter()
+            .any(|c| c.id == class.id || c.class_id == Some(class.id))));
+        println!("PASS: {}: {} projects", class.name, page.projects.len());
+    }
+    let mods = classes.iter().find(|c| c.name == "Mods").unwrap();
+    let gameplay = category_options(&categories, mods.id)
+        .into_iter()
+        .find(|(_, name)| name == "Gameplay")
+        .unwrap()
+        .0;
+    let query = BrowseQuery {
+        class_id: Some(mods.id),
+        category: Some(gameplay),
+        game_version: Some(versions[0].clone()),
+        ..Default::default()
+    };
+    let page = client.browse_mods(&query).expect("combined live filters");
+    assert!(!page.projects.is_empty());
+    assert!(page
+        .projects
+        .iter()
+        .all(|p| p.categories.iter().any(|c| c.id == gameplay)));
+    let files = client
+        .get_mod_files(page.projects[0].id)
+        .expect("live version evidence");
+    assert!(files
+        .iter()
+        .any(|file| file.game_versions.contains(&versions[0])));
+    if let Some(index) = page.next_index() {
+        let next = client
+            .browse_mods(&BrowseQuery { index, ..query })
+            .expect("filtered second page");
+        assert!(next
+            .projects
+            .iter()
+            .all(|p| p.categories.iter().any(|c| c.id == gameplay)));
+    }
+    for sort in [BrowseSort::Relevance, BrowseSort::Created] {
+        assert!(!client
+            .browse_mods(&BrowseQuery {
+                class_id: Some(mods.id),
+                sort,
+                ..Default::default()
+            })
+            .expect("live sort")
+            .projects
+            .is_empty());
+    }
+    println!(
+        "PASS: combined Mods / Gameplay / {} filter, pagination, and additional sort options",
+        versions[0]
+    );
+}

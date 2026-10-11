@@ -276,8 +276,19 @@
           780,
           420
         ],
-        "shortWindow": "Below 600 points of content height, everything below the browser heading scrolls together.",
-        "projectScroll": "Back to results remains above the scroll region."
+        "shortWindow": "Below 600 points of content height, Filters folds the selectors with an active type/category/version count. Expanded controls scroll with results; Clear filters remains reachable.",
+        "projectScroll": "Back to results remains above the scroll region.",
+        "filterGroups": {
+          "widths": {
+            "browseBy": 180,
+            "category": 260,
+            "gameVersion": 142,
+            "sortBy": 155,
+            "clearFilters": 104
+          },
+          "height": 60,
+          "labels": "Above selectors; groups wrap together without horizontal overflow."
+        }
       },
       "typography": {
         "cardName": 16,
@@ -290,18 +301,26 @@
       },
       "states": {
         "cardHoverAndFocus": "Existing selection stroke inside the 8-point card border when hovered or focused.",
-        "search": "Search or Enter submits; category and sort changes restart at index zero.",
+        "search": "Search or Enter submits; content type, category, version and sort changes restart at index zero. Pagination retains every submitted dimension.",
         "sortChoices": [
-          "Popular",
-          "Downloads",
-          "Updated",
-          "Name"
+          "Relevancy",
+          "Popularity",
+          "Latest update",
+          "Date released",
+          "Total Downloads",
+          "A-Z"
         ],
         "counts": "Provider pagination supplies result count, range and Previous/Next availability.",
         "setup": "Connect to CurseForge with Open Settings and instructions to save a local API key.",
         "error": "Search unavailable with provider-specific guidance, Open Settings and Try again.",
         "categoryError": "Visible warning; available projects remain shown.",
-        "return": "Back to results or Escape restores the current page; Ctrl+F returns to browser search."
+        "return": "Back to results or Escape restores the current page; Ctrl+F returns to browser search.",
+        "browseBy": "Provider root classes: Mods, Create a Sim, Build / Buy, Rooms / Lots, Sims / Households, Pets, Save Files, Worlds and Translations.",
+        "category": "Searchable full parent paths scoped to the selected content type; changing type clears category.",
+        "gameVersion": "Searchable numeric Sims 4 provider versions, newest first.",
+        "sortSemantics": "Relevancy omits sortField for provider default ranking. Date released uses public API release-date sort 11; the website Creation Date sort is unavailable. Popularity uses 2, Latest update 3, Total Downloads 6 and A-Z 4 ascending.",
+        "clearFilters": "Resets content type, category and game version while retaining search text and sort.",
+        "filterOptionLoading": "Worker loads category and version options only when missing or after a failed attempt."
       },
       "images": {
         "sizing": "contain within bounded sizes",
@@ -309,22 +328,27 @@
         "failure": "hide",
         "httpReferer": false
       },
-      "scope": "Provider search and in-app inspection only; no downloads, updates, metadata writes or source attachments. Requests use the saved local key.",
+      "scope": "Current browser supports provider search and in-app inspection using the saved local key. Filtering saves no credentials or source metadata and does not download, update or attach mods. Future download and update actions require user initiation.",
       "verification": {
         "captures": [
           "browse-dark",
           "browse-light",
+          "browse-user",
           "browse-narrow",
           "browse-small",
+          "browse-filters-small",
+          "browse-types",
+          "browse-categories",
           "project-dark",
           "project-small",
           "browse-setup",
           "browse-error"
         ],
-        "captureDirectory": "native/target/ui-discovery",
+        "captureDirectory": ".impeccable/review/curseforge-filters",
         "fixtureContent": "Synthetic test projects and procedural images, not provider results.",
-        "independentDisposition": "ship after keyboard card focus and card-row alignment fixes",
-        "liveProvider": "Not validated; no API key is available in this environment."
+        "independentDisposition": "ship with no material issues; all sixteen discovery/UI tests passed, including short-window scrolling to Clear filters",
+        "liveProvider": "Passed core/tests/curseforge_browse.rs::live_browse_filters_respect_provider_taxonomy with a local ignored key: all nine content types, combined Mods / Gameplay / 1.128.90 filters, filtered pagination, real file-version evidence, Relevancy and Date released requests.",
+        "nativeDetector": "Not applicable to the native egui UI."
       }
     }
   },
@@ -348,11 +372,11 @@
       "Do preserve photo proportions with destination-aware centered cover crops in cards and contain sizing in the inspector.",
       "Do keep explicit weak text colors readable on panels, cards, widgets and selected fills.",
       "Do preserve search and selected identity when switching card/list layouts.",
-      "Do show No Preview for missing or broken mod photos and keep weak source-match warnings visible."
+      "Do show No Preview for missing or broken mod photos and keep weak source-match warnings visible.",
+      "Do require user initiation for future mod downloads and updates."
     ],
     "donts": [
       "Don't fabricate mod photography, authors, source candidates or discovery counters.",
-      "Don't add download or update actions to this local management library.",
       "Don't replace native focus and hover behavior with a custom selection animation."
     ]
   }

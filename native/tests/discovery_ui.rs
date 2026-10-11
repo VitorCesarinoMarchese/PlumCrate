@@ -46,6 +46,230 @@ fn text(output: &egui::FullOutput, value: &str) -> bool {
         |s| matches!(&s.shape, egui::epaint::Shape::Text(t) if t.galley.text().contains(value)),
     )
 }
+
+fn filter_fixture(view: &mut View) {
+    view.browse_page = true;
+    view.discovery.categories = ts4_mod_manager_core::curseforge_browse::parse_categories_response(
+        r#"{"data":[
+        {"id":10,"gameId":78062,"name":"Create a Sim","isClass":true},
+        {"id":11,"gameId":78062,"name":"Clothing","parentCategoryId":10,"classId":10},
+        {"id":13,"gameId":78062,"name":"Adult","parentCategoryId":11,"classId":10},
+        {"id":20,"gameId":78062,"name":"Build / Buy","isClass":true},
+        {"id":21,"gameId":78062,"name":"Lighting","parentCategoryId":20,"classId":20}
+    ]}"#,
+    )
+    .unwrap();
+    view.discovery.game_versions = vec!["1.128.90".into(), "1.127.41".into()];
+    view.discovery.class_id = Some(10);
+    view.discovery.category = Some(13);
+    view.discovery.game_version = Some("1.128.90".into());
+    let generation = view.discovery.browser.begin(BrowseQuery {
+        class_id: Some(10),
+        category: Some(13),
+        game_version: Some("1.128.90".into()),
+        index: 24,
+        ..Default::default()
+    });
+    view.discovery.browser.accept(generation, Ok(parse_browse_response(r#"{"data":[],"pagination":{"index":24,"pageSize":24,"resultCount":0,"totalCount":24}}"#).unwrap()));
+}
+
+#[test]
+fn curseforge_filters_fit_and_show_the_category_parent_at_every_size() {
+    for size in [
+        [1870.0, 1006.0],
+        [1200.0, 800.0],
+        [680.0, 760.0],
+        [640.0, 480.0],
+    ] {
+        let ctx = egui::Context::default();
+        ui::setup(&ctx);
+        let mut view = View::default();
+        filter_fixture(&mut view);
+        let mut catalog = Catalog::default();
+        for _ in 0..3 {
+            frame(&ctx, &mut view, &mut catalog, size, vec![]);
+        }
+        if let Some(toggle) = view.discovery.stats.filters_toggle {
+            frame(&ctx, &mut view, &mut catalog, size, click(toggle));
+            for _ in 0..4 {
+                frame(&ctx, &mut view, &mut catalog, size, vec![]);
+            }
+        }
+        let output = frame(&ctx, &mut view, &mut catalog, size, vec![]);
+        assert!(text(&output, "Browse by"));
+        assert!(text(&output, "Game Version"));
+        assert!(text(&output, "Clothing / Adult"));
+        for rect in [
+            view.discovery.stats.browse_by,
+            view.discovery.stats.category,
+            view.discovery.stats.game_version,
+            view.discovery.stats.sort,
+            view.discovery.stats.clear_filters,
+        ]
+        .into_iter()
+        .flatten()
+        {
+            assert!(
+                rect.left() >= 0.0 && rect.right() <= size[0],
+                "filter overflow at {size:?}: {rect:?}"
+            );
+        }
+    }
+}
+
+#[test]
+fn switching_content_type_clears_category_keeps_version_and_restarts_pagination() {
+    let ctx = egui::Context::default();
+    ui::setup(&ctx);
+    let mut view = View::default();
+    filter_fixture(&mut view);
+    let mut catalog = Catalog::default();
+    let size = [1200.0, 800.0];
+    for _ in 0..3 {
+        frame(&ctx, &mut view, &mut catalog, size, vec![]);
+    }
+    let rect = view.discovery.stats.browse_by.unwrap();
+    frame(&ctx, &mut view, &mut catalog, size, click(rect));
+    frame(&ctx, &mut view, &mut catalog, size, vec![]);
+    let target = view
+        .discovery
+        .stats
+        .content_types
+        .iter()
+        .find(|(id, _)| *id == 20)
+        .unwrap()
+        .1;
+    frame(&ctx, &mut view, &mut catalog, size, click(target));
+    assert_eq!(view.discovery.class_id, Some(20));
+    assert_eq!(view.discovery.category, None);
+    assert_eq!(view.discovery.browser.active.class_id, Some(20));
+    assert_eq!(view.discovery.browser.active.category, None);
+    assert_eq!(
+        view.discovery.browser.active.game_version.as_deref(),
+        Some("1.128.90")
+    );
+    assert_eq!(view.discovery.browser.active.index, 0);
+}
+
+#[test]
+fn clearing_filters_keeps_search_text_and_resets_all_filter_dimensions() {
+    let ctx = egui::Context::default();
+    ui::setup(&ctx);
+    let mut view = View::default();
+    filter_fixture(&mut view);
+    view.discovery.query = "hair".into();
+    let mut catalog = Catalog::default();
+    let size = [1200.0, 800.0];
+    for _ in 0..3 {
+        frame(&ctx, &mut view, &mut catalog, size, vec![]);
+    }
+    let rect = view.discovery.stats.clear_filters.unwrap();
+    frame(&ctx, &mut view, &mut catalog, size, click(rect));
+    assert_eq!(view.discovery.class_id, None);
+    assert_eq!(view.discovery.category, None);
+    assert_eq!(view.discovery.game_version, None);
+    assert_eq!(view.discovery.browser.active.search, "hair");
+    assert_eq!(view.discovery.browser.active.index, 0);
+}
+
+#[test]
+fn selecting_category_version_and_sort_submits_combined_filters() {
+    fn text_rect(output: &egui::FullOutput, value: &str) -> egui::Rect {
+        output
+            .shapes
+            .iter()
+            .find_map(|shape| match &shape.shape {
+                egui::epaint::Shape::Text(text) if text.galley.text() == value => {
+                    Some(egui::Rect::from_min_size(text.pos, text.galley.size()))
+                }
+                _ => None,
+            })
+            .unwrap_or_else(|| panic!("missing selectable option {value}"))
+    }
+    let ctx = egui::Context::default();
+    ui::setup(&ctx);
+    let mut view = View::default();
+    filter_fixture(&mut view);
+    view.discovery.category = None;
+    view.discovery.query = "collection".into();
+    let mut catalog = Catalog::default();
+    let size = [1200.0, 800.0];
+    for _ in 0..3 {
+        frame(&ctx, &mut view, &mut catalog, size, vec![]);
+    }
+    for (control, label) in [
+        (0, "Clothing / Adult"),
+        (1, "1.127.41"),
+        (2, "Date released"),
+    ] {
+        let rect = match control {
+            0 => view.discovery.stats.category,
+            1 => view.discovery.stats.game_version,
+            _ => view.discovery.stats.sort,
+        }
+        .unwrap();
+        frame(&ctx, &mut view, &mut catalog, size, click(rect));
+        let output = frame(&ctx, &mut view, &mut catalog, size, vec![]);
+        let option = text_rect(&output, label);
+        frame(&ctx, &mut view, &mut catalog, size, click(option));
+        frame(&ctx, &mut view, &mut catalog, size, vec![]);
+        assert_eq!(view.discovery.browser.active.index, 0);
+    }
+    let query = &view.discovery.browser.active;
+    assert_eq!(query.search, "collection");
+    assert_eq!(query.class_id, Some(10));
+    assert_eq!(query.category, Some(13));
+    assert_eq!(query.game_version.as_deref(), Some("1.127.41"));
+    assert_eq!(
+        query.sort,
+        ts4_mod_manager_core::curseforge_browse::BrowseSort::Created
+    );
+}
+
+#[test]
+fn short_window_filter_disclosure_scrolls_to_clear_action() {
+    let ctx = egui::Context::default();
+    ui::setup(&ctx);
+    let mut view = View::default();
+    filter_fixture(&mut view);
+    let mut catalog = Catalog::default();
+    let size = [640.0, 480.0];
+    for _ in 0..3 {
+        frame(&ctx, &mut view, &mut catalog, size, vec![]);
+    }
+    let toggle = view.discovery.stats.filters_toggle.unwrap();
+    frame(&ctx, &mut view, &mut catalog, size, click(toggle));
+    for _ in 0..4 {
+        frame(&ctx, &mut view, &mut catalog, size, vec![]);
+    }
+    frame(
+        &ctx,
+        &mut view,
+        &mut catalog,
+        size,
+        vec![
+            egui::Event::PointerMoved(egui::pos2(320.0, 330.0)),
+            egui::Event::MouseWheel {
+                unit: egui::MouseWheelUnit::Point,
+                delta: egui::vec2(0.0, -180.0),
+                modifiers: Default::default(),
+                phase: egui::TouchPhase::Move,
+            },
+        ],
+    );
+    for _ in 0..5 {
+        frame(&ctx, &mut view, &mut catalog, size, vec![]);
+    }
+    let clear = view.discovery.stats.clear_filters.unwrap();
+    assert!(
+        clear.center().y > 105.0 && clear.center().y < 409.0,
+        "clear action must be reachable after scrolling: {clear:?}"
+    );
+    frame(&ctx, &mut view, &mut catalog, size, click(clear));
+    assert_eq!(view.discovery.browser.active.class_id, None);
+    assert_eq!(view.discovery.browser.active.category, None);
+    assert_eq!(view.discovery.browser.active.game_version, None);
+}
 #[test]
 fn browse_is_available_without_game_folder_and_preserves_library_search() {
     for size in [[1200.0, 800.0], [640.0, 480.0]] {

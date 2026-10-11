@@ -35,6 +35,8 @@ fn pagination_uses_committed_search_and_filter_not_unsent_draft() {
     let query = BrowseQuery {
         search: "hair".into(),
         category: Some(42),
+        class_id: Some(10),
+        game_version: Some("1.128.90".into()),
         ..Default::default()
     };
     let generation = browser.begin(query.clone());

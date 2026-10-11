@@ -19,7 +19,7 @@ Browse your collection by photo, find a file by name, and choose which mods are 
 | Feature | What you can do |
 | --- | --- |
 | Browse your collection | Switch between photo cards and a compact list. Search mod names and filenames, or filter installed and stored mods. |
-| Search CurseForge | Browse Sims 4 mods and custom content by name, category, and sort order. Read summaries and view screenshots inside the app. Requires your API key in local Settings. |
+| Search CurseForge | Browse Sims 4 mods and custom content by name, content type, category, game version, and sort order. Read summaries and view screenshots inside the app. Requires your API key in local Settings. |
 | Bring your own mods | Import a local folder or ZIP archive, or review existing game mods before moving them into the managed library. |
 | Choose what loads | Review the files before enabling or disabling a managed mod. |
 | Keep track of sources | Save a source link yourself, or review CurseForge suggestions and confirm a match. |

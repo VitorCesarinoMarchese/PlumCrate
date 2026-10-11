@@ -18,13 +18,21 @@ The picker starts in Downloads when that folder exists, otherwise in your home d
 
 **Browse mods** opens a separate Sims 4 CurseForge browser without requiring a game folder. It uses the API key saved in local Settings. Unsaved key edits do not affect requests. The **Open Settings** action appears when the key is missing or rejected.
 
-With a saved key, the browser loads popular projects. Search submits through **Search** or Enter; Ctrl+F focuses the browser search field. Category choices come from CurseForge. Sorting offers Popular, Most downloaded, Recently updated, and Name. Previous and Next use the submitted query and provider pagination, with 24 results per page and the API's 10,000-result limit. Editing a search without submitting it does not change page navigation.
+With a saved key, the browser loads popular projects. Search submits through **Search** or Enter; Ctrl+F focuses the browser search field.
+
+**Browse by** selects a provider content type: Mods, Create a Sim, Build / Buy, Rooms / Lots, Sims / Households, Pets, Save Files, Worlds, or Translations. **Category** becomes available for the selected type and shows searchable parent paths, such as Body / Hairstyles. Changing the content type clears the category. **Game Version** lists searchable numeric Sims 4 versions, newest first. These options come from CurseForge.
+
+**Sort by** offers Relevancy, Popularity, Latest update, Date released, Total Downloads, and A-Z. Relevancy uses the provider's default ranking. Date released uses the public API's release-date sort; the website's Creation Date sort is not available through that API. **Clear filters** clears content type, category, and game version while retaining search text and sort.
+
+Submitting a search or changing a filter or sort restarts at the first page. **Previous** and **Next** retain the submitted search, content type, category, version, and sort. Pages contain 24 results, within the API's 10,000-result limit. Editing a search without submitting it does not change page navigation. Below 600 logical points of window height, **Filters** folds the selectors and shows the active filter count. Expanded controls scroll with the results, so **Clear filters** remains reachable in short windows.
 
 Project cards show provider names, authors, logos, summaries, categories, download counts, and modification dates. **View details** opens the full summary and provider screenshots inside the app. **Back to results** or Escape restores the current results. **Open on CurseForge** and **Copy link** appear only when the API supplies a usable HTTPS project URL. Broken provider images hide. Preview requests omit Referer.
 
 Switching to **My mods** preserves local search and selection. Browsing does not install or update mods, write mod metadata, or attach sources. Use the existing import controls for files you already have.
 
-Requests run in a separate read-only worker. Pending searches coalesce and late responses cannot replace newer results. Loading, no matches, missing or rejected credentials, rate limits, network errors, and unavailable providers have separate states. Each request uses the existing bounded CurseForge transport. Normal shutdown does not wait for provider I/O.
+Requests run in a separate read-only worker. Pending searches coalesce and late responses cannot replace newer results. The worker loads category and version options when they are missing or a prior attempt failed. Loading, no matches, missing or rejected credentials, rate limits, network errors, and unavailable providers have separate states. Each request uses the existing bounded CurseForge transport. Normal shutdown does not wait for provider I/O.
+
+The ignored integration test `live_browse_filters_respect_provider_taxonomy` in `core/tests/curseforge_browse.rs` passed against the live provider. It checked all nine content types, combined Mods / Gameplay / 1.128.90 filters, filtered pagination, and real file-version evidence. Fixture captures in `.impeccable/review/curseforge-filters` cover both themes, the 1870-by-1006 user window, 680-by-760 and 640-by-480 windows, filter popups, and expanded filters in a short window. Credentials used for live tests stay local and untracked; the app still requires a key saved in Settings.
 
 The capture example uses only synthetic API responses and local procedural images:
 

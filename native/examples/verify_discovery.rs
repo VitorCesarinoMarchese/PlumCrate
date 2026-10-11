@@ -4,7 +4,7 @@ use std::{
     time::{Duration, Instant},
 };
 use ts4_mod_manager_core::{
-    curseforge_browse::{BrowseQuery, parse_browse_response},
+    curseforge_browse::{BrowseQuery, parse_browse_response, parse_categories_response},
     curseforge_client::SourceLookupError,
 };
 use ts4_mod_manager_native::{
@@ -12,7 +12,7 @@ use ts4_mod_manager_native::{
     ui::{self, View},
 };
 
-const CASES: [(&str, bool, [f32; 2], u8); 8] = [
+const CASES: [(&str, bool, [f32; 2], u8); 12] = [
     ("browse-dark", true, [1200.0, 800.0], 0),
     ("browse-light", false, [1200.0, 800.0], 0),
     ("browse-narrow", true, [680.0, 760.0], 0),
@@ -21,6 +21,10 @@ const CASES: [(&str, bool, [f32; 2], u8); 8] = [
     ("project-small", false, [640.0, 480.0], 1),
     ("browse-setup", true, [1200.0, 800.0], 2),
     ("browse-error", false, [640.0, 480.0], 3),
+    ("browse-user", true, [1870.0, 1006.0], 0),
+    ("browse-categories", true, [1200.0, 800.0], 4),
+    ("browse-types", false, [680.0, 760.0], 5),
+    ("browse-filters-small", true, [640.0, 480.0], 6),
 ];
 struct FixtureBytes(egui::load::Bytes);
 impl egui::load::BytesLoader for FixtureBytes {
@@ -52,6 +56,7 @@ struct Capture {
     requested: bool,
     staged: Instant,
     started: Instant,
+    opened: bool,
 }
 impl Capture {
     fn stage(&mut self, ctx: &egui::Context) {
@@ -61,6 +66,7 @@ impl Capture {
         } else {
             egui::Theme::Light
         });
+        ctx.all_styles_mut(|style| style.animation_time = 0.0);
         for command in [
             egui::ViewportCommand::MinInnerSize(size.into()),
             egui::ViewportCommand::MaxInnerSize(size.into()),
@@ -84,7 +90,32 @@ impl Capture {
         let page=parse_browse_response(&serde_json::json!({"data":projects,"pagination":{"index":0,"pageSize":24,"resultCount":24,"totalCount":120}}).to_string()).unwrap();
         // Supply local synthetic image bytes under synthetic HTTPS URIs without networking.
 
-        self.view.discovery.categories = page.projects[0].categories.clone();
+        self.view.discovery.categories = parse_categories_response(
+            r#"{"data":[
+            {"id":10,"gameId":78062,"name":"Create a Sim","isClass":true},
+            {"id":11,"gameId":78062,"name":"Clothing","classId":10,"parentCategoryId":10},
+            {"id":13,"gameId":78062,"name":"Adult","classId":10,"parentCategoryId":11},
+            {"id":14,"gameId":78062,"name":"Feminine","classId":10,"parentCategoryId":11},
+            {"id":12,"gameId":78062,"name":"Body","classId":10,"parentCategoryId":10},
+            {"id":42,"gameId":78062,"name":"Hairstyles","classId":10,"parentCategoryId":12},
+            {"id":43,"gameId":78062,"name":"Feminine","classId":10,"parentCategoryId":12},
+            {"id":20,"gameId":78062,"name":"Build / Buy","isClass":true},
+            {"id":21,"gameId":78062,"name":"Build Mode","classId":20,"parentCategoryId":20},
+            {"id":22,"gameId":78062,"name":"Lighting","classId":20,"parentCategoryId":21},
+            {"id":30,"gameId":78062,"name":"Mods","isClass":true},
+            {"id":40,"gameId":78062,"name":"Rooms / Lots","isClass":true},
+            {"id":50,"gameId":78062,"name":"Sims / Households","isClass":true},
+            {"id":60,"gameId":78062,"name":"Pets","isClass":true},
+            {"id":70,"gameId":78062,"name":"Save Files","isClass":true},
+            {"id":80,"gameId":78062,"name":"Worlds","isClass":true},
+            {"id":90,"gameId":78062,"name":"Translations","isClass":true}
+        ]}"#,
+        )
+        .unwrap();
+        self.view.discovery.class_id = Some(10);
+        self.view.discovery.category = Some(42);
+        self.view.discovery.game_versions =
+            vec!["1.128.90".into(), "1.127.41".into(), "1.126.78".into()];
         let generation = self.view.discovery.browser.begin(BrowseQuery::default());
         self.view
             .discovery
@@ -107,13 +138,52 @@ impl Capture {
             _ => {}
         }
         self.requested = false;
+        self.opened = false;
         self.staged = Instant::now();
     }
 }
 impl eframe::App for Capture {
     fn ui(&mut self, ui: &mut egui::Ui, _frame: &mut eframe::Frame) {
         let ctx = ui.ctx().clone();
+        if self.case == CASES.len() {
+            ctx.send_viewport_cmd(egui::ViewportCommand::Close);
+            return;
+        }
         self.view.show(ui, &mut self.catalog);
+        let state = CASES[self.case].3;
+        if !self.opened && self.staged.elapsed() > Duration::from_millis(200) {
+            match state {
+                4 => egui::Popup::open_id(
+                    &ctx,
+                    self.view
+                        .discovery
+                        .stats
+                        .category_control_id
+                        .unwrap()
+                        .with("popup"),
+                ),
+                5 => egui::Popup::open_id(
+                    &ctx,
+                    self.view
+                        .discovery
+                        .stats
+                        .browse_by_id
+                        .unwrap()
+                        .with("popup"),
+                ),
+                6 => {
+                    let id = self.view.discovery.stats.filters_toggle_id.unwrap();
+                    let mut collapsing =
+                        egui::collapsing_header::CollapsingState::load_with_default_open(
+                            &ctx, id, true,
+                        );
+                    collapsing.set_open(true);
+                    collapsing.store(&ctx);
+                }
+                _ => {}
+            }
+            self.opened = true;
+        }
         if let Some(image) = ctx.input(|input| {
             input.events.iter().find_map(|event| {
                 if let egui::Event::Screenshot { image, .. } = event {
@@ -211,6 +281,7 @@ fn main() -> eframe::Result {
                 requested: false,
                 staged: Instant::now(),
                 started: Instant::now(),
+                opened: false,
             };
             app.stage(&cc.egui_ctx);
             Ok(Box::new(app))
