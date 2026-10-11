@@ -426,6 +426,11 @@ fn rollback_journal(journal: &Journal) -> Result<Vec<IssueEvent>, ManagerError> 
         })();
         if let Err(e) = result {
             issues.push(issue(&journal.id, e.message));
+            // A link that could not be undone can still depend on an earlier source move.
+            // Independent move conflicts may continue recovering the other original paths.
+            if matches!(step, Step::CreateLink { .. } | Step::RemoveLink { .. }) {
+                break;
+            }
         }
     }
     Ok(issues)
@@ -490,6 +495,35 @@ mod crash_tests;
 #[cfg(all(test, unix))]
 mod tests {
     use super::*;
+    #[test]
+    fn failed_link_undo_preserves_published_content_until_recovery() {
+        let temp = tempfile::tempdir().unwrap();
+        let managed = temp.path().join("managed");
+        let staged = managed.join("tmp/staged");
+        let published = managed.join("mods/published");
+        let game = temp.path().join("Mods");
+        let held_game = temp.path().join("held-Mods");
+        fs::create_dir_all(&staged).unwrap();
+        fs::create_dir_all(published.parent().unwrap()).unwrap();
+        fs::create_dir_all(&game).unwrap();
+        fs::write(staged.join("a.package"), b"content").unwrap();
+        let mut transaction = Transaction::new(&managed, "folder_import").unwrap();
+        transaction.move_path(&staged, &published).unwrap();
+        transaction.create_link(&game, Path::new("a.package"), &published.join("a.package")).unwrap();
+        fs::rename(&game, &held_game).unwrap();
+        std::os::unix::fs::symlink(&held_game, &game).unwrap();
+        assert!(transaction.rollback().is_err());
+        assert!(published.join("a.package").is_file(), "rollback must preserve a source while its dependent link cannot be undone");
+        assert_eq!(fs::read(held_game.join("a.package")).unwrap(), b"content");
+        fs::remove_file(&game).unwrap();
+        fs::rename(&held_game, &game).unwrap();
+        let issues = recover_pending(&managed).unwrap();
+        assert!(issues.is_empty(), "{issues:?}");
+        assert!(!fs_scope::exists(&game.join("a.package")));
+        assert!(!fs_scope::exists(&published));
+        assert_eq!(fs::read(staged.join("a.package")).unwrap(), b"content");
+    }
+
     #[test]
     fn injected_enable_failure_rolls_back_created_links() {
         let temp = tempfile::tempdir().unwrap();
