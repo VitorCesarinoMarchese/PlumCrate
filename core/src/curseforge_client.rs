@@ -102,6 +102,26 @@ impl<T: CurseForgeTransport> CurseForgeClient<T> {
         Ok(Self { api_key: key.to_string(), transport })
     }
 
+    pub fn browse_mods(&self, query: &crate::curseforge_browse::BrowseQuery) -> Result<crate::curseforge_browse::BrowsePage, SourceLookupError> {
+        use crate::curseforge_browse::{MAX_SEARCH_RESULTS, PAGE_SIZE};
+        if query.index >= MAX_SEARCH_RESULTS { return Err(SourceLookupError::InvalidResponse); }
+        let mut request = build_search_request(Some(&self.api_key), &query.search)?;
+        request.url.push_str(&format!("&sortField={}&sortOrder={}&index={}&pageSize={PAGE_SIZE}", query.sort.field(), query.sort.order(), query.index));
+        if let Some(category) = query.category { request.url.push_str(&format!("&categoryId={category}")); }
+        let (status, body) = self.transport.get(&request)?;
+        classify_status(status)?;
+        let page = crate::curseforge_browse::parse_browse_response(&body)?;
+        if page.pagination.index != query.index { return Err(SourceLookupError::InvalidResponse); }
+        Ok(page)
+    }
+
+    pub fn browse_categories(&self) -> Result<Vec<crate::curseforge_browse::Category>, SourceLookupError> {
+        let request = CurseForgeRequest { url: format!("{CURSEFORGE_API_BASE}/v1/categories?gameId={SIMS4_GAME_ID}"), api_key: self.api_key.clone() };
+        let (status, body) = self.transport.get(&request)?;
+        classify_status(status)?;
+        crate::curseforge_browse::parse_categories_response(&body)
+    }
+
     pub fn search_mods(&self, search_filter: &str) -> Result<Vec<CurseForgeModSummary>, SourceLookupError> {
         let request = build_search_request(Some(&self.api_key), search_filter)?;
         let (status, body) = self.transport.get(&request)?;

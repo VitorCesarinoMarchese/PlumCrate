@@ -2,6 +2,7 @@ pub mod operation;
 pub mod transfer;
 pub mod archive_import;
 pub mod curseforge_client;
+pub mod curseforge_browse;
 pub mod error;
 pub mod external_migration;
 pub mod fs_scope;
