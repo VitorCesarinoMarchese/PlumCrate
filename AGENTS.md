@@ -2,14 +2,19 @@
 
 Project-specific rules for future coding agents working on TS4 Mod Manager.
 
+## Product scope
+
+- Focus the desktop app on Linux.
+- Support searching, browsing, downloading, and updating The Sims 4 mods directly within the app.
+
 ## Source lookup and CurseForge safety
 
 - Do not paste, request, or store CurseForge API keys in chat.
 - Store local API keys only in untracked `.env` or local app settings.
 - `.env` / `.env.*` must stay ignored by git.
 - Never store CurseForge API keys in per-mod `meta.json`.
-- Do not download mods.
-- Do not update mods.
+- Allow users to download and update mods through the app.
+- Require user initiation for downloads and updates.
 - Do not auto-attach sources silently.
 - Always require explicit user confirmation before saving source candidates.
 - Do not treat weak/name-only matches as verified.
