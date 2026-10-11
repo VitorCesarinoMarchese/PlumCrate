@@ -585,3 +585,103 @@ fn color_mode_switch_preserves_the_custom_editor_draft() {
     assert_eq!(saved.custom_themes.len(), 1);
 
 }
+
+#[test]
+fn details_popup_yields_to_reviews_and_returns_after_cancel() {
+    let fixture = tempfile::tempdir().unwrap();
+    let mut catalog = Catalog::default();
+    let generation = catalog.begin_scan(fixture.path().join("game"));
+    catalog.accept_scan(generation, Ok(vec![serde_json::from_value(serde_json::json!({
+        "key":"fixture", "id":"fixture", "name":"Synthetic collection", "files":["folder/a.package"],
+        "mod_files":["folder/a.package"], "source":"managed", "enabled":false, "group_path":[],
+        "sourceUrl":"https://example.com/fixture"
+    })).unwrap()]));
+    let mut controls = Controls::new(
+        fixture.path().join("managed"),
+        fixture.path().into(),
+        Settings::default(),
+        || {},
+    )
+    .unwrap();
+    let deadline = std::time::Instant::now() + std::time::Duration::from_secs(5);
+    while controls.busy() {
+        controls.poll(&catalog);
+        assert!(std::time::Instant::now() < deadline);
+        std::thread::sleep(std::time::Duration::from_millis(2));
+    }
+    let ctx = egui::Context::default();
+    ui::setup(&ctx);
+    ctx.all_styles_mut(|style| style.animation_time = 0.0);
+    let mut view = View::default();
+    frame(&ctx, &mut view, &mut controls, &mut catalog, vec![]);
+    frame(&ctx, &mut view, &mut controls, &mut catalog, vec![]);
+    let output = frame(&ctx, &mut view, &mut controls, &mut catalog, vec![]);
+    frame(
+        &ctx,
+        &mut view,
+        &mut controls,
+        &mut catalog,
+        click_text(&output, "Synthetic collection"),
+    );
+    for action in ["Rename", "Remove source", "Move to trash"] {
+        let output = frame(&ctx, &mut view, &mut controls, &mut catalog, vec![]);
+        assert!(view.stats.files > 0);
+        assert!(has_text(&output, "Saved source"));
+        frame(
+            &ctx,
+            &mut view,
+            &mut controls,
+            &mut catalog,
+            click_text(&output, "More actions"),
+        );
+        frame(&ctx, &mut view, &mut controls, &mut catalog, vec![]);
+        let output = frame(&ctx, &mut view, &mut controls, &mut catalog, vec![]);
+        frame(
+            &ctx,
+            &mut view,
+            &mut controls,
+            &mut catalog,
+            click_text(&output, action),
+        );
+        frame(&ctx, &mut view, &mut controls, &mut catalog, vec![]);
+        assert!(
+            controls.review_open(),
+            "review for {action} must remain open"
+        );
+        assert_eq!(
+            view.stats.files, 0,
+            "details must yield to the management review"
+        );
+        assert!(view.stats.detail_close.is_none());
+        frame(
+            &ctx,
+            &mut view,
+            &mut controls,
+            &mut catalog,
+            vec![egui::Event::Key {
+                key: egui::Key::Escape,
+                physical_key: None,
+                pressed: true,
+                repeat: false,
+                modifiers: Default::default(),
+            }],
+        );
+        assert!(!controls.review_open());
+        frame(&ctx, &mut view, &mut controls, &mut catalog, vec![]);
+        assert!(view.stats.files > 0);
+        assert_eq!(catalog.selected, Some(EntryId::Managed("fixture".into())));
+        assert!(!controls.busy(), "cancel must not submit a mutation");
+    }
+    catalog.begin_scan(fixture.path().join("other-game"));
+    frame(&ctx, &mut view, &mut controls, &mut catalog, vec![]);
+    assert!(
+        view.stats.detail_close.is_none(),
+        "changing folders closes old details"
+    );
+    assert!(
+        !fixture
+            .path()
+            .join(".config/ts4-mod-manager/settings.json")
+            .exists()
+    );
+}

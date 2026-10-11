@@ -32,6 +32,7 @@ mod controls {
             7 => controls.dialog = Some(Dialog::SettingsImport(Settings::default(), false)),
             8 => controls.candidates = Some((identity, vec![])),
             9 => controls.trash_entries = Some((identity, vec![])),
+            10..=14 => {},
             _ => unreachable!(),
         }
     }
@@ -42,7 +43,7 @@ mod controls {
     }
 }
 
-const CASES: [(&str, bool, [f32; 2]); 10] = [
+const CASES: [(&str, bool, [f32; 2]); 15] = [
     ("import-zip-light", false, [1200.0, 800.0]),
     ("import-zip-dark", true, [1200.0, 800.0]),
     ("import-zip-small", false, [640.0, 480.0]),
@@ -53,6 +54,11 @@ const CASES: [(&str, bool, [f32; 2]); 10] = [
     ("settings-import-dark", true, [1200.0, 800.0]),
     ("source-empty-light", false, [1200.0, 800.0]),
     ("trash-empty-dark", true, [1200.0, 800.0]),
+    ("mod-details-light", false, [1200.0, 800.0]),
+    ("mod-details-dark", true, [1200.0, 800.0]),
+    ("mod-details-narrow", true, [680.0, 760.0]),
+    ("mod-details-small", false, [640.0, 480.0]),
+    ("mod-details-long", true, [680.0, 760.0]),
 ];
 
 struct Capture {
@@ -64,6 +70,7 @@ struct Capture {
     case: usize,
     stable_frames: u8,
     requested: bool,
+    opened: bool,
     started: Instant,
     staged: Instant,
 }
@@ -89,6 +96,13 @@ impl Capture {
             self.case,
             self.source.clone(),
         );
+        self.opened = false;
+        self.catalog.mods[0].name = if self.case == 14 {
+            "Synthetic collection with a very long name, release date, and additional pack details"
+                .into()
+        } else {
+            "A synthetic collection".into()
+        };
         self.stable_frames = 0;
         self.requested = false;
         self.staged = Instant::now();
@@ -96,6 +110,34 @@ impl Capture {
 }
 
 impl eframe::App for Capture {
+    fn raw_input_hook(&mut self, _ctx: &egui::Context, input: &mut egui::RawInput) {
+        if self.case >= 10
+            && !self.opened
+            && self.stable_frames >= 2
+            && let Some(row) = self.view.stats.first_row
+        {
+            let pos = row.center();
+            input.events.extend([
+                egui::Event::PointerMoved(pos),
+                egui::Event::PointerButton {
+                    pos,
+                    button: egui::PointerButton::Primary,
+                    pressed: true,
+                    modifiers: Default::default(),
+                },
+                egui::Event::PointerButton {
+                    pos,
+                    button: egui::PointerButton::Primary,
+                    pressed: false,
+                    modifiers: Default::default(),
+                },
+            ]);
+            self.opened = true;
+            self.stable_frames = 0;
+            self.staged = Instant::now();
+        }
+    }
+
     fn ui(&mut self, ui: &mut egui::Ui, _frame: &mut eframe::Frame) {
         let ctx = ui.ctx().clone();
         self.controls.poll(&self.catalog);
@@ -141,6 +183,7 @@ impl eframe::App for Capture {
             if self.stable_frames >= 5
                 && self.staged.elapsed() >= Duration::from_millis(350)
                 && !ctx.has_pending_images()
+                && (self.case < 10 || self.opened)
             {
                 ctx.send_viewport_cmd(egui::ViewportCommand::Screenshot(Default::default()));
                 self.requested = true;
@@ -171,7 +214,17 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let source_check = source.clone();
     let mut catalog = catalog::Catalog::default();
     let generation = catalog.begin_scan(root);
-    catalog.accept_scan(generation, Ok(vec![]));
+    let preview = fixture.path().join("preview.png");
+    image::RgbaImage::from_pixel(320, 180, image::Rgba([30, 120, 95, 255])).save(&preview)?;
+    let entries = ["A synthetic collection", "B another collection", "C collection without preview"]
+        .into_iter().enumerate().map(|(index, name)| serde_json::from_value(serde_json::json!({
+            "key":name, "id":name, "name":name,
+            "files": (0..16).map(|n| format!("Synthetic pack/file{n:02}.package")).collect::<Vec<_>>(),
+            "mod_files":["Synthetic pack/file00.package"], "source":"managed", "enabled":false,
+            "group_path":[], "preview": if index < 2 { preview.to_str() } else { None },
+            "sourceUrl":"https://example.com/synthetic-collection"
+        })).unwrap()).collect();
+    catalog.accept_scan(generation, Ok(entries));
     let controls = controls::Controls::new(
         fixture.path().join("managed"),
         fixture.path().join("home"),
@@ -198,6 +251,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                 case: 0,
                 stable_frames: 0,
                 requested: false,
+                opened: false,
                 started: Instant::now(),
                 staged: Instant::now(),
             };
@@ -209,6 +263,6 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         std::fs::read(source_check)?,
         b"synthetic capture fixture, never imported"
     );
-    println!("10 production popup captures; no operations approved or settings saved");
+    println!("15 production popup captures; no operations approved or settings saved");
     Ok(())
 }

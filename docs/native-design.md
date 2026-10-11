@@ -75,7 +75,7 @@ This design applies to the Linux Fastframe/egui app. The Rust implementation is 
 
 - Photo cards by default, with a compact list switch.
 - Warm light and charcoal dark themes with gold selection.
-- A persistent inspector on wide windows and a return path on narrow windows.
+- A centered mod-details popup with the library visible behind it at every width.
 
 ## Colors
 
@@ -87,7 +87,7 @@ Gold selection fill and stroke identify selected navigation, installed state, fo
 
 ### Neutral
 
-Warm panel backgrounds contain the library, header and status. White or charcoal surfaces hold the rail, inspector, search and cards. Main text stays separate from explicit muted text. Warm borders and widget fills provide structure without competing with previews. Hover, active, disabled and error colors otherwise follow egui's theme.
+Warm panel backgrounds contain the library, header and status. White or charcoal surfaces hold the rail, details popup, search and cards. Main text stays separate from explicit muted text. Warm borders and widget fills provide structure without competing with previews. Hover, active, disabled and error colors otherwise follow egui's theme.
 
 **The readable metadata rule.** Use the explicit muted theme color for secondary text; do not substitute egui's default weak alpha for it.
 
@@ -99,19 +99,19 @@ The header displays the supplied blue and green SVG wordmark at 160 points wide,
 
 ## Layout
 
-The wide library has a fixed 176-point navigation rail and a resizable inspector, initially 300 points wide with limits of 280 and 400. Central and inspector panels use 24-point inner margins; the rail uses 16. The header uses 24 horizontal and 10 vertical points.
+The wide library has a fixed 176-point navigation rail. The central panel and details popup use 24-point inner margins; the rail uses 16. The header uses 24 horizontal and 10 vertical points.
 
-Below 1040 points of available width, state tabs replace the rail. Selecting a mod replaces the library with details; Back to mods returns to browsing. The header and compact local-library status remain available. Imports belong to the library toolbar; selected-mod actions belong to the inspector or narrow details.
+Below 1040 points of available width, state tabs replace the rail. Selecting a mod opens a centered details popup while keeping the library visible behind it. Close, Escape, or clicking the backdrop dismisses it without clearing selection. The header and compact local-library status remain available. Imports belong to the library toolbar; selected-mod actions belong to the details popup.
 
-Settings replaces the central library and inspector while retaining the header, status and wide navigation rail. Its title, Back to library and Save settings sit above the scroll region. Form content has a maximum width of 720 points. The bottom status uses 24 horizontal / 6 vertical points of inner margin. Operation history sits in an Activity disclosure with a maximum 90-point scroll height.
+Settings replaces the central library while retaining the header, status and wide navigation rail. Its title, Back to library and Save settings sit above the scroll region. Form content has a maximum width of 720 points. The bottom status uses 24 horizontal / 6 vertical points of inner margin. Operation history sits in an Activity disclosure with a maximum 90-point scroll height.
 
 Cards are 262 points high with a 16-point gap. The column count is `floor((available_width + 16) / 236)`, with at least one column; widths then divide the remaining space evenly. The 236-point column budget includes the gap, so it is not a guaranteed minimum card width. Images occupy 150 points in height with an 8-point inset. Text and footer content use a 14-point horizontal inset. Cards and list rows render only visible rows.
 
-The list uses 64-point rows, 44-point square previews and 12 horizontal / 10 vertical points of inner inset. The inspector preview is 180 points high. Its summary scrolls separately, reserving 150 points for file controls where space allows and keeping an 80-point minimum summary viewport. File rows are 48 points high. Global item spacing is 10 horizontal / 8 vertical; buttons use 12 horizontal / 8 vertical padding and a 34-point minimum interaction height.
+The list uses 64-point rows, 44-point square previews and 12 horizontal / 10 vertical points of inner inset. The details popup has a maximum content width of 600 points and shrinks to leave 24 points around its frame in narrow windows. Its title and actions sit above a height-bounded body, with Close below it. The preview is 180 points high. Its summary scrolls separately, reserving 150 points for file controls where space allows and keeping an 80-point minimum summary viewport. File rows are 48 points high. Global item spacing is 10 horizontal / 8 vertical; buttons use 12 horizontal / 8 vertical padding and a 34-point minimum interaction height.
 
 ## Elevation & Depth
 
-Library depth comes from panel/surface contrast and restrained borders. Cards have no custom shadow. Context menus retain egui's standard elevation. Review popups use the theme's surface color and standard popup shadow over a dimmed backdrop. Selection and keyboard focus share a 1.5-point gold card outline; hover uses the current egui hovered widget fill. These states update immediately, without a custom selection animation.
+Library depth comes from panel/surface contrast and restrained borders. Cards have no custom shadow. Context menus retain egui's standard elevation. Details and review popups use the theme's surface color and standard popup shadow over a dimmed backdrop. The More actions menu stays above the details popup, including after returning from a review. Details yield to pending management operations and review popups; cancellation returns to the selected mod. Changing the game folder or losing the selected mod closes details. Selection and keyboard focus share a 1.5-point gold card outline; hover uses the current egui hovered widget fill. These states update immediately, without a custom selection animation.
 
 ## Shapes
 
@@ -119,20 +119,20 @@ Cards use 12-point corners. Search uses 8-point corners. Buttons, list highlight
 
 ## Components
 
-- Photo cards show the real name, saved author when present, file count and Installed or Stored state. Without a saved author they show Managed collection or External collection. Missing and broken previews show No Preview; pending previews show a spinner. Card cover crops account for both source and destination proportions. Inspector images use contain sizing.
+- Photo cards show the real name, saved author when present, file count and Installed or Stored state. Without a saved author they show Managed collection or External collection. Missing and broken previews show No Preview; pending previews show a spinner. Card cover crops account for both source and destination proportions. Details images use contain sizing.
 - Search is a 40-point field with an 18-point icon. It filters display names and filenames as text changes. All, Installed and Stored filters intersect the current search. Rail counts describe the full catalog; the library count describes the visible collection. Filtering does not enable or disable files.
-- The card/list switch changes presentation while retaining search and selected identity. Standard native hover and focus remain visible. Selection opens the wide inspector or narrow detail view.
+- The card/list switch changes presentation while retaining search and selected identity. Standard native hover and focus remain visible. Selection opens the same details popup at every width. Card and row labels leave pointer activation to their parent so clicking text also opens details.
 - Import folder is the primary library-toolbar action, beside Import ZIP and Restore from trash. Settings is a selectable header route. The bottom contains status, notices, errors and disclosed Activity history.
 - Reviews use centered in-app modal popups, without draggable title bars or resize handles. They have 24-point padding, 12-point corners, a 23-point heading and a content width up to 460 points. Paths wrap and long bodies scroll while the 36-point action row stays visible. Cancel sits beside the primary action on the right. Editable fields use the widget fill. Escape and backdrop clicks dismiss without approval and do not activate the library behind the popup. Candidate and trash reviews transition to their confirmation one at a time. System file pickers remain desktop-owned.
-- Enable/Disable stays direct for managed mods in the inspector and narrow details. More actions includes the toggle, rename, source lookup/attachment/removal and trash. Right-clicking either a card or a list row selects that mod before opening the shared menu. External mods retain reviewed migration. Menu activations explicitly close the popup before opening their next interaction.
+- Enable/Disable stays direct for managed mods in the details popup. More actions includes the toggle, rename, source lookup/attachment/removal and trash. Right-clicking either a card or a list row selects that mod before opening the shared menu. External mods retain reviewed migration. Menu activations explicitly close the popup before opening their next interaction.
 - Settings is a full page with a persistent Save settings action above scrolling Appearance, Game folders, Source lookup and transfer controls. Back to library returns to browsing; wide library-filter navigation also leaves Settings.
 - Custom themes store separate light and dark palettes, each with six hex fields and color pickers: Accent, Background, Surface, Text, Muted text and Border. The editor follows the appearance mode and labels the displayed version Light colors or Dark colors. Create custom theme starts with both built-in palettes; Reset colors restores only the displayed version. Copy theme JSON exports both palettes; Import a theme also accepts older single-palette JSON, preserving it in the matching version and supplying a built-in companion. Save custom theme and Save settings validate, apply and persist both versions. Built-in and saved-theme selection in Settings applies immediately and needs Save settings for persistence; the header light/dark switch persists immediately and preserves the active custom theme and both editor drafts.
-- The inspector retains complete file and saved-source inspection, full-path tooltips and Copy feedback. Source changes and destructive management reviews require explicit confirmation. Low-confidence candidate warnings remain visible.
+- The details popup retains complete file and saved-source inspection, full-path tooltips and Copy feedback. Source changes and destructive management reviews require explicit confirmation. Low-confidence candidate warnings remain visible.
 - Preview requests send no Referer header. Relative local paths resolve under the selected Mods folder. Preview caching resets on scans and retains at most 32 URIs. Candidate review is currently text-only; any future candidate images must hide on failure.
 
 ## Do's and Don'ts
 
-- Do preserve photo proportions with destination-aware centered cover crops in cards and contain sizing in the inspector.
+- Do preserve photo proportions with destination-aware centered cover crops in cards and contain sizing in the details popup.
 - Do keep explicit weak text colors readable on panels, cards, widgets and selected fills.
 - Do preserve search and selected identity when switching card/list layouts.
 - Do show No Preview for missing or broken mod photos and keep weak source-match warnings visible.

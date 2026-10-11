@@ -200,7 +200,7 @@ pub struct View {
     pub instances: Vec<GameInstance>,
     pub scan_ms: Option<f64>,
     pub stats: RenderStats,
-    detail_only: bool,
+    detail_open: Option<EntryId>,
     editing_root: bool,
     copied: Option<(EntryId, f64)>,
     previews: crate::preview::Previews,
@@ -215,7 +215,7 @@ pub struct RenderStats {
     pub files: usize,
     pub search: Option<egui::Rect>,
     pub first_row: Option<egui::Rect>,
-    pub back: Option<egui::Rect>,
+    pub detail_close: Option<egui::Rect>,
     pub copy: Option<egui::Rect>,
     pub photos: usize,
     pub missing_photos: usize,
@@ -302,7 +302,12 @@ impl View {
                     match catalog.root.as_ref().filter(|_| !self.editing_root) {
                         None => {
                             if let Some(c) = controls.as_deref_mut()
-                                && ui.add_enabled(!c.picker_open(), egui::Button::new("Choose folder")).clicked()
+                                && ui
+                                    .add_enabled(
+                                        !c.picker_open(),
+                                        egui::Button::new("Choose folder"),
+                                    )
+                                    .clicked()
                             {
                                 c.choose_game_folder(ui.ctx(), None);
                             }
@@ -479,21 +484,6 @@ impl View {
         }
 
         let settings_page = controls.as_ref().is_some_and(|c| c.settings_page);
-        if !narrow && !settings_page {
-            egui::Panel::right("mod-details")
-                .default_size(300.0)
-                .min_size(280.0)
-                .max_size(400.0)
-                .frame(
-                    egui::Frame::new()
-                        .fill(ui.visuals().extreme_bg_color)
-                        .inner_margin(24),
-                )
-                .show(ui, |ui| {
-                    self.details(ui, catalog, controls.as_deref_mut());
-                });
-        }
-
         egui::CentralPanel::default().frame(egui::Frame::new().fill(ui.visuals().panel_fill).inner_margin(24))
             .show(ui, |ui| {
                 if settings_page {
@@ -504,16 +494,6 @@ impl View {
                     ui.colored_label(ui.visuals().error_fg_color, error);
                     ui.label("Check that the game folder exists and contains a readable Mods folder, then open it again.");
                     ui.add_space(16.0);
-                }
-                if narrow && self.detail_only && catalog.selected_mod().is_some() {
-                    let back = ui.add(egui::Button::image_and_text(Icon::Back.image(foreground, 16.0), "Back to mods"));
-                    self.stats.back = Some(back.rect);
-                    if back.clicked() {
-                        self.detail_only = false;
-                    }
-                    ui.add_space(16.0);
-                    self.details(ui, catalog, controls.as_deref_mut());
-                    return;
                 }
                 ui.horizontal(|ui| {
                     ui.label(RichText::new("Mod library").size(27.0).strong());
@@ -588,11 +568,22 @@ impl View {
                     return;
                 }
                 match self.layout {
-                    LibraryLayout::Cards => self.card_grid(ui, catalog, narrow, controls.as_deref_mut()),
-                    LibraryLayout::List => self.library_list(ui, catalog, controls),
+                    LibraryLayout::Cards => self.card_grid(ui, catalog, controls.as_deref_mut()),
+                    LibraryLayout::List => self.library_list(ui, catalog, controls.as_deref_mut()),
                 }
 
             });
+        if self.detail_open != catalog.selected || catalog.selected_mod().is_none() {
+            self.detail_open = None;
+        }
+        if !settings_page
+            && self.detail_open.is_some()
+            && !controls
+                .as_ref()
+                .is_some_and(|c| c.review_open() || c.busy())
+        {
+            self.details_popup(ui.ctx(), catalog, controls);
+        }
         scan_root
     }
 
@@ -600,7 +591,6 @@ impl View {
         &mut self,
         ui: &mut egui::Ui,
         catalog: &mut Catalog,
-        narrow: bool,
         mut controls: Option<&mut crate::controls::Controls>,
     ) {
         let gap = 16.0;
@@ -629,6 +619,7 @@ impl View {
                             let selected = catalog.selected.as_ref() == Some(&identity);
                             let response = ui
                                 .push_id(&identity, |ui| {
+                                    ui.style_mut().interaction.selectable_labels = false;
                                     let (rect, response) = ui.allocate_exact_size(
                                         egui::vec2(width, height),
                                         egui::Sense::click(),
@@ -768,7 +759,7 @@ impl View {
                             self.stats.rows += 1;
                             if response.clicked() {
                                 catalog.select(index);
-                                self.detail_only = narrow;
+                                self.detail_open = catalog.selected.clone();
                             }
                         }
                     });
@@ -881,35 +872,51 @@ impl View {
                     self.stats.rows += 1;
                     if response.clicked() {
                         catalog.select(index);
-                        self.detail_only = ui.ctx().content_rect().width() < 1040.0;
+                        self.detail_open = catalog.selected.clone();
                     }
                 }
             });
     }
 
-    fn details(
+    fn details_popup(
         &mut self,
-        ui: &mut egui::Ui,
+        ctx: &egui::Context,
         catalog: &Catalog,
         controls: Option<&mut crate::controls::Controls>,
     ) {
         let Some(entry) = catalog.selected_mod() else {
-            ui.add_space(24.0);
-            ui.heading("Select a mod");
-            ui.label("Its files and saved source details will appear here.");
             return;
         };
-        if let Some(c) = controls {
-            c.selected_actions(ui, catalog);
-            ui.add_space(16.0);
+        let popup = crate::popup::show_width(ctx, "mod-details", &entry.name, 600.0, |ui| {
+            if let Some(c) = controls {
+                c.selected_actions(ui, catalog);
+                ui.add_space(16.0);
+            }
+            let height =
+                (ctx.content_rect().height() - ui.min_rect().height() - 148.0).clamp(120.0, 560.0);
+            ui.allocate_ui_with_layout(
+                egui::vec2(ui.available_width(), height),
+                egui::Layout::top_down(egui::Align::Min),
+                |ui| self.details(ui, catalog),
+            );
+            let close = crate::popup::close(ui);
+            self.stats.detail_close = Some(close.rect);
+            close.clicked()
+        });
+        if popup.inner || popup.should_close() {
+            self.detail_open = None;
         }
+    }
+
+    fn details(&mut self, ui: &mut egui::Ui, catalog: &Catalog) {
+        let Some(entry) = catalog.selected_mod() else {
+            return;
+        };
         egui::ScrollArea::vertical()
             .id_salt(("detail-summary", EntryId::of(entry)))
             .max_height((ui.available_height() - 150.0).max(80.0))
             .auto_shrink([false, true])
             .show(ui, |ui| {
-                ui.add(egui::Label::new(RichText::new(&entry.name).size(23.0).strong()).wrap());
-                ui.add_space(12.0);
                 let state = if entry.enabled {
                     "Installed in this game folder"
                 } else {
@@ -1295,6 +1302,13 @@ mod tests {
         render(&ctx, &mut view, &mut catalog, vec![], 1200.0);
         render(&ctx, &mut view, &mut catalog, vec![], 1200.0);
         assert!(view.stats.rows > 0 && view.stats.rows < 30);
+        assert_eq!(
+            view.stats.files, 0,
+            "details stay closed until a card is opened"
+        );
+        let row = view.stats.first_row.unwrap().center();
+        render(&ctx, &mut view, &mut catalog, click(row), 1200.0);
+        render(&ctx, &mut view, &mut catalog, vec![], 1200.0);
         assert!(view.stats.files > 0 && view.stats.files < 40);
         render(&ctx, &mut view, &mut catalog, vec![], 680.0);
         assert!(view.stats.rows < 30);
@@ -1322,6 +1336,9 @@ mod tests {
         };
         let mut view = View::default();
         render(&ctx, &mut view, &mut catalog, vec![], 1200.0);
+        render(&ctx, &mut view, &mut catalog, vec![], 1200.0);
+        let row = view.stats.first_row.unwrap().center();
+        render(&ctx, &mut view, &mut catalog, click(row), 1200.0);
         let output = render(&ctx, &mut view, &mut catalog, vec![], 1200.0);
         let photos = output
             .shapes
@@ -1352,45 +1369,85 @@ mod tests {
         }
     }
 
+    fn click(pos: egui::Pos2) -> Vec<egui::Event> {
+        vec![
+            egui::Event::PointerMoved(pos),
+            egui::Event::PointerButton {
+                pos,
+                button: egui::PointerButton::Primary,
+                pressed: true,
+                modifiers: Default::default(),
+            },
+            egui::Event::PointerButton {
+                pos,
+                button: egui::PointerButton::Primary,
+                pressed: false,
+                modifiers: Default::default(),
+            },
+        ]
+    }
+
     #[test]
-    fn narrow_details_return_to_catalog_and_copy_full_paths() {
-        let mut catalog = populated_catalog();
-        let mut view = View::default();
-        let ctx = egui::Context::default();
-        setup(&ctx);
-        let click = |pos| {
-            vec![
-                egui::Event::PointerMoved(pos),
-                egui::Event::PointerButton {
-                    pos,
-                    button: egui::PointerButton::Primary,
+    fn details_popup_keeps_library_visible_and_copies_full_paths_at_every_width() {
+        for width in [640.0, 680.0, 1200.0, 1885.0] {
+            let mut catalog = populated_catalog();
+            let mut view = View::default();
+            let ctx = egui::Context::default();
+            setup(&ctx);
+            render(&ctx, &mut view, &mut catalog, vec![], width);
+            render(&ctx, &mut view, &mut catalog, vec![], width);
+            assert_eq!(view.stats.files, 0, "no persistent inspector");
+            let row = view.stats.first_row.unwrap().center();
+            render(&ctx, &mut view, &mut catalog, click(row), width);
+            render(&ctx, &mut view, &mut catalog, vec![], width);
+            assert!(view.stats.rows > 0 && view.stats.files > 0);
+            let copy = view.stats.copy.unwrap().center();
+            let output = render(&ctx, &mut view, &mut catalog, click(copy), width);
+            assert!(output.platform_output.commands.iter().any(|command| matches!(
+                command, egui::OutputCommand::CopyText(text) if *text == catalog.selected_mod().unwrap().files.join("\n")
+            )));
+            assert!(view.copied.is_some());
+            let close = view.stats.detail_close.expect("popup Close control");
+            assert!(ctx.content_rect().contains_rect(close));
+            render(&ctx, &mut view, &mut catalog, click(close.center()), width);
+            render(&ctx, &mut view, &mut catalog, vec![], width);
+            assert!(view.stats.rows > 0 && view.stats.files == 0);
+            assert!(catalog.selected.is_some());
+        }
+    }
+
+    #[test]
+    fn details_popup_dismisses_without_changing_selection_or_files() {
+        for outside in [false, true] {
+            let mut catalog = populated_catalog();
+            let selected = catalog.selected.clone();
+            let files = catalog.mods[0].files.clone();
+            let mut view = View::default();
+            let ctx = egui::Context::default();
+            setup(&ctx);
+            render(&ctx, &mut view, &mut catalog, vec![], 1200.0);
+            render(&ctx, &mut view, &mut catalog, vec![], 1200.0);
+            let row = view.stats.first_row.unwrap().center();
+            render(&ctx, &mut view, &mut catalog, click(row), 1200.0);
+            render(&ctx, &mut view, &mut catalog, vec![], 1200.0);
+            let events = if outside {
+                click(egui::pos2(10.0, 10.0))
+            } else {
+                vec![egui::Event::Key {
+                    key: egui::Key::Escape,
+                    physical_key: None,
                     pressed: true,
+                    repeat: false,
                     modifiers: Default::default(),
-                },
-                egui::Event::PointerButton {
-                    pos,
-                    button: egui::PointerButton::Primary,
-                    pressed: false,
-                    modifiers: Default::default(),
-                },
-            ]
-        };
-        render(&ctx, &mut view, &mut catalog, vec![], 680.0);
-        render(&ctx, &mut view, &mut catalog, vec![], 680.0);
-        let row = view.stats.first_row.expect("row").center();
-        render(&ctx, &mut view, &mut catalog, click(row), 680.0);
-        render(&ctx, &mut view, &mut catalog, vec![], 680.0);
-        assert!(view.stats.rows == 0 && view.stats.files > 0);
-        let copy = view.stats.copy.expect("copy").center();
-        let output = render(&ctx, &mut view, &mut catalog, click(copy), 680.0);
-        assert!(output.platform_output.commands.iter().any(|command| matches!(
-            command, egui::OutputCommand::CopyText(text) if *text == catalog.selected_mod().unwrap().files.join("\n")
-        )));
-        assert!(view.copied.is_some());
-        let back = view.stats.back.expect("back").center();
-        render(&ctx, &mut view, &mut catalog, click(back), 680.0);
-        render(&ctx, &mut view, &mut catalog, vec![], 680.0);
-        assert!(view.stats.rows > 0 && view.stats.files == 0);
+                }]
+            };
+            render(&ctx, &mut view, &mut catalog, events, 1200.0);
+            render(&ctx, &mut view, &mut catalog, vec![], 1200.0);
+            assert_eq!(view.stats.files, 0);
+            assert!(view.stats.rows > 0);
+            assert_eq!(catalog.selected, selected);
+            assert_eq!(catalog.mods[0].files, files);
+        }
     }
 
     #[test]

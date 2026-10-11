@@ -527,7 +527,15 @@ impl Controls {
                         },
                     );
                 }
-                ui.menu_button("More actions", |ui| self.mod_menu(ui, catalog));
+                let button = ui.button("More actions");
+                let menu = egui::Popup::menu(&button);
+                if ui.layer_id().order == egui::Order::Foreground {
+                    ui.ctx().set_sublayer(
+                        ui.layer_id(),
+                        egui::LayerId::new(egui::Order::Foreground, menu.get_id()),
+                    );
+                }
+                menu.show(|ui| self.mod_menu(ui, catalog));
             });
         }
     }
@@ -814,6 +822,10 @@ impl Controls {
             }
         }
     }
+    pub fn review_open(&self) -> bool {
+        self.dialog.is_some() || self.candidates.is_some() || self.trash_entries.is_some()
+    }
+
     pub fn show_dialogs(&mut self, ctx: &egui::Context, catalog: &Catalog) {
         if self.candidates.as_ref().is_some_and(|(id, _)| {
             !id.current(

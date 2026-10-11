@@ -6,6 +6,16 @@ pub fn show<T>(
     title: &str,
     content: impl FnOnce(&mut Ui) -> T,
 ) -> ModalResponse<T> {
+    show_width(ctx, id, title, 460.0, content)
+}
+
+pub fn show_width<T>(
+    ctx: &Context,
+    id: &str,
+    title: &str,
+    width: f32,
+    content: impl FnOnce(&mut Ui) -> T,
+) -> ModalResponse<T> {
     let style = ctx.style_of(ctx.theme());
     let frame = egui::Frame::popup(&style)
         .fill(style.visuals.extreme_bg_color)
@@ -15,7 +25,7 @@ pub fn show<T>(
     egui::Modal::new(Id::new((id, title)))
         .frame(frame)
         .show(ctx, |ui| {
-            ui.set_width((ctx.content_rect().width() - 96.0).clamp(240.0, 460.0));
+            ui.set_width((ctx.content_rect().width() - 96.0).clamp(240.0, width));
             ui.style_mut().wrap_mode = Some(egui::TextWrapMode::Wrap);
             ui.label(egui::RichText::new(title).size(23.0).strong());
             ui.add_space(12.0);
