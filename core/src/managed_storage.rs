@@ -116,6 +116,24 @@ pub(crate) fn create_managed_mod_transaction(
     req: ImportRequest,
     transaction: &mut crate::operation::Transaction,
 ) -> Result<ModMetadata, ManagerError> {
+    create_managed_mod_transaction_initialized(
+        managed_root,
+        req,
+        transaction,
+        |_, _| Ok(()),
+        || Ok(()),
+        || Ok(()),
+    )
+}
+
+pub(crate) fn create_managed_mod_transaction_initialized(
+    managed_root: &Path,
+    req: ImportRequest,
+    transaction: &mut crate::operation::Transaction,
+    initialize: impl FnOnce(&mut ModMetadata, &Path) -> Result<(), ManagerError>,
+    before_publish: impl FnOnce() -> Result<(), ManagerError>,
+    check: impl Fn() -> Result<(), ManagerError>,
+) -> Result<ModMetadata, ManagerError> {
     if !req.source_dir.is_dir() {
         return Err(ManagerError::new(
             ErrorCode::InvalidPath,
@@ -134,11 +152,11 @@ pub(crate) fn create_managed_mod_transaction(
     fs_scope::create_dir_all(&mod_root.join("links"))?;
 
     fs_scope::Directory::open(&req.source_dir)?;
-    let files = copy_recursive(&req.source_dir, &files_root)?;
+    let files = copy_recursive_checked(&req.source_dir, &files_root, &check)?;
 
     let name = req.name;
     let detected_name = detect_display_name(&name);
-    let meta = ModMetadata {
+    let mut meta = ModMetadata {
         version: 1,
         created_by: "sims4-mod-manager".to_string(),
         mod_id: mod_id.clone(),
@@ -157,12 +175,14 @@ pub(crate) fn create_managed_mod_transaction(
         updated_at: None,
     };
 
+    initialize(&mut meta, &files_root)?;
     fs_scope::atomic_write(
         &mod_root.join("meta.json"),
         &serde_json::to_vec_pretty(&meta)
             .map_err(|e| ManagerError::new(ErrorCode::InternalError, e.to_string()))?,
     )?;
     fs_scope::create_dir_all(final_root.parent().unwrap())?;
+    before_publish()?;
     transaction.move_path(&mod_root, &final_root)?;
 
     Ok(meta)
@@ -362,11 +382,16 @@ pub fn read_managed_mod_or_default(
     })
 }
 
-fn copy_recursive(from: &Path, to: &Path) -> Result<Vec<String>, ManagerError> {
+fn copy_recursive_checked(
+    from: &Path,
+    to: &Path,
+    check: &impl Fn() -> Result<(), ManagerError>,
+) -> Result<Vec<String>, ManagerError> {
     let mut stack = vec![from.to_path_buf()];
     let mut collected = vec![];
 
     while let Some(dir) = stack.pop() {
+        check()?;
         let entries = fs::read_dir(&dir).map_err(|e| {
             ManagerError::new(
                 ErrorCode::IoError,
@@ -375,6 +400,7 @@ fn copy_recursive(from: &Path, to: &Path) -> Result<Vec<String>, ManagerError> {
         })?;
 
         for entry in entries {
+            check()?;
             let entry = entry.map_err(fs_scope::io_error)?;
             let src = entry.path();
             let meta = fs::symlink_metadata(&src).map_err(|e| {
@@ -420,7 +446,17 @@ fn copy_recursive(from: &Path, to: &Path) -> Result<Vec<String>, ManagerError> {
             #[cfg(not(unix))]
             let mut input = fs::File::open(&src).map_err(fs_scope::io_error)?;
             let mut output = fs_scope::create_file(to, rel)?;
-            std::io::copy(&mut input, &mut output).map_err(fs_scope::io_error)?;
+            let mut buffer = [0; 65536];
+            loop {
+                check()?;
+                let count =
+                    std::io::Read::read(&mut input, &mut buffer).map_err(fs_scope::io_error)?;
+                if count == 0 {
+                    break;
+                }
+                std::io::Write::write_all(&mut output, &buffer[..count])
+                    .map_err(fs_scope::io_error)?;
+            }
             output.sync_all().map_err(fs_scope::io_error)?;
 
             collected.push(rel.to_string_lossy().replace('\\', "/"));

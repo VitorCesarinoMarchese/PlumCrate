@@ -253,6 +253,50 @@ impl Directory {
             .map_err(|_| ManagerError::new(ErrorCode::InvalidPath, "NUL in path"))?;
         Ok((current, name))
     }
+    pub(crate) fn entry_names(
+        &self,
+        limit: usize,
+    ) -> Result<Vec<std::ffi::OsString>, ManagerError> {
+        use std::os::fd::AsRawFd;
+        let mut names = Vec::new();
+        for entry in fs::read_dir(format!("/proc/self/fd/{}", self.file.as_raw_fd()))
+            .map_err(io_error)?
+            .take(limit + 1)
+        {
+            names.push(entry.map_err(io_error)?.file_name());
+        }
+        if names.len() > limit {
+            return Err(ManagerError::new(
+                ErrorCode::InvalidPath,
+                format!("Directory exceeds the {limit}-entry scan limit"),
+            ));
+        }
+        names.sort();
+        Ok(names)
+    }
+    pub(crate) fn open_regular(&self, relative: &Path) -> Result<fs::File, ManagerError> {
+        use std::os::fd::{AsRawFd, FromRawFd};
+        let (parent, name) = self.parent(relative, false)?;
+        let fd = unsafe {
+            libc::openat(
+                parent.file.as_raw_fd(),
+                name.as_ptr(),
+                libc::O_RDONLY | libc::O_NOFOLLOW | libc::O_NONBLOCK | libc::O_CLOEXEC,
+            )
+        };
+        if fd < 0 {
+            return Err(io_error(std::io::Error::last_os_error()));
+        }
+        let file = unsafe { fs::File::from_raw_fd(fd) };
+        if !file.metadata().map_err(io_error)?.is_file() {
+            return Err(ManagerError::new(
+                ErrorCode::InvalidPath,
+                "Download is not a regular file",
+            ));
+        }
+        Ok(file)
+    }
+
     pub fn create_file(&self, relative: &Path) -> Result<fs::File, ManagerError> {
         use std::os::fd::{AsRawFd, FromRawFd};
         let (parent, name) = self.parent(relative, true)?;

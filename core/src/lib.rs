@@ -1,6 +1,7 @@
 pub mod operation;
 pub mod transfer;
 pub mod archive_import;
+pub mod browser_import;
 pub mod curseforge_client;
 pub mod curseforge_browse;
 pub mod error;

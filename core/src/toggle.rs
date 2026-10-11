@@ -193,32 +193,63 @@ pub fn apply_toggle(
         managed_root,
         if target_enabled { "enable" } else { "disable" },
     )?;
+    if let Err(error) = apply_toggle_transaction(
+        managed_root,
+        game_mods_dir,
+        mod_id,
+        target_enabled,
+        &dry,
+        &mut transaction,
+    ) {
+        transaction.rollback()?;
+        return Err(error);
+    }
+
+    transaction.commit()?;
+    Ok(ApplyResult {
+        applied: true,
+        issues: dry.issues,
+    })
+}
+
+pub(crate) fn apply_toggle_transaction(
+    managed_root: &Path,
+    game_mods_dir: &Path,
+    mod_id: &str,
+    target_enabled: bool,
+    dry: &DryRunResult,
+    transaction: &mut crate::operation::Transaction,
+) -> Result<(), ManagerError> {
     if target_enabled {
         let mut links: Vec<String> = vec![];
         for op in &dry.operations {
+            if op.action == "keep_symlink" {
+                if !link_ownership::owned(managed_root, mod_id, game_mods_dir, &op.path)? {
+                    return Err(ManagerError::new(
+                        ErrorCode::ExternalLink,
+                        "Existing enabled link changed",
+                    ));
+                }
+                links.push(op.path.clone());
+                continue;
+            }
             if op.action != "create_symlink" {
                 continue;
             }
 
             let rel = PathBuf::from(&op.path);
             let src = link_ownership::target(managed_root, mod_id, &op.path)?;
-            if let Err(error) = transaction.create_link(game_mods_dir, &rel, &src) {
-                transaction.rollback()?;
-                return Err(error);
-            }
+            transaction.create_link(game_mods_dir, &rel, &src)?;
             links.push(rel.to_string_lossy().replace('\\', "/"));
         }
 
-        if let Err(error) = link_ownership::write_transactional(
+        link_ownership::write_transactional(
             managed_root,
             mod_id,
             game_mods_dir,
             links.clone(),
-            &mut transaction,
-        ) {
-            transaction.rollback()?;
-            return Err(error);
-        }
+            transaction,
+        )?;
     } else {
         for op in &dry.operations {
             if op.action != "remove_symlink" {
@@ -233,12 +264,7 @@ pub fn apply_toggle(
                     "Link target changed",
                 ));
             }
-            if let Err(error) =
-                transaction.remove_link(game_mods_dir, Path::new(&op.path), &raw_target)
-            {
-                transaction.rollback()?;
-                return Err(error);
-            }
+            transaction.remove_link(game_mods_dir, Path::new(&op.path), &raw_target)?;
         }
 
         let record = link_ownership::read(managed_root, mod_id, game_mods_dir)?;
@@ -249,24 +275,17 @@ pub fn apply_toggle(
             .filter(|rel| fs_scope::exists(&game_mods_dir.join(rel)))
             .collect();
         if is_instance {
-            if let Err(error) = link_ownership::write_transactional(
+            link_ownership::write_transactional(
                 managed_root,
                 mod_id,
                 game_mods_dir,
                 unresolved,
-                &mut transaction,
-            ) {
-                transaction.rollback()?;
-                return Err(error);
-            }
+                transaction,
+            )?;
         }
     }
 
-    transaction.commit()?;
-    Ok(ApplyResult {
-        applied: true,
-        issues: dry.issues,
-    })
+    Ok(())
 }
 
 fn rel_path_for_issue(path: &Path, root: &Path) -> String {

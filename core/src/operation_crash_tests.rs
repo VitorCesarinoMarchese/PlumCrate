@@ -62,6 +62,9 @@ fn fixture_child() {
             )
             .unwrap();
         }
+        "browser" => {
+            import_browser_fixture(&root).unwrap();
+        }
         "migration" => {
             crate::external_migration::migrate_external_mod(
                 &managed,
@@ -87,6 +90,75 @@ fn fixture_child() {
         _ => panic!("Unknown fixture operation"),
     }
     panic!("Operation finished without reaching the requested pause");
+}
+
+fn import_browser_fixture(
+    root: &Path,
+) -> Result<crate::managed_storage::ModMetadata, crate::error::ManagerError> {
+    use crate::{
+        browser_import::{self, DownloadWatch, ImportPermit},
+        curseforge_client::{
+            CurseForgeClient, CurseForgeRequest, CurseForgeTransport, SourceLookupError,
+        },
+    };
+    use md5::Md5;
+    use sha1::{Digest, Sha1};
+    struct Provider(serde_json::Value);
+    impl CurseForgeTransport for Provider {
+        fn get(&self, request: &CurseForgeRequest) -> Result<(u16, String), SourceLookupError> {
+            let body = if request.url.ends_with("/42") {
+                serde_json::json!({"data":{"id":42,"gameId":78062,"name":"Browser fixture","links":{"websiteUrl":"https://www.curseforge.com/sims4/mods/fixture"}}})
+            } else {
+                serde_json::json!({"data":[self.0],"pagination":{"index":0,"pageSize":50,"resultCount":1,"totalCount":1}})
+            };
+            Ok((200, body.to_string()))
+        }
+    }
+    let bytes = fs::read(root.join("source/a.package")).unwrap();
+    let file = serde_json::json!({"id":100,"modId":42,"fileName":"a.package","fileDate":"2026-10-01T00:00:00Z","releaseType":1,"isAvailable":true,"fileStatus":4,"gameVersions":[],"fileLength":bytes.len(),"hashes":[{"algo":1,"value":format!("{:x}",Sha1::digest(&bytes))},{"algo":2,"value":format!("{:x}",Md5::digest(&bytes))}]});
+    let client = CurseForgeClient::new(Some("fixture"), Provider(file)).unwrap();
+    let project = browser_import::load_browser_project(&client, 42)?;
+    let release = &project.releases[0];
+    let permit = ImportPermit::default();
+    let mut watch = DownloadWatch::new(&root.join("source"), release)?;
+    assert!(watch.poll(&permit)?.is_none());
+    let matched = watch.poll(&permit)?.unwrap();
+    browser_import::import_browser_download(
+        &root.join("managed"),
+        &root.join("Mods"),
+        &project,
+        release,
+        &matched,
+        &permit,
+    )
+}
+
+#[test]
+fn browser_import_failures_undo_publication_links_and_ownership_together() {
+    for step in 1..=3 {
+        let temp = tempfile::tempdir().unwrap();
+        let root = temp.path();
+        fs::create_dir_all(root.join("source")).unwrap();
+        fs::create_dir_all(root.join("Mods")).unwrap();
+        fs::write(root.join("source/a.package"), b"original browser download").unwrap();
+        fs::write(root.join("Mods/unmanaged.package"), b"unmanaged original").unwrap();
+        FAILURE_AFTER.with(|count| count.set(Some(step)));
+        assert!(import_browser_fixture(root).is_err());
+        assert_eq!(
+            fs::read(root.join("source/a.package")).unwrap(),
+            b"original browser download"
+        );
+        assert_eq!(
+            fs::read(root.join("Mods/unmanaged.package")).unwrap(),
+            b"unmanaged original"
+        );
+        assert!(!fs_scope::exists(&root.join("Mods/a.package")));
+        let mods = root.join("managed/mods");
+        assert!(fs::read_dir(mods)
+            .map(|entries| entries.count() == 0)
+            .unwrap_or(true));
+        assert!(recover_pending(&root.join("managed")).unwrap().is_empty());
+    }
 }
 
 fn command(root: &Path, action: &str) -> Command {
@@ -139,6 +211,9 @@ fn snapshot(path: &Path) -> BTreeMap<PathBuf, Vec<u8>> {
 fn sigkill_recovers_import_migration_and_restore() {
     for (action, step, replacement) in [
         ("import", 1, false),
+        ("browser", 1, false),
+        ("browser", 2, false),
+        ("browser", 3, false),
         ("migration", 1, false),
         ("migration", 2, false),
         ("migration", 3, false),

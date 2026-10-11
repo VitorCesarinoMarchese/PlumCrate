@@ -45,6 +45,15 @@ pub fn import_archive_to_managed(
 }
 
 pub fn extract_archive(archive_path: &Path, destination: &Path) -> Result<(), ManagerError> {
+    extract_archive_checked(archive_path, destination, || Ok(()))
+}
+
+pub(crate) fn extract_archive_checked(
+    archive_path: &Path,
+    destination: &Path,
+    mut check: impl FnMut() -> Result<(), ManagerError>,
+) -> Result<(), ManagerError> {
+    check()?;
     let ext = archive_path
         .extension()
         .and_then(|s| s.to_str())
@@ -52,7 +61,7 @@ pub fn extract_archive(archive_path: &Path, destination: &Path) -> Result<(), Ma
         .to_ascii_lowercase();
 
     match ext.as_str() {
-        "zip" => extract_zip(archive_path, destination),
+        "zip" => extract_zip(archive_path, destination, &mut check),
         _ => Err(ManagerError::new(
             ErrorCode::ArchiveUnsupported,
             format!("Unsupported archive extension: .{ext}"),
@@ -60,7 +69,11 @@ pub fn extract_archive(archive_path: &Path, destination: &Path) -> Result<(), Ma
     }
 }
 
-fn extract_zip(archive_path: &Path, destination: &Path) -> Result<(), ManagerError> {
+fn extract_zip(
+    archive_path: &Path,
+    destination: &Path,
+    check: &mut impl FnMut() -> Result<(), ManagerError>,
+) -> Result<(), ManagerError> {
     let file = fs::File::open(archive_path).map_err(|e| {
         ManagerError::new(
             ErrorCode::ArchiveExtractionFailed,
@@ -82,6 +95,7 @@ fn extract_zip(archive_path: &Path, destination: &Path) -> Result<(), ManagerErr
     let mut total_bytes = 0_u64;
     // Inspect the complete archive before writing any of its contents.
     for i in 0..archive.len() {
+        check()?;
         let entry = archive.by_index(i).map_err(|e| {
             ManagerError::new(
                 ErrorCode::ArchiveExtractionFailed,
@@ -131,6 +145,7 @@ fn extract_zip(archive_path: &Path, destination: &Path) -> Result<(), ManagerErr
     fs_scope::create_dir_all(destination)?;
     let directory = fs_scope::Directory::open(destination)?;
     for i in 0..archive.len() {
+        check()?;
         let mut entry = archive
             .by_index(i)
             .map_err(|error| extraction_error(error.to_string()))?;
@@ -146,8 +161,21 @@ fn extract_zip(archive_path: &Path, destination: &Path) -> Result<(), ManagerErr
         }
         let mut output = directory.create_file(relative)?;
         let expected = entry.size();
-        let copied = std::io::copy(&mut (&mut entry).take(expected + 1), &mut output)
-            .map_err(|error| extraction_error(format!("Read ZIP entry failed: {error}")))?;
+        let mut copied = 0;
+        let mut limited = (&mut entry).take(expected + 1);
+        let mut buffer = [0; 65536];
+        loop {
+            check()?;
+            let count = limited
+                .read(&mut buffer)
+                .map_err(|error| extraction_error(format!("Read ZIP entry failed: {error}")))?;
+            if count == 0 {
+                break;
+            }
+            std::io::Write::write_all(&mut output, &buffer[..count])
+                .map_err(|error| extraction_error(format!("Write ZIP entry failed: {error}")))?;
+            copied += count as u64;
+        }
         if copied != expected {
             return Err(extraction_error(format!("ZIP entry size mismatch: {name}")));
         }
@@ -232,6 +260,29 @@ mod tests {
         }
 
         zip.finish().expect("finish zip");
+    }
+
+    #[test]
+    fn cancellation_stops_archive_extraction_before_writing_entries() {
+        let tmp = TempDir::new().unwrap();
+        let archive = tmp.path().join("mod.zip");
+        let destination = tmp.path().join("content");
+        make_zip(&archive, vec![("a.package", b"AAA"), ("b.package", b"BBB")]);
+        let mut checks = 0;
+        let result = super::extract_archive_checked(&archive, &destination, || {
+            checks += 1;
+            if checks == 2 {
+                Err(crate::error::ManagerError::new(
+                    crate::error::ErrorCode::InvalidPath,
+                    "cancelled",
+                ))
+            } else {
+                Ok(())
+            }
+        });
+        assert!(result.is_err());
+        assert!(!destination.join("a.package").exists());
+        assert!(!destination.join("b.package").exists());
     }
 
     #[test]
