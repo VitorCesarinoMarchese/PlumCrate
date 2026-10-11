@@ -48,6 +48,7 @@ pub struct Controls {
     managed: PathBuf,
     trash: PathBuf,
     pub settings: Settings,
+    saved_settings: Settings,
     settings_path: PathBuf,
     next: u64,
     recovering: bool,
@@ -92,6 +93,7 @@ impl Controls {
             worker: Mutations::start_with_recovery(managed.clone(), wake)?,
             managed,
             trash: home.join(".local/share/Trash/files"),
+            saved_settings: settings.clone(),
             settings,
             settings_path: home.join(".config/ts4-mod-manager/settings.json"),
             next: 1,
@@ -593,9 +595,26 @@ impl Controls {
     }
     pub fn set_color_mode(&mut self, ctx: &egui::Context, theme: Theme) {
         self.preview_color_mode(ctx, theme);
-        if let Err(error) = self.settings.save(&self.settings_path) {
-            self.error = Some(error);
+        let mut saved = self.saved_settings.clone();
+        saved.theme = self.settings.theme.clone();
+        match saved.save(&self.settings_path) {
+            Ok(()) => self.saved_settings = saved,
+            Err(error) => self.error = Some(error),
         }
+    }
+    pub fn settings_dirty(&self) -> bool {
+        self.settings != self.saved_settings || self.theme_edit.as_ref().is_some_and(|draft| {
+            self.saved_settings.custom_themes.iter().find(|theme| Some(&theme.name) == self.theme_edit_original.as_ref()) != Some(draft)
+        })
+    }
+    fn discard_preferences(&mut self, ctx: &egui::Context) {
+        self.settings = self.saved_settings.clone();
+        self.theme_edit_original = self.settings.active_custom_theme.clone();
+        self.theme_edit = self.settings.custom_themes.iter().find(|theme| Some(&theme.name) == self.theme_edit_original.as_ref()).cloned();
+        self.theme_json.clear();
+        self.error = None;
+        self.notice = Some("Unsaved settings discarded".into());
+        crate::ui::apply_settings_theme(ctx, &self.settings);
     }
     fn preview_color_mode(&mut self, ctx: &egui::Context, theme: Theme) {
         self.settings.theme = theme;
@@ -631,6 +650,7 @@ impl Controls {
         }
         match next.save(&self.settings_path) {
             Ok(()) => {
+                self.saved_settings = next.clone();
                 self.settings = next;
                 if let Some(theme) = &self.theme_edit {
                     self.theme_edit_original = Some(theme.name.clone());
@@ -650,15 +670,19 @@ impl Controls {
                 if ui.button("Save settings").clicked() {
                     self.save_preferences(&ctx);
                 }
+                if ui.add_enabled(self.settings_dirty(), egui::Button::new("Discard")).clicked() {
+                    self.discard_preferences(&ctx);
+                }
                 if ui.button("Back to library").clicked() {
                     self.settings_page = false;
                 }
             });
         });
-        ui.label(
-            egui::RichText::new("Make this space yours. Preferences stay on this device.")
-                .color(ui.visuals().weak_text_color()),
-        );
+        ui.label(egui::RichText::new(if self.settings_dirty() {
+            "Unsaved changes · Save or discard when ready. Leaving this page keeps your draft."
+        } else {
+            "Preferences stay on this device. The header Light/Dark switch saves immediately."
+        }).color(ui.visuals().weak_text_color()));
         ui.add_space(24.0);
         egui::ScrollArea::vertical().id_salt("settings-page").auto_shrink([false, false]).show(ui, |ui| {
             ui.set_max_width(ui.available_width().min(720.0));
@@ -722,9 +746,7 @@ impl Controls {
                         match serde_json::to_string_pretty(theme) { Ok(json) => { ctx.copy_text(json.clone()); self.theme_json = json; }, Err(_) => self.error = Some("Cannot export theme".into()) }
                     }
                 });
-                if ui.add_enabled(valid, egui::Button::new("Save custom theme").fill(ui.visuals().selection.bg_fill).stroke(ui.visuals().selection.stroke)).clicked() {
-                    self.save_preferences(&ctx);
-                }
+                ui.label(egui::RichText::new("Save settings above to keep both color versions.").color(ui.visuals().weak_text_color()));
             }
             ui.add_space(12.0);
             ui.collapsing("Import a theme", |ui| {
@@ -749,7 +771,10 @@ impl Controls {
             ui.add_space(24.0); ui.separator(); ui.add_space(16.0);
             ui.heading("Source lookup");
             ui.label("CurseForge API key");
-            ui.add(egui::TextEdit::singleline(self.settings.curseforge_api_key.get_or_insert_with(String::new)).password(true).desired_width(400.0).min_size(egui::vec2(200.0, 34.0)).margin(egui::vec2(10.0, 9.0)));
+            let mut key = self.settings.curseforge_api_key.clone().unwrap_or_default();
+            if ui.add(egui::TextEdit::singleline(&mut key).password(true).desired_width(400.0).min_size(egui::vec2(200.0, 34.0)).margin(egui::vec2(10.0, 9.0))).changed() {
+                self.settings.curseforge_api_key = (!key.is_empty()).then_some(key);
+            }
             ui.label(egui::RichText::new("Stored only in local settings. Source attachment always needs your confirmation.").color(ui.visuals().weak_text_color()));
             ui.add_space(16.0);
             ui.add_space(24.0); ui.separator(); ui.add_space(16.0);
@@ -1055,8 +1080,9 @@ impl Controls {
                     Dialog::SettingsImport(settings, _) => {
                         match settings.save(&self.settings_path) {
                             Ok(()) => {
-                                self.settings = settings.clone();
-                                crate::ui::apply_settings_theme(ctx, &self.settings);
+                                self.saved_settings = settings.clone();
+                                self.discard_preferences(ctx);
+                                self.notice = Some("Imported settings saved".into());
                                 self.roots_changed =
                                     settings.selected_root.as_ref().map(PathBuf::from);
                                 keep = false;
@@ -1388,6 +1414,55 @@ mod tests {
         assert_eq!(std::fs::read(path).unwrap(), bytes);
         assert!(controls.error.as_deref().unwrap().contains("unused"));
     }
+    #[test]
+    fn header_mode_switch_does_not_save_unrelated_settings_drafts() {
+        let fixture = tempfile::tempdir().unwrap();
+        let mut controls = Controls::new(fixture.path().join("managed"), fixture.path().into(), Settings::default(), || {}).unwrap();
+        controls.settings.game_roots.push(fixture.path().join("game").to_string_lossy().into());
+        controls.settings.selected_root = controls.settings.game_roots.first().cloned();
+        controls.settings.curseforge_api_key = Some("fixture-only".into());
+        controls.set_color_mode(&egui::Context::default(), Theme::Light);
+        let saved = Settings::load(&controls.settings_path).unwrap();
+        assert!(saved.theme == Theme::Light);
+        assert!(saved.game_roots.is_empty(), "header appearance must not commit a folder draft");
+        assert!(saved.selected_root.is_none());
+        assert!(saved.curseforge_api_key.is_none());
+        assert_eq!(controls.settings.game_roots.len(), 1, "draft stays available for explicit save");
+    }
+
+    #[test]
+    fn discard_restores_saved_values_but_keeps_the_header_mode_change() {
+        let fixture = tempfile::tempdir().unwrap();
+        let mut controls = Controls::new(fixture.path().join("managed"), fixture.path().into(), Settings::default(), || {}).unwrap();
+        let ctx = egui::Context::default();
+        assert!(!controls.settings_dirty());
+        controls.settings.game_roots.push(fixture.path().join("game").to_string_lossy().into());
+        controls.theme_edit = Some(crate::settings::CustomTheme::base());
+        assert!(controls.settings_dirty());
+        controls.set_color_mode(&ctx, Theme::Dark);
+        controls.discard_preferences(&ctx);
+        assert!(!controls.settings_dirty());
+        assert!(controls.settings.game_roots.is_empty());
+        assert!(controls.theme_edit.is_none());
+        assert!(controls.settings.theme == Theme::Dark);
+        controls.settings.curseforge_api_key = Some("fixture-only".into());
+        controls.save_preferences(&ctx);
+        assert!(!controls.settings_dirty());
+        controls.settings.curseforge_api_key = None;
+        controls.discard_preferences(&ctx);
+        assert_eq!(controls.settings.curseforge_api_key.as_deref(), Some("fixture-only"));
+    }
+
+    #[test]
+    fn rendering_settings_does_not_create_an_empty_key_draft() {
+        let fixture = tempfile::tempdir().unwrap();
+        let mut controls = Controls::new(fixture.path().join("managed"), fixture.path().into(), Settings::default(), || {}).unwrap();
+        let ctx = egui::Context::default();
+        let mut output = ctx.run_ui(egui::RawInput::default(), |ui| controls.settings_content(ui, &Catalog::default()));
+        output.textures_delta.clear();
+        assert!(!controls.settings_dirty());
+    }
+
     #[test]
     fn mode_switch_preserves_custom_theme_and_unsaved_editor_colors() {
         let fixture = tempfile::tempdir().unwrap();

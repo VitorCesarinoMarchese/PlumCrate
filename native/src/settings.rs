@@ -11,7 +11,7 @@ pub enum Theme {
     Dark,
     System,
 }
-#[derive(Clone, Serialize, Deserialize)]
+#[derive(Clone, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct ThemeColors {
     pub accent: String,
@@ -68,7 +68,7 @@ impl ThemeColors {
         })
     }
 }
-#[derive(Clone, Serialize)]
+#[derive(Clone, Serialize, PartialEq, Eq)]
 pub struct CustomTheme {
     pub name: String,
     pub light: ThemeColors,
@@ -150,7 +150,7 @@ impl CustomTheme {
         }
     }
 }
-#[derive(Clone, Serialize, Deserialize)]
+#[derive(Clone, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct Settings {
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
