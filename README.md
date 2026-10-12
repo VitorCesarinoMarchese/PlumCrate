@@ -19,7 +19,8 @@ Browse your collection by photo, find a file by name, and choose which mods are 
 | Feature | What you can do |
 | --- | --- |
 | Browse your collection | Switch between photo cards and a compact list. Search mod names and filenames, or filter installed and stored mods. |
-| Search CurseForge | Browse Sims 4 mods and custom content by name, content type, category, game version, and sort order. Read summaries and view screenshots inside the app. Requires your API key in local Settings. |
+| Search CurseForge | Browse Sims 4 mods and custom content by name, content type, category, game version, and sort order. Read author descriptions, inspect release dependencies, and view screenshots inside the app. Requires your API key in local Settings. |
+| Install from CurseForge | Review a public release, Downloads folder, and selected game, then open its official page in your browser. The app verifies the completed download, imports it, and enables it automatically. |
 | Bring your own mods | Import a local folder or ZIP archive, or review existing game mods before moving them into the managed library. |
 | Choose what loads | Review the files before enabling or disabling a managed mod. |
 | Keep track of sources | Save a source link yourself, or review CurseForge suggestions and confirm a match. |
@@ -33,7 +34,7 @@ The first alpha, **0.01**, is being prepared. Expect rough edges and report prob
 
 Linux is the current supported platform. Windows and macOS have not been verified. Release downloads will appear on the [releases page](https://github.com/VitorCesarinoMarchese/TS4ModManager/releases) when published. Until then, use the [build and run guide](docs/development.md#run-the-app).
 
-The app manages local mods and checks attached CurseForge projects for newer releases on request. Update notices open the mod page for manual download; you replace your local files yourself. CurseForge browsing, lookup, and update checks need your own API key saved in local Settings. Suggestions and installed-release records are saved only after you confirm them, and weak source matches show a warning.
+The app manages local mods and checks attached CurseForge projects for newer releases on request. Update notices open the mod page for manual download; you replace your local files yourself. Browser-assisted installation opens the official release page and watches your Downloads folder after you approve the source and installation. The website may still require a Download or save click. CurseForge browsing, installation, lookup, and update checks need your own API key saved in local Settings. Suggestions and installed-release records are saved only after you confirm them, and weak source matches show a warning.
 
 ## Getting started
 
@@ -42,11 +43,15 @@ The app manages local mods and checks attached CurseForge projects for newer rel
 3. Select a managed mod to inspect its files. Choose **Enable** or **Disable**, review the proposed changes, and confirm.
 4. Right-click a mod for more actions. Use **Restore from trash** to recover a removed managed mod.
 
-See the [app guide](docs/native-app.md) for settings, themes, source lookup, [update checks](docs/native-app.md#check-for-mod-updates), and folder selection.
+To install a CurseForge mod, open **Browse mods**, view a project, and choose **Download via website…**. Review the release and folders, then select **Start browser download**. After you save the file in your browser, the app imports and enables the verified download without another click.
+
+Read the project's **Description** and **Dependencies** before downloading. Required, optional, and tool dependencies offer their own download review. Each download needs separate approval; the app does not install a dependency chain automatically.
+
+See the [app guide](docs/native-app.md) for [browser-assisted installation](docs/native-app.md#install-from-a-browser-download), settings, themes, source lookup, [update checks](docs/native-app.md#check-for-mod-updates), and folder selection.
 
 ## Your files stay yours
 
-Your library and settings stay on your computer. Local browsing and mod management work without CurseForge. Optional CurseForge browsing, source lookup, update checks, and remote preview images use network requests.
+Your library and settings stay on your computer. Local browsing and mod management work without CurseForge. Optional CurseForge browsing, browser-assisted installation, source lookup, update checks, and remote preview images use network requests.
 
 Management actions require review. The app checks ownership before removing its links, leaves unmanaged files alone, and moves removed managed mods to recoverable trash. Read the [storage and safety details](docs/development.md#local-storage-and-safety) for locations and recovery behavior.
 

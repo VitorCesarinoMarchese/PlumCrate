@@ -26,9 +26,9 @@ With a saved key, the browser loads popular projects. Search submits through **S
 
 Submitting a search or changing a filter or sort restarts at the first page. **Previous** and **Next** retain the submitted search, content type, category, version, and sort. Pages contain 24 results, within the API's 10,000-result limit. Editing a search without submitting it does not change page navigation. Below 600 logical points of window height, **Filters** folds the selectors and shows the active filter count. Expanded controls scroll with the results, so **Clear filters** remains reachable in short windows.
 
-Project cards show provider names, authors, logos, summaries, categories, download counts, and modification dates. **View details** opens the full summary and provider screenshots inside the app. **Back to results** or Escape restores the current results. **Open on CurseForge** and **Copy link** appear only when the API supplies a usable HTTPS project URL. Broken provider images hide. Preview requests omit Referer.
+Project cards show provider names, authors, logos, summaries, categories, download counts, and modification dates. **View details** opens the author description, release dependencies, and provider screenshots inside the app. **Back to results** or Escape restores the current results. **Open on CurseForge** and **Copy link** appear only when the API supplies a usable HTTPS project URL. Broken provider images hide. Preview requests omit Referer.
 
-Switching to **My mods** preserves local search and selection. Browsing does not install or update mods, write mod metadata, or attach sources. Use the existing import controls for files you already have.
+Switching to **My mods** preserves local search and selection. Search and project inspection leave files and source metadata unchanged. Project details offer the explicitly reviewed [browser-assisted installation](#install-from-a-browser-download) below. Existing import controls remain available for other local files.
 
 Requests run in a separate read-only worker. Pending searches coalesce and late responses cannot replace newer results. The worker loads category and version options when they are missing or a prior attempt failed. Loading, no matches, missing or rejected credentials, rate limits, network errors, and unavailable providers have separate states. Each request uses the existing bounded CurseForge transport. Normal shutdown does not wait for provider I/O.
 
@@ -40,11 +40,69 @@ The capture example uses only synthetic API responses and local procedural image
 cargo run --manifest-path native/Cargo.toml --locked --example verify_discovery -- native/target/ui-discovery
 ```
 
-Live searches need a valid locally saved key. The implementation was checked against fixtures because no key was available during development.
+Live searches need a valid locally saved key. Capture examples use fixtures and make no provider requests.
+
+## Read a project and review its dependencies
+
+Open **View details** from a CurseForge result. **Description** and **Dependencies** above the scrolling page jump to their sections. Wide windows show the author description beside the release selector and dependency rows. Narrow windows stack the description first.
+
+The description retains author text, headings, lists, table rows, images, credits, and support links as native content. Safe HTTPS links open in your browser. Website scripts and styles do not run. Empty descriptions have their own message; failed requests offer **Retry description** independently of **Retry releases**.
+
+1. Read the author's instructions, including requirements mentioned in the description.
+2. Under **Dependencies for this release**, select the release you want. The rows describe that file, rather than every release in the project.
+3. For a required, optional, or tool dependency, select **Review download…**. Choose its release and review the source, Downloads folder, and game destination.
+4. Select **Start browser download** to approve that dependency's installation. Complete any Download or save action in the browser.
+5. After the installation finishes, review any other desired dependency separately. Use **Download via website…** for the parent mod when ready.
+
+The parent mod's selected release carries into its download review. Changing a release in that review also changes the dependency information shown there. CurseForge identifies dependency projects but does not guarantee a compatible version. Incompatible, embedded, included, and unknown relations remain visible without a download action. Read their warnings and the author's instructions.
+
+**Author-linked mods** lists supported CurseForge project links found in the description. These links are not declared dependencies. **Inspect linked mod** checks for an exact provider project match before offering **Review linked mod…**. A missing or ambiguous match cannot start a download review.
+
+An empty declared list does not prove that the mod has no requirements. Missing and partial dependency information show warnings, and failed project lookups offer **Retry dependency lookups**. The app does not infer dependencies from names, mark similarly named installed mods as satisfied, or download a dependency chain. Reading or inspecting projects saves no source attachment and approves no installation.
+
+Static skeletons reserve space during browse loading, an initial library scan without entries, description and release lookups, pending provider images, and download-review loading. The sections load independently. Existing library entries remain visible during a rescan.
+
+The capture example writes twelve synthetic production-widget captures to `.impeccable/review/details-*.png`:
+
+```sh
+cargo run --manifest-path native/Cargo.toml --locked --example verify_project_details -- .impeccable/review
+```
+
+The captures cover both themes, the 1871-by-1006 user window, narrow and 640-by-480 windows, section navigation, loading, empty descriptions, and lookup failures. Independent visual review returned ship with no material fixes. Captures make no provider requests and install no files. See [project-details contracts](project-details.md) for parsing limits, identity checks, and module ownership.
+
+## Install from a browser download
+
+Choose your Sims 4 folder and save your CurseForge API key in local Settings first. Browser-assisted installation supports website downloads when API downloading is unavailable.
+
+1. Open **Browse mods**, select a project, and choose **Download via website…**.
+2. Review the source and select the public release you want. Check the **Browser Downloads folder** and use **Change Downloads folder** if your browser saves elsewhere.
+3. Check **Install in this Sims 4 folder**. **Start browser download** approves saving that source and release, copying the verified file into your library, and enabling it in this game.
+4. The app opens the official release page. Complete any Download or save action the website or browser requires, using the reviewed Downloads folder.
+5. The app watches for up to ten minutes, verifies the completed file, imports it, and enables it automatically. No second import or enable confirmation is needed.
+
+The default watched folder comes from your XDG Downloads setting, or `~/Downloads` when none is configured. Watching accepts stable regular ZIP, `.package`, and `.ts4script` files up to 2 GiB. The release must be a stable public release with an API-supplied length and SHA1 or MD5 checksum. Matching uses file bytes, not the filename. A renamed file with a supported extension or an already-completed matching download can be used after approval. Temporary browser files, symbolic links, and mismatched downloads do not qualify. If no suitable release exists, use **Open on CurseForge** and the local import controls.
+
+Your original download stays untouched. The app saves the source and verified installed-release baseline in the mod's `meta.json` with your initial consent. An intact managed copy of the same project and release is reused rather than duplicated. Occupied game paths cause a safe error; the app does not overwrite unmanaged files.
+
+Waiting and queued status appear at the bottom with the watched folder and **Cancel download import**. Canceling, changing the game folder or saved key, or closing the app revokes work before publication starts. Once publication starts, installation finishes or rolls back in the originally approved game. A ten-minute timeout reports a failure and offers retry. Selection changes and normal rescans preserve the session.
+
+This installs mods; it does not replace an older release automatically. The [update-check workflow](#check-for-mod-updates) still opens the mod page for manual replacement. See [browser-download contracts](browser-downloads.md) for file verification and transaction details.
+
+The synthetic production-widget capture example writes six review and waiting captures, without downloading or installing mod files:
+
+```sh
+cargo run --manifest-path native/Cargo.toml --locked --example verify_browser_import -- .impeccable/review
+```
+
+The checked captures cover dark and light 1200-by-800 windows, a 1871-by-1006 user window, and 640-by-480 review and waiting states. The small review keeps the game destination and actions visible while release details and Downloads-folder controls scroll. Independent finish review returned ship with no material fixes. Input tests cover one approval followed by automatic import and enabling, and the pinned destination in the small review.
+
+Desktop page links retain eframe browser support and dispatch browser lookup and launching on a separate thread. Linux default-browser lookup can wait for a desktop command; it must not block the window event thread. Run `python3 native/verify_browser_links.py` to verify the exact synthetic release URL and a deliberately stalled default-browser lookup. The check confirms that the desktop event thread is not waiting on that lookup. It opens no website and downloads no mod files. The Python regression suite also checks that the shipping backend retains browser support.
+
+On Hyprland Wayland, run `python3 native/verify_hidden_download.py` to test the separate covered-window failure. It moves only its synthetic probe window to an unshown workspace, completes a verified download through the production watcher and management queue, and keeps the window hidden for eight seconds. It checks automatic enabling, original-file preservation, and compositor ping replies before restoring and closing the probe. No user mod or browser window is moved. The test failed with the stock runtime and passed with the pinned fixes. The metadata regression also checks that the complete GUI graph uses the matched revisions.
 
 ## Build and launch
 
-Requires Rust 1.98 or later and native Linux graphics support. Fastframe is pinned to `bb79dbddef01e660f9cfc37ccd9dff1c299a8d47`. `Cargo.lock` pins the resolved dependencies, including egui/eframe 0.36.2. The native app uses published egui/winit rather than the optional Fastframe forks.
+Requires Rust 1.98 or later and native Linux graphics support. Fastframe is pinned to `bb79dbddef01e660f9cfc37ccd9dff1c299a8d47`. `Cargo.lock` pins Fastframe's matched egui/eframe 0.36.1 and winit 0.30.13 forks. The egui revision is `ba6790fe7cf46e58e8d27ce1524cbfdee745e938`; winit is `ed7caa9023f10b397f5b6ec8284a840cbd8a6f65`. These revisions include Wayland frame pacing and hidden-window handling fixes. Keep the GUI crates on the same revision; exact dependency versions prevent Cargo from selecting a newer stock release without those fixes.
 
 Run from the project root:
 
@@ -86,7 +144,7 @@ Startup asks the core to recover pending operations and displays recovery issues
 
 **Check updates** in the library toolbar checks managed mods with an explicitly attached CurseForge project. A manual source URL alone is not enough. Checks use the API key saved in local Settings; a missing key opens Settings. Results appear in a library summary, with **Update available** on cards and list rows. Mod details show the result and offer **Check this mod**.
 
-To establish the release you installed and check for a newer one:
+Browser-assisted imports already save their verified installed-release baseline. For other managed mods, establish the release you installed before checking for a newer one:
 
 1. Use **Find source** and confirm the correct CurseForge project if the mod has no attached project.
 2. Select **Check updates**, then open the mod's details. The app reports an unknown installed version until you confirm a release.

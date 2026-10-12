@@ -1,10 +1,10 @@
 # Mod update checks
 
-The app checks stable public CurseForge project releases and opens the author's project page for manual downloads. It compares publication dates after the user confirms their installed release. A newer project release may target another component or game version. Checks run only on user request and report results inside the app. They do not send operating-system notifications or run automatically at startup. The [app guide](native-app.md#check-for-mod-updates) describes the manual workflow.
+The app checks stable public CurseForge project releases and opens the author's project page for manual downloads. It compares publication dates after the user confirms their installed release. A newer project release may target another component or game version. Checks run only on user request and report results inside the app. They do not send operating-system notifications or run automatically at startup. The [app guide](native-app.md#check-for-mod-updates) describes the manual workflow. [Browser-assisted installation](browser-downloads.md) is a separate path that imports and enables an approved download. It does not replace an older managed release automatically.
 
 ## Why installed identity needs confirmation
 
-Existing source attachments identify a project. Their legacy `fileId` comes from a source suggestion and does not prove which archive the user installed. Checks ignore that value. The user selects an actual provider release and confirms it before the app writes `sourceAttachment.installedRelease` in the mod's `meta.json`.
+Existing source attachments identify a project. Their legacy `fileId` comes from a source suggestion and does not prove which archive the user installed. Checks ignore that value. The user selects an actual provider release and confirms it before the update workflow writes `sourceAttachment.installedRelease` in the mod's `meta.json`. Browser-assisted imports establish the same baseline from verified downloaded bytes, with source and installation consent in their initial review.
 
 That record contains the project ID, file ID, confirmation time, and a SHA-256 digest of the managed `files` tree. Changing file bytes, names, additions, or removals makes the recorded version unknown until the user confirms again. Metadata and enablement links outside `files` do not affect the digest. Changing or removing the attached project clears the record.
 
@@ -18,6 +18,6 @@ Native `Controls` owns `UpdateState`, saved credentials, and the existing review
 
 ## Design decision
 
-Two designs were compared: controller-owned results using the existing queues, and catalog-owned results with a separate service and provider abstraction. The first fits the current saved-settings and confirmation ownership with fewer layers. The implementation incorporates the second proposal's request deduplication and distinct failed-check state. It adds no download, extraction, or installation path.
+Two designs were compared: controller-owned results using the existing queues, and catalog-owned results with a separate service and provider abstraction. The first fits the current saved-settings and confirmation ownership with fewer layers. The implementation incorporates the second proposal's request deduplication and distinct failed-check state. The update-check implementation adds no download, extraction, or installation path. Browser-assisted installation has its own provider, watcher, and transaction modules.
 
 Core tests cover version identity, date comparisons, pagination, changed content, unsafe files, source replacement, and confirmation. Native tests exercise stale completion rejection, worker independence, real pointer input, mod-page URLs, unchanged files, and the final confirmation button. `verify_updates` captures production controls with synthetic provider data in both themes and short windows.
