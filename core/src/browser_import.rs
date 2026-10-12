@@ -41,7 +41,51 @@ pub struct BrowserProject {
 pub struct BrowserRelease {
     pub release: Release,
     pub length: u64,
+    pub dependencies: FileDependencies,
     hashes: Vec<(u64, String)>,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct FileDependencies {
+    pub relations: Vec<ProjectRelation>,
+    pub completeness: DependencyCompleteness,
+}
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum DependencyCompleteness { Complete, Partial, Unknown }
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct ProjectRelation { pub project_id: u64, pub kind: RelationKind }
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum RelationKind { Embedded, Optional, Required, Tool, Incompatible, Include, Unknown(u64) }
+impl RelationKind {
+    pub fn can_install(self) -> bool { matches!(self, Self::Optional | Self::Required | Self::Tool) }
+    pub fn label(self) -> &'static str {
+        match self {
+            Self::Embedded => "Embedded library", Self::Optional => "Optional",
+            Self::Required => "Required", Self::Tool => "Tool", Self::Incompatible => "Incompatible",
+            Self::Include => "Included", Self::Unknown(_) => "Unknown relation",
+        }
+    }
+}
+fn parse_dependencies(value: Option<&Value>) -> FileDependencies {
+    let Some(values) = value.and_then(Value::as_array) else {
+        return FileDependencies { relations: vec![], completeness: DependencyCompleteness::Unknown };
+    };
+    let mut result = FileDependencies { relations: vec![], completeness: DependencyCompleteness::Complete };
+    for value in values.iter().take(128) {
+        let Some(project_id) = value["modId"].as_u64().filter(|id| *id > 0) else {
+            result.completeness = DependencyCompleteness::Partial; continue;
+        };
+        let Some(kind) = value["relationType"].as_u64() else {
+            result.completeness = DependencyCompleteness::Partial; continue;
+        };
+        let kind = match kind { 1 => RelationKind::Embedded, 2 => RelationKind::Optional,
+            3 => RelationKind::Required, 4 => RelationKind::Tool, 5 => RelationKind::Incompatible,
+            6 => RelationKind::Include, n => RelationKind::Unknown(n) };
+        let relation = ProjectRelation { project_id, kind };
+        if !result.relations.contains(&relation) { result.relations.push(relation); }
+    }
+    if values.len() > 128 { result.completeness = DependencyCompleteness::Partial; }
+    result
 }
 impl BrowserRelease {
     /// Derived release navigation only; saved source remains the exact API project page.
@@ -191,6 +235,7 @@ fn parse_file(value: &Value, project_id: u64) -> Option<BrowserRelease> {
             game_versions: versions,
         },
         length,
+        dependencies: parse_dependencies(value.get("dependencies")),
         hashes,
     })
 }

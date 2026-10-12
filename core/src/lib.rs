@@ -4,6 +4,7 @@ pub mod archive_import;
 pub mod browser_import;
 pub mod curseforge_client;
 pub mod curseforge_browse;
+pub mod curseforge_details;
 pub mod error;
 pub mod external_migration;
 pub mod fs_scope;

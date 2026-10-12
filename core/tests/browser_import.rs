@@ -30,6 +30,35 @@ fn project(p: Provider) -> browser_import::BrowserProject {
     browser_import::load_browser_project(&CurseForgeClient::new(Some("fixture"), p).unwrap(), 42)
         .unwrap()
 }
+
+#[test]
+fn dependencies_belong_to_each_file_and_distinguish_empty_partial_and_missing() {
+    use browser_import::{DependencyCompleteness, RelationKind};
+    let mut p=provider(b"package", "mod.package");
+    let mut older=p.files[0].clone();
+    older["id"]=json!(101);
+    older["dependencies"]=json!([]);
+    p.files[0]["dependencies"]=json!([
+        {"modId":9,"relationType":3},
+        {"modId":10,"relationType":2},
+        {"modId":11,"relationType":5},
+        {"modId":12,"relationType":99},
+        {"modId":0,"relationType":3}
+    ]);
+    p.files.push(older);
+    let result=project(p);
+    let current=&result.releases.iter().find(|r|r.release.file_id==100).unwrap().dependencies;
+    assert_eq!(current.relations.len(),4);
+    assert_eq!(current.completeness,DependencyCompleteness::Partial);
+    assert_eq!(current.relations[0].kind,RelationKind::Required);
+    assert!(!current.relations[2].kind.can_install());
+    assert!(!current.relations[3].kind.can_install());
+    let old=&result.releases.iter().find(|r|r.release.file_id==101).unwrap().dependencies;
+    assert!(old.relations.is_empty());
+    assert_eq!(old.completeness,DependencyCompleteness::Complete);
+    let missing=project(provider(b"package", "mod.package"));
+    assert_eq!(missing.releases[0].dependencies.completeness,DependencyCompleteness::Unknown);
+}
 fn match_download(
     dir: &Path,
     p: &browser_import::BrowserProject,
