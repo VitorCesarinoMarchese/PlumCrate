@@ -1,15 +1,27 @@
+use crate::project_details::{Details, Load, ReviewRequest};
 use egui::{RichText, vec2};
-use std::sync::mpsc;
+use std::{
+    collections::VecDeque,
+    sync::{
+        Arc,
+        atomic::{AtomicU64, Ordering},
+        mpsc,
+    },
+};
+use ts4_mod_manager_core::{browser_import::DependencyCompleteness, curseforge_details::BlockKind};
 use ts4_mod_manager_core::{
     curseforge_browse::{
         BrowsePage, BrowseProject, BrowseQuery, BrowseSort, Category, category_options,
     },
-    curseforge_client::{CurseForgeClient, SourceLookupError, UreqCurseForgeTransport},
+    curseforge_client::{
+        CurseForgeClient, CurseForgeTransport, SourceLookupError, UreqCurseForgeTransport,
+    },
 };
-use crate::project_details::{Details, Load, ReviewRequest};
-use ts4_mod_manager_core::{browser_import::DependencyCompleteness, curseforge_details::BlockKind};
 #[derive(Clone, Copy, PartialEq, Eq)]
-enum DetailSection { Description, Dependencies }
+enum DetailSection {
+    Description,
+    Dependencies,
+}
 
 #[derive(Default)]
 pub struct Browser {
@@ -19,26 +31,102 @@ pub struct Browser {
     pub error: Option<SourceLookupError>,
     generation: u64,
     history: Vec<u32>,
+    search_epoch: u64,
+    cache: VecDeque<(BrowseQuery, BrowsePage)>,
+    prefetch: Option<Prefetch>,
+}
+enum Prefetch {
+    Pending(BrowseQuery),
+    Failed(BrowseQuery),
 }
 impl Browser {
     pub fn begin(&mut self, query: BrowseQuery) -> u64 {
-        if query.search != self.active.search
-            || query.sort != self.active.sort
-            || query.category != self.active.category
-            || query.index == 0
-        {
-            self.history.clear();
-        } else if query.index > self.active.index {
+        self.search_epoch += 1;
+        self.history.clear();
+        self.cache.clear();
+        self.prefetch = None;
+        self.open_page(query)
+    }
+    pub fn navigate(&mut self, query: BrowseQuery) -> u64 {
+        let same_search = BrowseQuery {
+            index: query.index,
+            ..self.active.clone()
+        } == query;
+        if self.search_epoch == 0 || !same_search {
+            return self.begin(query);
+        }
+        if query.index > self.active.index {
             self.history.push(self.active.index);
         } else if self.history.last() == Some(&query.index) {
             self.history.pop();
         }
+        self.open_page(query)
+    }
+    fn open_page(&mut self, query: BrowseQuery) -> u64 {
         self.generation += 1;
         self.active = query;
-        self.page = None;
-        self.loading = true;
+        self.page = self
+            .cache
+            .iter()
+            .find(|(q, _)| q == &self.active)
+            .map(|(_, page)| page.clone());
+        if let Some(page) = self.page.clone() {
+            self.cache_page(self.active.clone(), page);
+        }
+        self.loading = self.page.is_none();
         self.error = None;
         self.generation
+    }
+    fn cache_page(&mut self, query: BrowseQuery, page: BrowsePage) {
+        self.cache.retain(|(q, _)| q != &query);
+        self.cache.push_back((query, page));
+        while self.cache.len() > 3 {
+            self.cache.pop_front();
+        }
+    }
+    pub fn take_prefetch(&mut self) -> Option<(u64, BrowseQuery)> {
+        let query = self.next_query()?;
+        if self.cache.iter().any(|(q, _)| q == &query)
+            || matches!(&self.prefetch,Some(Prefetch::Pending(q)|Prefetch::Failed(q)) if q==&query)
+        {
+            return None;
+        }
+        self.prefetch = Some(Prefetch::Pending(query.clone()));
+        Some((self.search_epoch, query))
+    }
+    pub fn awaiting_prefetch(&self) -> bool {
+        self.loading && matches!(&self.prefetch,Some(Prefetch::Pending(q)) if q==&self.active)
+    }
+    pub fn accept_prefetch(
+        &mut self,
+        epoch: u64,
+        query: BrowseQuery,
+        result: Result<BrowsePage, SourceLookupError>,
+    ) -> bool {
+        if epoch != self.search_epoch
+            || !matches!(&self.prefetch,Some(Prefetch::Pending(q)) if q==&query)
+        {
+            return false;
+        }
+        match result {
+            Ok(page) => {
+                self.prefetch = None;
+                self.cache_page(query.clone(), page.clone());
+                if self.active == query && self.loading {
+                    self.page = Some(page);
+                    self.loading = false;
+                    self.error = None;
+                }
+            }
+            Err(error) => {
+                self.prefetch = Some(Prefetch::Failed(query.clone()));
+                if self.active == query && self.loading {
+                    self.loading = false;
+                    self.error = Some(error);
+                }
+            }
+        }
+        true
     }
     pub fn accept(
         &mut self,
@@ -51,6 +139,7 @@ impl Browser {
         self.loading = false;
         match result {
             Ok(page) => {
+                self.cache_page(self.active.clone(), page.clone());
                 self.page = Some(page);
                 self.error = None;
             }
@@ -98,23 +187,65 @@ fn error_message(error: &SourceLookupError) -> &'static str {
 }
 struct Request {
     generation: u64,
+    epoch: u64,
     query: BrowseQuery,
     key: String,
     load_filters: bool,
 }
 enum Completion {
     Page(u64, Result<BrowsePage, SourceLookupError>),
+    Prefetched(u64, BrowseQuery, Result<BrowsePage, SourceLookupError>),
     Categories(u64, Result<Vec<Category>, SourceLookupError>),
     Versions(u64, Result<Vec<String>, SourceLookupError>),
 }
 struct Jobs {
     sender: mpsc::Sender<Request>,
+    prefetch: mpsc::Sender<Request>,
+    epoch: Arc<AtomicU64>,
     receiver: mpsc::Receiver<Completion>,
 }
 impl Jobs {
     fn start(ctx: egui::Context) -> std::io::Result<Self> {
+        Self::with_client(ctx, |key| {
+            CurseForgeClient::new(Some(key), UreqCurseForgeTransport::default())
+        })
+    }
+    fn with_client<T, F>(ctx: egui::Context, factory: F) -> std::io::Result<Self>
+    where
+        T: CurseForgeTransport + 'static,
+        F: Fn(&str) -> Result<CurseForgeClient<T>, SourceLookupError> + Send + Sync + 'static,
+    {
         let (sender, requests) = mpsc::channel::<Request>();
+        let (prefetch, speculative) = mpsc::channel::<Request>();
         let (results, receiver) = mpsc::channel();
+        let epoch = Arc::new(AtomicU64::new(0));
+        let factory = Arc::new(factory);
+        let background_factory = factory.clone();
+        let background_epoch = epoch.clone();
+        let background_results = results.clone();
+        let background_ctx = ctx.clone();
+        std::thread::Builder::new()
+            .name("curseforge-preload".into())
+            .spawn(move || {
+                while let Ok(mut request) = speculative.recv() {
+                    while let Ok(next) = speculative.try_recv() {
+                        request = next;
+                    }
+                    if request.epoch != background_epoch.load(Ordering::Acquire) {
+                        continue;
+                    }
+                    let page = background_factory(&request.key)
+                        .and_then(|client| client.browse_mods(&request.query));
+                    if background_results
+                        .send(Completion::Prefetched(request.epoch, request.query, page))
+                        .is_err()
+                    {
+                        break;
+                    }
+                    background_ctx.request_repaint();
+                }
+            })?;
+        let current_epoch = epoch.clone();
         std::thread::Builder::new()
             .name("curseforge-browser".into())
             .spawn(move || {
@@ -122,10 +253,10 @@ impl Jobs {
                     while let Ok(next) = requests.try_recv() {
                         request = next;
                     }
-                    let client = CurseForgeClient::new(
-                        Some(&request.key),
-                        UreqCurseForgeTransport::default(),
-                    );
+                    if request.epoch != current_epoch.load(Ordering::Acquire) {
+                        continue;
+                    }
+                    let client = factory(&request.key);
                     let page = client
                         .as_ref()
                         .map_err(Clone::clone)
@@ -137,7 +268,9 @@ impl Jobs {
                         break;
                     }
                     ctx.request_repaint();
-                    if !request.load_filters {
+                    if !request.load_filters
+                        || request.epoch != current_epoch.load(Ordering::Acquire)
+                    {
                         continue;
                     }
                     let categories = client
@@ -145,15 +278,18 @@ impl Jobs {
                         .map_err(Clone::clone)
                         .and_then(|client| client.browse_categories());
                     if results
-                        .send(Completion::Categories(request.generation, categories))
+                        .send(Completion::Categories(request.epoch, categories))
                         .is_err()
                     {
                         break;
                     }
                     ctx.request_repaint();
+                    if request.epoch != current_epoch.load(Ordering::Acquire) {
+                        continue;
+                    }
                     let versions = client.and_then(|client| client.browse_game_versions());
                     if results
-                        .send(Completion::Versions(request.generation, versions))
+                        .send(Completion::Versions(request.epoch, versions))
                         .is_err()
                     {
                         break;
@@ -161,8 +297,18 @@ impl Jobs {
                     ctx.request_repaint();
                 }
             })?;
-        Ok(Self { sender, receiver })
+        Ok(Self {
+            sender,
+            prefetch,
+            epoch,
+            receiver,
+        })
     }
+}
+
+enum Submission {
+    Refresh,
+    Navigate,
 }
 
 #[derive(Default)]
@@ -228,10 +374,20 @@ impl DiscoverView {
             ..Self::default()
         }
     }
-    fn submit(&mut self, ctx: &egui::Context, query: BrowseQuery) {
+    fn submit(&mut self, ctx: &egui::Context, query: BrowseQuery, submission: Submission) {
         self.selected = None;
         self.details.clear();
-        let generation = self.browser.begin(query.clone());
+        let generation = match submission {
+            Submission::Refresh => self.browser.begin(query.clone()),
+            Submission::Navigate => self.browser.navigate(query.clone()),
+        };
+        if let Some(jobs) = &self.jobs {
+            jobs.epoch
+                .store(self.browser.search_epoch, Ordering::Release);
+        }
+        if !self.browser.loading || self.browser.awaiting_prefetch() {
+            return;
+        }
         let Some(key) = self.key.clone().filter(|key| !key.trim().is_empty()) else {
             self.browser
                 .accept(generation, Err(SourceLookupError::MissingApiKey));
@@ -247,13 +403,14 @@ impl DiscoverView {
                 }
             }
         }
-        if self
-            .jobs
-            .as_ref()
-            .unwrap()
+        let jobs = self.jobs.as_ref().unwrap();
+        jobs.epoch
+            .store(self.browser.search_epoch, Ordering::Release);
+        if jobs
             .sender
             .send(Request {
                 generation,
+                epoch: self.browser.search_epoch,
                 query,
                 key,
                 load_filters: self.categories.is_empty()
@@ -278,7 +435,30 @@ impl DiscoverView {
                 game_version: self.game_version.clone(),
                 index: 0,
             },
+            Submission::Refresh,
         );
+    }
+    fn preload(&mut self) {
+        let (Some(jobs), Some(key)) = (&self.jobs, &self.key) else {
+            return;
+        };
+        let Some((epoch, query)) = self.browser.take_prefetch() else {
+            return;
+        };
+        if jobs
+            .prefetch
+            .send(Request {
+                generation: self.browser.generation,
+                epoch,
+                query: query.clone(),
+                key: key.clone(),
+                load_filters: false,
+            })
+            .is_err()
+        {
+            self.browser
+                .accept_prefetch(epoch, query, Err(SourceLookupError::Network));
+        }
     }
     pub fn show(&mut self, ui: &mut egui::Ui, key: Option<&str>, focus_search: bool) -> bool {
         self.stats = Stats::default();
@@ -300,8 +480,11 @@ impl DiscoverView {
                     Completion::Page(generation, result) => {
                         self.browser.accept(generation, result);
                     }
+                    Completion::Prefetched(epoch, query, result) => {
+                        self.browser.accept_prefetch(epoch, query, result);
+                    }
                     Completion::Versions(generation, result)
-                        if generation == self.browser.generation =>
+                        if generation == self.browser.search_epoch =>
                     {
                         match result {
                             Ok(versions) => {
@@ -312,7 +495,7 @@ impl DiscoverView {
                         }
                     }
                     Completion::Categories(generation, result)
-                        if generation == self.browser.generation =>
+                        if generation == self.browser.search_epoch =>
                     {
                         match result {
                             Ok(categories) => {
@@ -326,6 +509,7 @@ impl DiscoverView {
                 }
             }
         }
+        self.preload();
         self.previews.begin_frame(ui.ctx(), self.browser.generation);
         if focus_search {
             self.selected = None;
@@ -435,7 +619,7 @@ impl DiscoverView {
                 if self.browser.error != Some(SourceLookupError::MissingApiKey)
                     && ui.button("Try again").clicked()
                 {
-                    self.submit(ui.ctx(), self.browser.active.clone());
+                    self.submit(ui.ctx(), self.browser.active.clone(), Submission::Navigate);
                 }
             });
             return settings_requested;
@@ -483,7 +667,7 @@ impl DiscoverView {
             );
             self.stats.previous = Some(previous.rect);
             if previous.clicked() {
-                self.submit(ui.ctx(), self.browser.previous_query().unwrap());
+                self.submit(ui.ctx(), self.browser.previous_query().unwrap(), Submission::Navigate);
             }
             let next = ui.add_enabled(
                 self.browser.next_query().is_some(),
@@ -491,12 +675,15 @@ impl DiscoverView {
             );
             self.stats.next = Some(next.rect);
             if next.clicked() {
-                self.submit(ui.ctx(), self.browser.next_query().unwrap());
+                self.submit(ui.ctx(), self.browser.next_query().unwrap(), Submission::Navigate);
             }
         });
         if self.browser.loading {
             return false;
         }
+        let Some(page) = self.browser.page.clone() else { return false; };
+        self.previews.begin_frame(ui.ctx(), self.browser.generation);
+        self.preload();
         ui.add_space(12.0);
         if page.projects.is_empty() {
             ui.add_space(24.0);
@@ -1114,4 +1301,177 @@ fn bounded_label(ui: &mut egui::Ui, text: &str, size: f32, rows: usize) {
     job.wrap.max_rows = rows;
     let galley = ui.fonts_mut(|fonts| fonts.layout_job(job));
     ui.add(egui::Label::new(galley)).on_hover_text(text);
+}
+
+#[cfg(test)]
+mod preload_tests {
+    use super::*;
+    use std::{
+        sync::{Condvar, Mutex},
+        time::{Duration, Instant},
+    };
+    use ts4_mod_manager_core::curseforge_client::{CurseForgeRequest, CurseForgeTransport};
+    struct Provider {
+        indices: Arc<Mutex<Vec<u32>>>,
+        gate: Option<Arc<(Mutex<bool>, Condvar)>>,
+        started: Option<mpsc::Sender<()>>,
+    }
+    impl CurseForgeTransport for Provider {
+        fn get(&self, request: &CurseForgeRequest) -> Result<(u16, String), SourceLookupError> {
+            let url = url::Url::parse(&request.url).unwrap();
+            if !url.path().ends_with("/mods/search") {
+                return Ok((200, r#"{"data":[]}"#.into()));
+            }
+            let index = url
+                .query_pairs()
+                .find(|(k, _)| k == "index")
+                .unwrap()
+                .1
+                .parse::<u32>()
+                .unwrap();
+            self.indices.lock().unwrap().push(index);
+            if index == 24
+                && let Some(gate) = &self.gate
+            {
+                self.started.as_ref().unwrap().send(()).unwrap();
+                let (lock, signal) = &**gate;
+                let (_guard, timeout) = signal
+                    .wait_timeout_while(lock.lock().unwrap(), Duration::from_secs(2), |open| !*open)
+                    .unwrap();
+                if timeout.timed_out() {
+                    return Err(SourceLookupError::Network);
+                }
+            }
+            Ok((200,serde_json::json!({"data":[{"id":index+1,"gameId":78062,"name":format!("Page {index} project")}],"pagination":{"index":index,"pageSize":24,"resultCount":24,"totalCount":72}}).to_string()))
+        }
+    }
+    #[test]
+    fn blocked_prefetch_does_not_delay_a_new_foreground_search() {
+        let (started, receiver) = mpsc::channel();
+        let gate = Arc::new((Mutex::new(false), Condvar::new()));
+        let worker_gate = gate.clone();
+        let indices = Arc::new(Mutex::new(vec![]));
+        let jobs = Jobs::with_client(egui::Context::default(), move |key| {
+            CurseForgeClient::new(
+                Some(key),
+                Provider {
+                    indices: indices.clone(),
+                    gate: Some(worker_gate.clone()),
+                    started: Some(started.clone()),
+                },
+            )
+        })
+        .unwrap();
+        jobs.epoch.store(1, Ordering::Release);
+        jobs.prefetch
+            .send(Request {
+                generation: 1,
+                epoch: 1,
+                query: BrowseQuery {
+                    index: 24,
+                    ..Default::default()
+                },
+                key: "synthetic".into(),
+                load_filters: false,
+            })
+            .unwrap();
+        receiver.recv_timeout(Duration::from_secs(1)).unwrap();
+        jobs.epoch.store(2, Ordering::Release);
+        jobs.sender
+            .send(Request {
+                generation: 2,
+                epoch: 2,
+                query: BrowseQuery {
+                    search: "new search".into(),
+                    ..Default::default()
+                },
+                key: "synthetic".into(),
+                load_filters: false,
+            })
+            .unwrap();
+        let completion = jobs.receiver.recv_timeout(Duration::from_secs(1)).unwrap();
+        *gate.0.lock().unwrap() = true;
+        gate.1.notify_all();
+        assert!(matches!(completion, Completion::Page(2, Ok(_))));
+    }
+    fn frame(
+        ctx: &egui::Context,
+        view: &mut DiscoverView,
+        events: Vec<egui::Event>,
+    ) -> egui::FullOutput {
+        let mut output = ctx.run_ui(
+            egui::RawInput {
+                screen_rect: Some(egui::Rect::from_min_size(
+                    egui::Pos2::ZERO,
+                    vec2(1200.0, 800.0),
+                )),
+                events,
+                ..Default::default()
+            },
+            |ui| {
+                view.show(ui, Some("synthetic"), false);
+            },
+        );
+        output.textures_delta.clear();
+        output
+    }
+    #[test]
+    fn next_click_renders_cached_cards_and_fetches_only_one_page_ahead() {
+        let ctx = egui::Context::default();
+        crate::ui::setup(&ctx);
+        let indices = Arc::new(Mutex::new(vec![]));
+        let requests = indices.clone();
+        let jobs = Jobs::with_client(ctx.clone(), move |key| {
+            CurseForgeClient::new(
+                Some(key),
+                Provider {
+                    indices: requests.clone(),
+                    gate: None,
+                    started: None,
+                },
+            )
+        })
+        .unwrap();
+        let mut view = DiscoverView {
+            jobs: Some(jobs),
+            ..Default::default()
+        };
+        let deadline = Instant::now() + Duration::from_secs(3);
+        while !view.browser.cache.iter().any(|(q, _)| q.index == 24) {
+            frame(&ctx, &mut view, vec![]);
+            assert!(Instant::now() < deadline);
+            std::thread::sleep(Duration::from_millis(5));
+        }
+        assert_eq!(*indices.lock().unwrap(), vec![0, 24]);
+        let pos = view.stats.next.unwrap().center();
+        let output = frame(
+            &ctx,
+            &mut view,
+            vec![
+                egui::Event::PointerMoved(pos),
+                egui::Event::PointerButton {
+                    pos,
+                    button: egui::PointerButton::Primary,
+                    pressed: true,
+                    modifiers: Default::default(),
+                },
+                egui::Event::PointerButton {
+                    pos,
+                    button: egui::PointerButton::Primary,
+                    pressed: false,
+                    modifiers: Default::default(),
+                },
+            ],
+        );
+        assert_eq!(view.browser.active.index, 24);
+        assert!(!view.browser.loading);
+        assert_eq!(view.stats.skeleton_cards, 0);
+        assert!(output.shapes.iter().any(|s|matches!(&s.shape,egui::epaint::Shape::Text(t) if t.galley.text().contains("Page 24 project"))));
+        while !view.browser.cache.iter().any(|(q, _)| q.index == 48) {
+            frame(&ctx, &mut view, vec![]);
+            assert!(Instant::now() < deadline);
+            std::thread::sleep(Duration::from_millis(5));
+        }
+        assert_eq!(*indices.lock().unwrap(), vec![0, 24, 48]);
+    }
 }
