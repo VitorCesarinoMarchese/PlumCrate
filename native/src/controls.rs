@@ -253,7 +253,7 @@ impl Controls {
         }
         self.confirm(catalog, Action::RecordRelease { report: Box::new(report.clone()), release: release.clone(), token: self.updates.token() }, "Confirm installed release", lines);
     }
-    pub fn prepare_browser_import(&mut self, ctx: &egui::Context, catalog: &Catalog, project_id: u64) {
+    pub fn prepare_browser_import(&mut self, ctx: &egui::Context, catalog: &Catalog, request: crate::project_details::ReviewRequest) {
         if self.browser_import.running() { self.notice = Some("Finish or cancel the current browser download first.".into()); return; }
         let Some(root) = catalog.root.clone().filter(|_| !catalog.loading && !self.busy()) else {
             self.notice = Some("Choose a Sims 4 game folder before downloading a mod.".into()); return;
@@ -261,7 +261,14 @@ impl Controls {
         let Some(key) = self.source_api_key().map(str::to_owned) else {
             self.settings_page = true; self.notice = Some("Save your CurseForge API key before choosing a release.".into()); return;
         };
-        self.browser_import.prepare(ctx, root, &key, project_id);
+        match request {
+            crate::project_details::ReviewRequest::ProjectId(project_id) => self.browser_import.prepare(ctx, root, &key, project_id),
+            crate::project_details::ReviewRequest::Loaded {project,file_id} => {
+                if !project.releases.iter().any(|r|r.release.file_id==file_id) {self.notice=Some("Choose a verified release before downloading.".into());return;}
+                self.browser_import.prepare_loaded(root,&key,project);
+                self.browser_import.chosen=Some(file_id);
+            },
+        }
     }
     fn browser_import_review(&mut self, ctx: &egui::Context, catalog: &Catalog) {
         use crate::browser_import::Phase;
@@ -275,7 +282,10 @@ impl Controls {
                 .scroll_bar_visibility(egui::scroll_area::ScrollBarVisibility::AlwaysVisible)
                 .show(ui, |ui| {
                 if self.browser_import.phase == Phase::Loading {
-                    ui.horizontal(|ui| { ui.spinner(); ui.label("Loading verified releases from CurseForge…"); });
+                    ui.label("Loading verified releases from CurseForge…");
+                    ui.add_space(12.0);
+                    crate::skeleton::paragraphs(ui);
+                    crate::skeleton::block(ui,egui::vec2(ui.available_width(),32.0));
                 } else if let Some(project) = &self.browser_import.project {
                     ui.label("Download in your browser. The app will verify the file, save this source, and install it in the selected game automatically.");
                     ui.add_space(8.0);
@@ -296,9 +306,19 @@ impl Controls {
                     self.browser_release_rect = Some(combo.response.rect);
                     if project.releases.is_empty() { ui.label("Automatic installation needs a public ZIP, package, or ts4script release with a published file size and checksum. Use the project page and local import controls for other files."); }
                     if !project.complete { ui.label("Only part of the release history is shown."); }
+                    let selected = self.browser_import.chosen.and_then(|id| project.releases.iter().find(|r| r.release.file_id == id));
                     if let Some(file) = selected {
                         ui.label(format!("{} bytes · {}", file.length, file.release.published_at.format("%Y-%m-%d")));
                         if !file.release.game_versions.is_empty() { ui.label(format!("Game versions: {}", file.release.game_versions.join(", "))); }
+                        ui.add_space(8.0);
+                        ui.label("Dependencies declared for this selected file");
+                        match file.dependencies.completeness {
+                            ts4_mod_manager_core::browser_import::DependencyCompleteness::Unknown=>{ui.label("Dependency information is unavailable. Check the author's description before starting.");},
+                            ts4_mod_manager_core::browser_import::DependencyCompleteness::Partial=>{ui.label("Dependency information is incomplete. Check the author's description before starting.");},
+                            _=>{},
+                        }
+                        for relation in &file.dependencies.relations {ui.label(format!("{} · CurseForge project #{}",relation.kind.label(),relation.project_id));}
+                        if file.dependencies.completeness==ts4_mod_manager_core::browser_import::DependencyCompleteness::Complete && file.dependencies.relations.is_empty() {ui.label("No dependencies declared for this file.");}
                     }
                     ui.add_space(12.0);
                     ui.label("Browser Downloads folder");
@@ -1747,6 +1767,8 @@ mod tests {
         controls.dialog = Some(Dialog::Rename(identity, "Draft name".into()));
         let ctx = egui::Context::default();
         ctx.enable_accesskit();
+        let mut sizing = ctx.run_ui(egui::RawInput::default(), |ui| controls.show_dialogs(ui.ctx(), &catalog));
+        sizing.textures_delta.clear();
         let mut output = ctx.run_ui(egui::RawInput::default(), |ui| controls.show_dialogs(ui.ctx(), &catalog));
         output.textures_delta.clear();
         let tree = output.platform_output.accesskit_update.unwrap();

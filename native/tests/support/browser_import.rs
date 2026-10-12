@@ -26,6 +26,9 @@ pub struct Fixture {
     pub project: BrowserProject,
 }
 pub fn fixture() -> Fixture {
+    fixture_with_wake(|| {})
+}
+pub fn fixture_with_wake(wake: impl Fn() + Send + Sync + 'static) -> Fixture {
     let directory = tempfile::tempdir().unwrap();
     let root = directory.path().join("game");
     std::fs::create_dir_all(root.join("Mods")).unwrap();
@@ -41,7 +44,7 @@ pub fn fixture() -> Fixture {
             curseforge_api_key: Some(KEY.into()),
             ..Default::default()
         },
-        || {},
+        wake,
     )
     .unwrap();
     let deadline = std::time::Instant::now() + std::time::Duration::from_secs(3);

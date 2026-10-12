@@ -220,6 +220,7 @@ pub struct RenderStats {
     pub library_tab: Option<egui::Rect>,
     pub theme_button: Option<egui::Rect>,
     pub rows: usize,
+    pub skeleton_cards: usize,
     pub files: usize,
     pub search: Option<egui::Rect>,
     pub first_row: Option<egui::Rect>,
@@ -532,7 +533,7 @@ impl View {
                 if self.browse_page {
                     let key = controls.as_ref().and_then(|c| c.source_api_key());
                     let settings_requested = self.discovery.show(ui, key, search_requested);
-                    if let Some(project_id) = self.discovery.take_import_request() && let Some(c) = controls.as_deref_mut() { c.prepare_browser_import(ui.ctx(), catalog, project_id); }
+                    if let Some(c) = controls.as_deref_mut() && let Some(request) = self.discovery.take_import_request() { c.prepare_browser_import(ui.ctx(), catalog, request); }
                     if settings_requested && let Some(c) = controls.as_deref_mut() { c.settings_page = true; }
                     return;
                 }
@@ -609,6 +610,10 @@ impl View {
                         ("No mods found", "This folder has no package or script mods. Managed mods also appear here when stored locally.")
                     };
                     ui.heading(title); ui.label(message);
+                    if catalog.loading {
+                        ui.add_space(16.0);
+                        self.stats.skeleton_cards = crate::skeleton::cards(ui);
+                    }
                     return;
                 }
                 match self.layout {

@@ -6,6 +6,10 @@ use ts4_mod_manager_core::{
     },
     curseforge_client::{CurseForgeClient, SourceLookupError, UreqCurseForgeTransport},
 };
+use crate::project_details::{Details, Load, ReviewRequest};
+use ts4_mod_manager_core::{browser_import::DependencyCompleteness, curseforge_details::BlockKind};
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum DetailSection { Description, Dependencies }
 
 #[derive(Default)]
 pub struct Browser {
@@ -172,8 +176,10 @@ pub struct DiscoverView {
     pub categories: Vec<Category>,
     pub game_versions: Vec<String>,
     pub selected: Option<BrowseProject>,
+    pub details: Details,
+    detail_jump: Option<DetailSection>,
     pub stats: Stats,
-    import_request: Option<u64>,
+    import_request: Option<ReviewRequest>,
     jobs: Option<Jobs>,
     key: Option<String>,
     category_error: Option<SourceLookupError>,
@@ -191,10 +197,18 @@ pub struct Stats {
     pub card_actions: Vec<egui::Rect>,
     pub back: Option<egui::Rect>,
     pub browser_import: Option<egui::Rect>,
+    pub dependency_reviews: Vec<(u64, egui::Rect)>,
+    pub release: Option<egui::Rect>,
+    pub description_jump: Option<egui::Rect>,
+    pub dependencies_jump: Option<egui::Rect>,
+    pub detail_scroll: Option<(egui::Id,egui::Rect)>,
+    pub description_heading: Option<egui::Rect>,
+    pub dependencies_heading: Option<egui::Rect>,
     pub next: Option<egui::Rect>,
     pub previous: Option<egui::Rect>,
     pub settings: Option<egui::Rect>,
     pub cards: usize,
+    pub skeleton_cards: usize,
     pub browse_by: Option<egui::Rect>,
     pub category: Option<egui::Rect>,
     pub game_version: Option<egui::Rect>,
@@ -207,7 +221,7 @@ pub struct Stats {
     pub category_control_id: Option<egui::Id>,
 }
 impl DiscoverView {
-    pub fn take_import_request(&mut self) -> Option<u64> { self.import_request.take() }
+    pub fn take_import_request(&mut self) -> Option<ReviewRequest> { self.import_request.take() }
     pub fn with_cache(directory: std::path::PathBuf) -> Self {
         Self {
             previews: crate::preview::Previews::with_cache(directory),
@@ -216,6 +230,7 @@ impl DiscoverView {
     }
     fn submit(&mut self, ctx: &egui::Context, query: BrowseQuery) {
         self.selected = None;
+        self.details.clear();
         let generation = self.browser.begin(query.clone());
         let Some(key) = self.key.clone().filter(|key| !key.trim().is_empty()) else {
             self.browser
@@ -315,12 +330,14 @@ impl DiscoverView {
         if focus_search {
             self.selected = None;
         }
+        self.details.sync(ui.ctx(), self.selected.as_ref(), self.key.as_deref());
         if self.selected.is_some() {
             if ui.memory(|memory| memory.is_above_modal_layer(ui.layer_id()))
                 && !egui::Popup::is_any_open(ui.ctx())
                 && ui.input_mut(|input| input.consume_key(egui::Modifiers::NONE, egui::Key::Escape))
             {
                 self.selected = None;
+                self.details.clear();
             } else {
                 self.details(ui);
                 return false;
@@ -424,10 +441,9 @@ impl DiscoverView {
             return settings_requested;
         }
         if self.browser.loading {
-            ui.horizontal(|ui| {
-                ui.spinner();
-                ui.label("Searching CurseForge...");
-            });
+            ui.label("Searching CurseForge...");
+            ui.add_space(12.0);
+            self.stats.skeleton_cards = crate::skeleton::cards(ui);
             return false;
         }
         if let Some(error) = &self.category_error {
@@ -809,31 +825,35 @@ impl DiscoverView {
                 );
             }
             crate::preview::State::Pending => {
-                ui.allocate_ui(size, |ui| {
-                    ui.centered_and_justified(|ui| {
-                        ui.spinner();
-                    });
-                });
+                crate::skeleton::block(ui, size);
             }
             crate::preview::State::Missing => {}
         }
     }
     fn details(&mut self, ui: &mut egui::Ui) {
         let project = self.selected.as_ref().unwrap().clone();
-        let back = ui.add(egui::Button::image_and_text(
-            crate::ui::Icon::Back.image(ui.visuals().text_color(), 16.0),
-            "Back to results",
-        ));
+        let back = ui.horizontal_wrapped(|ui| {
+            let back=ui.add(egui::Button::image_and_text(crate::ui::Icon::Back.image(ui.visuals().text_color(),16.0),"Back to results"));
+            let description=ui.button("Description");
+            self.stats.description_jump=Some(description.rect);
+            if description.clicked() {self.detail_jump=Some(DetailSection::Description);}
+            let dependencies=ui.button("Dependencies");
+            self.stats.dependencies_jump=Some(dependencies.rect);
+            if dependencies.clicked() {self.detail_jump=Some(DetailSection::Dependencies);}
+            back
+        }).inner;
         self.stats.back = Some(back.rect);
         if back.clicked() {
             self.selected = None;
+            self.details.clear();
             return;
         }
         ui.add_space(16.0);
-        egui::ScrollArea::vertical()
+        let scroll=egui::ScrollArea::vertical()
             .id_salt(("curseforge-project", project.id))
             .auto_shrink([false, false])
             .show(ui, |ui| {
+                ui.set_max_width(ui.available_width().min(1160.0));
                 ui.horizontal_top(|ui| {
                     self.photo(ui, project.preview_url.as_deref(), vec2(80.0, 80.0));
                     ui.vertical(|ui| {
@@ -853,28 +873,46 @@ impl DiscoverView {
                 });
                 ui.add_space(16.0);
                 ui.label(&project.summary);
-                ui.add_space(12.0);
-                ui.horizontal_wrapped(|ui| {
-                    for category in &project.categories {
-                        ui.label(
-                            RichText::new(&category.name).color(ui.visuals().weak_text_color()),
-                        );
-                    }
-                });
+                if !project.categories.is_empty() {
+                    ui.add_space(12.0);
+                    ui.horizontal_wrapped(|ui| {
+                        for category in &project.categories {
+                            ui.label(RichText::new(&category.name).color(ui.visuals().weak_text_color()));
+                        }
+                    });
+                }
                 ui.add_space(16.0);
                 if let Some(url) = project.source_url.as_deref().filter(|url| safe_url(url)) {
-                    ui.horizontal(|ui| {
+                    ui.horizontal_wrapped(|ui| {
                         if ui.button("Open on CurseForge").clicked() {
                             ui.ctx().open_url(egui::OpenUrl::new_tab(url));
                         }
                         if ui.button("Copy link").clicked() {
                             ui.ctx().copy_text(url.into());
                         }
-                        let download = ui.button("Download via website…");
+                        let download = ui.add_enabled(!matches!(self.details.project,Load::Loading),egui::Button::new("Download via website…"));
                         self.stats.browser_import = Some(download.rect);
-                        if download.clicked() { self.import_request = Some(project.id); }
+                        if download.clicked() {
+                            self.import_request = Some(match &self.details.project {
+                                Load::Ready(loaded) if self.details.chosen.is_some() => ReviewRequest::Loaded {project:loaded.clone(),file_id:self.details.chosen.unwrap()},
+                                _=>ReviewRequest::ProjectId(project.id),
+                            });
+                        }
 
                     });
+                }
+                ui.add_space(24.0);
+                if ui.available_width() >= 920.0 {
+                    ui.horizontal_top(|ui| {
+                        ui.spacing_mut().item_spacing.x=24.0;
+                        let width=(ui.available_width()-340.0-24.0).min(720.0);
+                        ui.allocate_ui_with_layout(vec2(width,0.0),egui::Layout::top_down(egui::Align::Min),|ui| {ui.set_min_width(width);self.description_section(ui,&project);});
+                        ui.allocate_ui_with_layout(vec2(340.0,0.0),egui::Layout::top_down(egui::Align::Min),|ui| {ui.set_min_width(340.0);self.dependency_section(ui,&project);});
+                    });
+                } else {
+                    self.description_section(ui,&project);
+                    ui.add_space(24.0);
+                    self.dependency_section(ui,&project);
                 }
                 ui.add_space(24.0);
                 if !project.screenshots.is_empty() {
@@ -886,6 +924,152 @@ impl DiscoverView {
                     ui.add_space(12.0);
                 }
             });
+        self.stats.detail_scroll=Some((scroll.id,scroll.inner_rect));
+    }
+    fn description_section(&mut self, ui:&mut egui::Ui, project:&BrowseProject) {
+        let heading=ui.label(RichText::new("Description").size(18.0).strong());
+        self.stats.description_heading=Some(heading.rect);
+        if self.detail_jump==Some(DetailSection::Description) {heading.scroll_to_me_animation(Some(egui::Align::Min),egui::style::ScrollAnimation::none());self.detail_jump=None;}
+        ui.add_space(12.0);
+        match &self.details.description {
+            Load::Loading | Load::Idle => {
+                ui.label("Loading project description...");
+                ui.add_space(12.0);
+                crate::skeleton::paragraphs(ui);
+                ui.add_space(16.0);
+                crate::skeleton::paragraphs(ui);
+            },
+            Load::Failed(error) => {
+                ui.label(error);
+                if ui.button("Retry description").clicked() { self.details.retry_description(ui.ctx(),project,self.key.as_deref()); }
+            },
+            Load::Ready(document) => {
+                if document.blocks.is_empty() { ui.label("The author has not provided a description."); }
+                for (index,block) in document.blocks.iter().enumerate() {
+                    match block.kind {
+                        BlockKind::Heading(level) => {
+                            if index>0 {ui.add_space(12.0);}
+                            ui.label(RichText::new(&block.text).size(if level <= 2 {20.0} else {17.0}).strong());
+                        },
+                        BlockKind::Rule => { ui.separator(); },
+                        BlockKind::Image => {
+                            if let Some(url)=&block.image {
+                                match self.previews.load(ui.ctx(),Some(url.as_str()),None) {
+                                    crate::preview::State::Ready(texture) => { ui.add(egui::Image::from_texture(texture).max_size(vec2(ui.available_width(),420.0)).corner_radius(6)); },
+                                    crate::preview::State::Pending => crate::skeleton::block(ui,vec2(ui.available_width(),180.0)),
+                                    crate::preview::State::Missing => {},
+                                }
+                            }
+                            if !block.text.is_empty() { ui.label(RichText::new(&block.text).size(12.0).color(ui.visuals().weak_text_color())); }
+                        },
+                        _ => {
+                            let mut text=RichText::new(&block.text).size(14.0);
+                            if block.kind==BlockKind::Preformatted { text=text.monospace(); }
+                            if block.kind==BlockKind::Quote { text=text.italics(); }
+                            ui.add(egui::Label::new(text).wrap().selectable(true));
+                        },
+                    }
+                    for link in &block.links { ui.hyperlink_to(&link.label,link.url.as_str()); }
+                    ui.add_space(6.0);
+                }
+            },
+        }
+    }
+    fn dependency_section(&mut self, ui:&mut egui::Ui, summary:&BrowseProject) {
+        let mut retry_references=false;
+        let heading=ui.label(RichText::new("Dependencies for this release").size(18.0).strong());
+        self.stats.dependencies_heading=Some(heading.rect);
+        if self.detail_jump==Some(DetailSection::Dependencies) {heading.scroll_to_me_animation(Some(egui::Align::Min),egui::style::ScrollAnimation::none());self.detail_jump=None;}
+        ui.add_space(12.0);
+        match &self.details.project {
+            Load::Idle | Load::Loading => {
+                ui.label("Loading releases and dependencies...");
+                ui.add_space(12.0);
+                crate::skeleton::block(ui,vec2(ui.available_width(),32.0));
+                ui.add_space(16.0);
+                crate::skeleton::paragraphs(ui);
+            },
+            Load::Failed(error) => {
+                ui.label(error);
+                if ui.button("Retry releases").clicked() { self.details.retry_project(ui.ctx(),summary,self.key.as_deref()); }
+            },
+            Load::Ready(project) => {
+                let response=egui::ComboBox::from_id_salt("project-detail-release")
+                    .width(ui.available_width()).wrap_mode(egui::TextWrapMode::Truncate)
+                    .selected_text(project.releases.iter().find(|r|Some(r.release.file_id)==self.details.chosen).map(|r|r.release.name.as_str()).unwrap_or("No verified releases"))
+                    .show_ui(ui,|ui| {
+                        for release in &project.releases {
+                            ui.selectable_value(&mut self.details.chosen,Some(release.release.file_id),format!("{} · {}",release.release.name,release.release.published_at.format("%Y-%m-%d")));
+                        }
+                    });
+                self.stats.release=Some(response.response.rect);
+                if let Some(file)=project.releases.iter().find(|r|Some(r.release.file_id)==self.details.chosen) {
+                    ui.add_space(8.0);
+                    ui.add(egui::Label::new(RichText::new(&file.release.file_name).size(12.0).color(ui.visuals().weak_text_color())).wrap());
+                    match file.dependencies.completeness {
+                        DependencyCompleteness::Unknown => { ui.label("Dependency information is unavailable for this release. Check the author's description."); },
+                        DependencyCompleteness::Partial => { ui.label(RichText::new("Some dependency information could not be read. This list may be incomplete.").strong()); },
+                        DependencyCompleteness::Complete if file.dependencies.relations.is_empty() => { ui.label("No dependencies declared for this release. Check the author's description for additional requirements."); },
+                        _ => {},
+                    }
+                    ui.add_space(8.0);
+                    for relation in &file.dependencies.relations {
+                        ui.separator();
+                        ui.label(RichText::new(relation.kind.label()).size(12.0).color(if relation.kind==ts4_mod_manager_core::browser_import::RelationKind::Incompatible {ui.visuals().text_color()} else {ui.visuals().weak_text_color()}));
+                        match self.details.references.get(&relation.project_id) {
+                            Some(Load::Ready(reference)) => {
+                                ui.add(egui::Label::new(RichText::new(&reference.title).strong()).wrap());
+                                ui.horizontal_wrapped(|ui| {
+                                    ui.hyperlink_to("Open project",reference.source_url.as_str());
+                                    if relation.kind.can_install() {
+                                        let review=ui.button("Review download…");
+                                        self.stats.dependency_reviews.push((relation.project_id,review.rect));
+                                        if review.clicked() { self.import_request=Some(ReviewRequest::ProjectId(reference.project_id)); }
+                                    }
+                                });
+                            },
+                            Some(Load::Failed(error)) => { ui.label(format!("CurseForge project #{}",relation.project_id)); ui.label(error); },
+                            _ => { ui.label(format!("CurseForge project #{}",relation.project_id)); crate::skeleton::block(ui,vec2(ui.available_width()*0.8,14.0)); },
+                        }
+                        if !relation.kind.can_install() {
+                            ui.label(match relation.kind {
+                                ts4_mod_manager_core::browser_import::RelationKind::Incompatible=>"Do not install this together with the selected release.",
+                                ts4_mod_manager_core::browser_import::RelationKind::Embedded=>"The provider lists this as an embedded library. No separate install is needed.",
+                                _=>"Check the author's instructions for this relationship before installing separately.",
+                            });
+                        }
+                        ui.add_space(8.0);
+                    }
+                    if !file.dependencies.relations.is_empty() {
+                        ui.label(RichText::new("Review each dependency separately. CurseForge identifies projects, but does not guarantee a compatible version.").size(12.0).color(ui.visuals().weak_text_color()));
+                    }
+                    retry_references=self.details.references.values().any(|r|matches!(r,Load::Failed(_))) && ui.button("Retry dependency lookups").clicked();
+                } else { ui.label("No public release supports verified automatic installation. Check the description and project page."); }
+                if !project.complete { ui.label("Only part of the release history is available."); }
+            },
+        }
+        if retry_references {self.details.retry_references();}
+        let links=match &self.details.description {Load::Ready(document)=>document.author_projects(),_=>vec![]};
+        if !links.is_empty() {
+            ui.add_space(24.0);
+            ui.label(RichText::new("Author-linked mods").size(18.0).strong());
+            ui.label("These links come from the description. They are not declared dependencies.");
+            for link in links {
+                ui.add_space(12.0);
+                ui.hyperlink_to(&link.label,link.url.as_str());
+                match self.details.author_projects.get(&link.url) {
+                    Some(Load::Ready(reference)) => {
+                        ui.label(&reference.title);
+                        if ui.button("Review linked mod…").clicked() {self.import_request=Some(ReviewRequest::ProjectId(reference.project_id));}
+                    },
+                    Some(Load::Loading) => {ui.label("Checking the exact CurseForge project...");crate::skeleton::block(ui,vec2(ui.available_width()*0.8,14.0));},
+                    state => {
+                        if let Some(Load::Failed(error))=state {ui.label(error);}
+                        if ui.button("Inspect linked mod").clicked() {self.details.inspect_author(ui.ctx(),link.url.clone(),self.key.as_deref());}
+                    },
+                }
+            }
+        }
     }
 }
 fn safe_url(value: &str) -> bool {

@@ -18,3 +18,8 @@ pub mod discovery;
 pub mod updates;
 
 pub mod browser_import;
+
+pub mod desktop_links;
+
+mod skeleton;
+pub mod project_details;

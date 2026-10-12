@@ -231,6 +231,7 @@ impl eframe::App for NativeApp {
             self.scan(root);
         }
         self.controls.show_dialogs(ui.ctx(), &self.catalog);
+        ts4_mod_manager_native::desktop_links::dispatch_pending(ui.ctx());
         let Some(path) = self.screenshot.as_ref() else {
             return;
         };

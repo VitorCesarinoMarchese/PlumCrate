@@ -47,6 +47,43 @@ fn text(output: &egui::FullOutput, value: &str) -> bool {
     )
 }
 
+#[test]
+fn pending_search_reserves_cards_without_exposing_download_actions() {
+    for size in [[1200.0, 800.0], [640.0, 480.0]] {
+        let ctx = egui::Context::default();
+        ui::setup(&ctx);
+        let mut view = View::default();
+        filter_fixture(&mut view);
+        view.discovery.browser.begin(BrowseQuery::default());
+        let mut catalog = Catalog::default();
+        let output = frame(&ctx, &mut view, &mut catalog, size, vec![]);
+        assert!(text(&output, "Searching CurseForge"));
+        assert!(view.discovery.stats.skeleton_cards > 0);
+        assert!(view.discovery.stats.card_actions.is_empty());
+        assert!(view.discovery.stats.browser_import.is_none());
+        assert!(view.discovery.selected.is_none());
+        let cards=output.shapes.iter().filter_map(|shape|match &shape.shape {
+            egui::epaint::Shape::Rect(rect) if rect.rect.height()>250.0 && rect.rect.height()<300.0 && rect.stroke.width>0.0 && rect.fill==ctx.style_of(ctx.theme()).visuals.extreme_bg_color=>Some(rect.rect),
+            _=>None,
+        }).collect::<Vec<_>>();
+        assert!(!cards.is_empty());
+        for rect in cards {assert!(rect.left()>=24.0 && rect.right()<=size[0]-23.0,"placeholder card overflow: {rect:?}");}
+    }
+}
+
+#[test]
+fn initial_catalog_scan_reserves_library_cards() {
+    let ctx = egui::Context::default();
+    ui::setup(&ctx);
+    let mut view = View::default();
+    let mut catalog = Catalog::default();
+    catalog.begin_scan(std::path::PathBuf::from("/synthetic/game"));
+    let output = frame(&ctx, &mut view, &mut catalog, [1200.0, 800.0], vec![]);
+    assert!(text(&output, "Reading your catalog"));
+    assert!(view.stats.skeleton_cards > 0);
+    assert_eq!(view.stats.rows, 0);
+}
+
 fn filter_fixture(view: &mut View) {
     view.browse_page = true;
     view.discovery.categories = ts4_mod_manager_core::curseforge_browse::parse_categories_response(

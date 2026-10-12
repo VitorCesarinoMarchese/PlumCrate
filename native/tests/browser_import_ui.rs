@@ -52,6 +52,8 @@ fn browsing_offers_browser_import_and_requires_a_selected_game() {
 
 #[path = "support/browser_import.rs"]
 mod support;
+#[allow(dead_code)]
+#[path="support/project_details.rs"] mod details_support;
 fn click(rect: egui::Rect) -> Vec<egui::Event> {
     let pos = rect.center();
     vec![
@@ -76,6 +78,36 @@ fn frame(
     events: Vec<egui::Event>,
 ) -> egui::FullOutput {
     sized_frame(ctx, fixture, events, egui::vec2(1200.0, 800.0))
+}
+
+#[test]
+fn a_dependency_review_confirms_only_that_project_then_imports_and_enables_it() {
+    use ts4_mod_manager_core::{browser_import::load_browser_project,curseforge_client::CurseForgeClient};
+    use ts4_mod_manager_native::{browser_import::Phase,project_details::ReviewRequest};
+    let mut fixture=support::fixture();
+    fixture.controls.browser_import.cancel();
+    let ctx=egui::Context::default();ts4_mod_manager_native::ui::setup(&ctx);
+    let client=CurseForgeClient::new(Some("synthetic"),details_support::Provider).unwrap();
+    let dependency=load_browser_project(&client,9).unwrap();
+    let original=fixture.directory.path().join("Downloads/core-library.package");
+    std::fs::write(&original,support::BYTES).unwrap();
+    fixture.controls.prepare_browser_import(&ctx,&fixture.catalog,ReviewRequest::Loaded {project:dependency,file_id:200});
+    assert_eq!(fixture.controls.browser_import.phase,Phase::Review);
+    assert_eq!(fixture.controls.browser_import.chosen,Some(200));
+    for _ in 0..3 {frame(&ctx,&mut fixture,vec![]);}
+    assert!(!fixture.directory.path().join("game/Mods/core-library.package").exists());
+    let start=fixture.controls.browser_start_rect.unwrap();
+    let output=frame(&ctx,&mut fixture,click(start));
+    assert!(output.platform_output.commands.iter().any(|c|matches!(c,egui::OutputCommand::OpenUrl(url) if url.url.ends_with("/synthetic-core/files/200"))));
+    let deadline=std::time::Instant::now()+std::time::Duration::from_secs(5);
+    while fixture.controls.browser_import.phase!=Phase::Complete {
+        fixture.controls.poll(&fixture.catalog);
+        assert!(std::time::Instant::now()<deadline,"{:?}",fixture.controls.browser_import.error);
+        std::thread::sleep(std::time::Duration::from_millis(10));
+    }
+    assert_eq!(std::fs::read(&original).unwrap(),support::BYTES);
+    assert_eq!(std::fs::read(fixture.directory.path().join("game/Mods/core-library.package")).unwrap(),support::BYTES);
+    assert!(!fixture.directory.path().join("game/Mods/garden.package").exists());
 }
 fn sized_frame(ctx: &egui::Context, fixture: &mut support::Fixture, events: Vec<egui::Event>, size: egui::Vec2) -> egui::FullOutput {
     let mut output = ctx.run_ui(

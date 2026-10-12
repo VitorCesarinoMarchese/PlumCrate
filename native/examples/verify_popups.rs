@@ -3,7 +3,9 @@ use std::{
     path::PathBuf,
     time::{Duration, Instant},
 };
-use ts4_mod_manager_native::{catalog, discovery, management, preview, settings, updates, browser_import};
+use ts4_mod_manager_native::{catalog, discovery, management, preview, settings, updates, browser_import, project_details};
+#[path="../src/skeleton.rs"]
+mod skeleton;
 
 #[allow(dead_code)]
 #[path = "../src/ui.rs"]
