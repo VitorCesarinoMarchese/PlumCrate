@@ -1,12 +1,23 @@
 #!/usr/bin/env python3
 """Convert the existing Linux release bundle into an AppImage."""
 import argparse
+import hashlib
 import os
 from pathlib import Path
 import shutil
 import subprocess
 import tarfile
 import tempfile
+
+
+def write_checksum(image):
+    digest = hashlib.sha256()
+    with image.open("rb") as release:
+        for chunk in iter(lambda: release.read(1024 * 1024), b""):
+            digest.update(chunk)
+    destination = image.with_name(image.name + ".sha256")
+    destination.write_text(f"{digest.hexdigest()}  {image.name}\n")
+    return destination
 
 
 def create_appdir(bundle, appdir):
@@ -49,6 +60,7 @@ def main():
                         "--mksquashfs-opt", "-processors", "--mksquashfs-opt", "1",
                         str(appdir), str(staging / "release.AppImage")], env=env, check=True)
         shutil.copy2(staging / "release.AppImage", destination)
+        write_checksum(destination)
         print(destination)
 
 

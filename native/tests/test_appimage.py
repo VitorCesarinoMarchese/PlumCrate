@@ -1,5 +1,6 @@
 """Verify the AppImage launcher runs a relocated release bundle."""
 import importlib.util
+import hashlib
 from pathlib import Path
 import shutil
 import subprocess
@@ -14,6 +15,15 @@ spec.loader.exec_module(appimage)
 
 
 class AppImageTests(unittest.TestCase):
+    def test_publishes_checksum_for_the_exact_appimage_filename(self):
+        with tempfile.TemporaryDirectory() as directory:
+            image = Path(directory) / "ts4-mod-manager-native-0.0.1-alpha.2-x86_64.AppImage"
+            image.write_bytes(b"AppImage release fixture")
+            checksum = appimage.write_checksum(image)
+            self.assertEqual(checksum, image.with_name(image.name + ".sha256"))
+            self.assertEqual(checksum.read_text(),
+                             f"{hashlib.sha256(image.read_bytes()).hexdigest()}  {image.name}\n")
+
     def test_relocated_launcher_preserves_arguments_and_working_directory(self):
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
