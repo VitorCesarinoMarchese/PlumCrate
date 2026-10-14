@@ -342,6 +342,8 @@ mod tests {
     #[test]
     fn remote_images_and_redirects_send_no_referrer() {
         use std::io::{Read, Write};
+        let ctx = egui::Context::default();
+        crate::ui::setup(&ctx);
         let temp = tempfile::tempdir().unwrap();
         let path = temp.path().join("preview.png");
         image::RgbaImage::from_pixel(20, 30, image::Rgba([10, 100, 80, 255]))
@@ -385,8 +387,6 @@ mod tests {
             }
             requests
         });
-        let ctx = egui::Context::default();
-        crate::ui::setup(&ctx);
         let mut previews = Previews::with_cache(temp.path().join("cache"));
         assert!(matches!(
             wait_for_preview(&ctx, &mut previews, &url),
