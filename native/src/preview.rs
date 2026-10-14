@@ -34,22 +34,24 @@ impl Previews {
         if !uri.starts_with("http://") && !uri.starts_with("https://") {
             return Ok(uri.into());
         }
-        if let Some(state) = self.remote.get_mut(uri) {
+        for state in self.remote.values_mut() {
+            let Err(receiver) = state else { continue };
+            match receiver.try_recv() {
+                Ok(result) => {
+                    *state = Ok(result
+                        .ok()
+                        .and_then(|path| resolve_uri(path.to_str(), None))
+                        .unwrap_or_default());
+                }
+                Err(mpsc::TryRecvError::Disconnected) => *state = Ok(String::new()),
+                Err(mpsc::TryRecvError::Empty) => {}
+            }
+        }
+        if let Some(state) = self.remote.get(uri) {
             return match state {
                 Ok(path) if path.is_empty() => Err(State::Missing),
                 Ok(path) => Ok(path.clone()),
-                Err(receiver) => match receiver.try_recv() {
-                    Ok(Ok(path)) => {
-                        let path = resolve_uri(path.to_str(), None).ok_or(State::Missing)?;
-                        *state = Ok(path.clone());
-                        Ok(path)
-                    }
-                    Ok(Err(_)) | Err(mpsc::TryRecvError::Disconnected) => {
-                        *state = Ok(String::new());
-                        Err(State::Missing)
-                    }
-                    Err(mpsc::TryRecvError::Empty) => Err(State::Pending),
-                },
+                Err(_) => Err(State::Pending),
             };
         }
         if self.remote.values().filter(|state| state.is_err()).count() >= 4 {
@@ -171,6 +173,61 @@ mod tests {
             );
             std::thread::sleep(std::time::Duration::from_millis(5));
         }
+    }
+
+    #[test]
+    fn completed_offscreen_downloads_release_slots() {
+        let temp = tempfile::tempdir().unwrap();
+        let photo = temp.path().join("photo.png");
+        image::RgbaImage::from_pixel(20, 30, image::Rgba([10, 100, 80, 255]))
+            .save(&photo)
+            .unwrap();
+        let ctx = egui::Context::default();
+        crate::ui::setup(&ctx);
+        let mut previews = Previews::with_cache(temp.path().join("cache"));
+        previews.begin_frame(&ctx, 1);
+        let mut senders = vec![];
+        for index in 0..4 {
+            let (sender, receiver) = mpsc::channel();
+            senders.push(sender);
+            previews.remote.insert(
+                format!("https://fixture.invalid/{index}.png"),
+                Err(receiver),
+            );
+        }
+        let server = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
+        let next = format!("http://{}/next.png", server.local_addr().unwrap());
+        drop(server);
+        assert_eq!(previews.load(&ctx, Some(&next), None), State::Pending);
+        assert!(
+            !previews.remote.contains_key(&next),
+            "active downloads stay bounded"
+        );
+        senders[0].send(Ok(photo.clone())).unwrap();
+        senders[1].send(Err("broken image".into())).unwrap();
+        drop(senders);
+
+        // Scroll to a new card without drawing any of the previous four.
+        assert_eq!(previews.load(&ctx, Some(&next), None), State::Pending);
+        assert!(
+            previews.remote.contains_key(&next),
+            "finished offscreen requests must free slots"
+        );
+        assert!(matches!(
+            wait_for_preview(&ctx, &mut previews, "https://fixture.invalid/0.png"),
+            State::Ready(_)
+        ));
+        for index in 1..4 {
+            assert_eq!(
+                previews.load(
+                    &ctx,
+                    Some(&format!("https://fixture.invalid/{index}.png")),
+                    None
+                ),
+                State::Missing
+            );
+        }
+        assert_eq!(wait_for_preview(&ctx, &mut previews, &next), State::Missing);
     }
 
     #[test]
