@@ -143,8 +143,10 @@ struct Links {
     website_url: Option<String>,
 }
 #[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
 struct Photo {
     url: Option<String>,
+    thumbnail_url: Option<String>,
 }
 
 pub fn parse_browse_response(body: &str) -> Result<BrowsePage, SourceLookupError> {
@@ -172,7 +174,11 @@ pub fn parse_browse_response(body: &str) -> Result<BrowsePage, SourceLookupError
                 .map(|author| author.name)
                 .collect(),
             source_url: project.links.and_then(|links| links.website_url),
-            preview_url: project.logo.and_then(|photo| photo.url),
+            preview_url: project.logo.and_then(|photo| {
+                photo.thumbnail_url
+                    .filter(|url| !url.trim().is_empty())
+                    .or(photo.url)
+            }),
             screenshots: project
                 .screenshots
                 .into_iter()

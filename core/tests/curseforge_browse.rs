@@ -193,6 +193,37 @@ fn browse_preserves_provider_metadata_and_pagination_without_inventing_links() {
 }
 
 #[test]
+fn browse_uses_provider_thumbnails_with_original_logo_fallback() {
+    for thumbnail in [
+        serde_json::json!("https://media.forgecdn.net/thumbnail.png"),
+        serde_json::Value::Null,
+        serde_json::json!(" "),
+    ] {
+        let page = parse_browse_response(&serde_json::json!({
+            "data": [{
+                "id": 1, "gameId": 78062, "name": "Fixture project",
+                "logo": {
+                    "url": "https://media.forgecdn.net/original.png",
+                    "thumbnailUrl": thumbnail,
+                },
+                "screenshots": [{"url": "https://media.forgecdn.net/screenshot.png"}],
+            }],
+            "pagination": {"index": 0, "pageSize": 24, "resultCount": 1, "totalCount": 1},
+        }).to_string()).unwrap();
+        let expected = if thumbnail.as_str().is_some_and(|url| !url.trim().is_empty()) {
+            "https://media.forgecdn.net/thumbnail.png"
+        } else {
+            "https://media.forgecdn.net/original.png"
+        };
+        assert_eq!(page.projects[0].preview_url.as_deref(), Some(expected));
+        assert_eq!(
+            page.projects[0].screenshots,
+            ["https://media.forgecdn.net/screenshot.png"]
+        );
+    }
+}
+
+#[test]
 fn empty_and_invalid_provider_results_stay_distinct() {
     let empty = parse_browse_response(
         r#"{"data":[],"pagination":{"index":0,"pageSize":24,"resultCount":0,"totalCount":0}}"#,
