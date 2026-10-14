@@ -12,6 +12,8 @@ pub struct Options {
     pub dark: bool,
     pub help: bool,
     pub verify_workflows: bool,
+    pub version: bool,
+    pub app_update_receipt: Option<PathBuf>,
 }
 
 impl Options {
@@ -28,19 +30,23 @@ impl Options {
         let mut dark = false;
         let mut help = false;
         let mut verify_workflows = false;
+        let mut version = false;
+        let mut app_update_receipt = None;
         while let Some(arg) = args.next() {
             match arg.as_str() {
+                "--version" | "-V" => version = true,
                 "--verify-workflows" => verify_workflows = true,
                 "--settings" => settings_page = true,
                 "--inspect" => inspect = true,
                 "--dark" => dark = true,
                 "--help" | "-h" => help = true,
-                "--home" | "--root" | "--managed-root" | "--screenshot" | "--query" | "--size" => {
+                "--home" | "--root" | "--managed-root" | "--screenshot" | "--query" | "--size" | "--app-update-receipt" => {
                     let value = args
                         .next()
                         .filter(|value| !value.starts_with("--"))
                         .ok_or_else(|| format!("Missing value for {arg}"))?;
                     match arg.as_str() {
+                        "--app-update-receipt" => app_update_receipt = Some(PathBuf::from(value)),
                         "--home" => home = Some(value.into()),
                         "--root" => root = Some(PathBuf::from(value)),
                         "--managed-root" => managed = Some(PathBuf::from(value)),
@@ -67,10 +73,10 @@ impl Options {
                 _ => return Err(format!("Unknown option: {arg}. Use --help for usage.")),
             }
         }
-        if !help && (inspect || screenshot.is_some()) && root.is_none() {
+        if !help && !version && (inspect || screenshot.is_some()) && root.is_none() {
             return Err("--inspect and --screenshot require --root".into());
         }
-        let home = home.ok_or("HOME is missing. Provide --home.")?;
+        let home = if version { home.unwrap_or_default() } else { home.ok_or("HOME is missing. Provide --home.")? };
         let managed_root = managed.unwrap_or_else(|| home.join(".local/share/sims4-mod-manager"));
         Ok(Self {
             home,
@@ -84,6 +90,8 @@ impl Options {
             dark,
             help,
             verify_workflows,
+            version,
+            app_update_receipt,
         })
     }
 }
@@ -97,6 +105,10 @@ mod tests {
     #[test]
     fn opens_settings_directly_for_native_capture() {
         assert!(parse(&["--settings"]).unwrap().settings_page);
+    }
+    #[test]
+    fn accepts_version_for_appimage_update_validation() {
+        assert!(parse(&["--version"]).unwrap().version);
     }
     #[test]
     fn validates_cli_before_running_or_reading_catalog() {

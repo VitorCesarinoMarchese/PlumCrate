@@ -23,3 +23,5 @@ pub mod desktop_links;
 
 mod skeleton;
 pub mod project_details;
+
+pub mod app_update;

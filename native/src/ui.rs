@@ -294,6 +294,9 @@ impl View {
                         {
                             c.settings_page = !c.settings_page;
                         }
+                        if let Some(c) = controls.as_deref_mut() {
+                            c.app_updates.banner(ui);
+                        }
                         if ui.button("Help").on_hover_text("Tasks and keyboard shortcuts (F1)").clicked() { self.help_open = true; }
                         let dark = ui.visuals().dark_mode;
                         let icon = if dark { Icon::Sun } else { Icon::Moon };

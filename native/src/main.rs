@@ -19,6 +19,10 @@ fn main() {
 
 fn run() -> Result<(), String> {
     let options = Options::parse(std::env::args().skip(1))?;
+    if options.version {
+        println!("ts4-mod-manager-native {}", env!("CARGO_PKG_VERSION"));
+        return Ok(());
+    }
     if options.verify_workflows {
         println!("{}", ts4_mod_manager_native::workflows::verify()?);
         return Ok(());
@@ -94,6 +98,9 @@ fn run() -> Result<(), String> {
                 move || wake_ctx.request_repaint(),
             )?;
             controls.settings_page = options.settings_page;
+            if !capture_required {
+                controls.app_updates.activate();
+            }
             let mut view = View::default();
             view.discovery = ts4_mod_manager_native::discovery::DiscoverView::with_cache(options.home.join(".cache/ts4-mod-manager/photos"));
             jobs.submit(Request::Detect {
@@ -108,6 +115,8 @@ fn run() -> Result<(), String> {
                 managed_root: options.managed_root,
                 scrolling: Default::default(),
                 screenshot: options.screenshot,
+                app_update_receipt: options.app_update_receipt,
+                window_rendered: false,
                 capture_requested: false,
                 stable_frames: 0,
                 started: Instant::now(),
@@ -142,6 +151,8 @@ struct NativeApp {
     managed_root: PathBuf,
     scrolling: fastframe_scroll::Scrolling,
     screenshot: Option<PathBuf>,
+    app_update_receipt: Option<PathBuf>,
+    window_rendered: bool,
     capture_requested: bool,
     stable_frames: u8,
     started: Instant,
@@ -205,9 +216,14 @@ impl NativeApp {
 }
 
 impl eframe::App for NativeApp {
-    fn logic(&mut self, _ctx: &egui::Context, _frame: &mut eframe::Frame) {
+    fn logic(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
         self.poll();
         self.controls.poll(&self.catalog);
+        let automatic = self.controls.automatic_app_updates();
+        self.controls.app_updates.poll(ctx, automatic);
+        if std::mem::take(&mut self.controls.app_updates.restart_requested) {
+            ctx.send_viewport_cmd(egui::ViewportCommand::Close);
+        }
         if let Some(root) = self
             .controls
             .refresh
@@ -231,6 +247,20 @@ impl eframe::App for NativeApp {
             self.scan(root);
         }
         self.controls.show_dialogs(ui.ctx(), &self.catalog);
+        let restart_blocked = self.controls.busy() || self.controls.review_open()
+            || self.controls.browser_import.running() || self.controls.settings_dirty();
+        self.controls.app_updates.show_dialog(ui.ctx(), restart_blocked);
+        if self.window_rendered && let Some(receipt) = self.app_update_receipt.take() {
+            let ctx = ui.ctx().clone();
+            std::thread::Builder::new().name("app-update-started".into()).spawn(move || {
+                if let Err(error) = ts4_mod_manager_native::app_update::acknowledge(&receipt) {
+                    eprintln!("{error}");
+                    ctx.send_viewport_cmd(egui::ViewportCommand::Close);
+                }
+            }).ok();
+        }
+        self.window_rendered = true;
+        if self.app_update_receipt.is_some() { ui.ctx().request_repaint(); }
         ts4_mod_manager_native::desktop_links::dispatch_pending(ui.ctx());
         let Some(path) = self.screenshot.as_ref() else {
             return;

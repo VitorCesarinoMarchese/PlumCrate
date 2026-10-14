@@ -188,6 +188,8 @@ impl CustomTheme {
 #[derive(Clone, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct Settings {
+    #[serde(default = "checks_enabled")]
+    pub check_app_updates: bool,
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub custom_themes: Vec<CustomTheme>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -203,6 +205,7 @@ pub struct Settings {
 impl Default for Settings {
     fn default() -> Self {
         Self {
+            check_app_updates: true,
             custom_themes: vec![],
             active_custom_theme: None,
             version: 1,
@@ -213,6 +216,7 @@ impl Default for Settings {
         }
     }
 }
+fn checks_enabled() -> bool { true }
 impl Settings {
     pub fn parse(raw: &str) -> Result<Self, String> {
         if raw.len() as u64 > MAX_TRANSFER_BYTES {

@@ -3,7 +3,7 @@ use std::{
     path::PathBuf,
     time::{Duration, Instant},
 };
-use ts4_mod_manager_native::{catalog, discovery, management, preview, settings, updates, browser_import, project_details};
+use ts4_mod_manager_native::{app_update, catalog, discovery, management, preview, settings, updates, browser_import, project_details};
 #[path="../src/skeleton.rs"]
 mod skeleton;
 

@@ -38,6 +38,7 @@ struct PendingPicker {
     receiver: std::sync::mpsc::Receiver<Option<PathBuf>>,
 }
 pub struct Controls {
+    pub app_updates: crate::app_update::AppUpdates,
     pub updates: crate::updates::UpdateState,
     pub browser_import: crate::browser_import::BrowserImport,
     pub browser_start_rect: Option<egui::Rect>,
@@ -93,6 +94,7 @@ impl Controls {
             .cloned();
         let theme_edit_original = settings.active_custom_theme.clone();
         Ok(Self {
+            app_updates: crate::app_update::AppUpdates::default(),
             updates: crate::updates::UpdateState::default(),
             browser_import: crate::browser_import::BrowserImport::new(&home),
             browser_start_rect: None,
@@ -133,6 +135,7 @@ impl Controls {
         })
     }
     pub fn source_api_key(&self) -> Option<&str> { self.saved_settings.curseforge_api_key.as_deref() }
+    pub fn automatic_app_updates(&self) -> bool { self.saved_settings.check_app_updates }
     pub fn check_updates(&mut self, catalog: &Catalog, mod_ids: Vec<String>) {
         self.updates.sync(catalog, self.saved_settings.curseforge_api_key.as_deref());
         if self.updates.pending || catalog.loading || mod_ids.is_empty() { return; }
@@ -481,6 +484,10 @@ impl Controls {
         Some(identity)
     }
     fn submit(&mut self, identity: Identity, action: Action) {
+        if self.app_updates.installing() {
+            self.error = Some("Wait for the app update to finish restarting before changing mods.".into());
+            return;
+        }
         if matches!(action, Action::Lookup(_)) && self.operations.iter().any(|o|
             matches!(o.job.action, Action::Lookup(_)) && (o.status == "Queued" || o.status == "Running")) {
             self.notice = Some("A source lookup is already running. Local actions remain available.".into());
@@ -600,7 +607,8 @@ impl Controls {
         }
     }
     pub fn busy(&self) -> bool {
-        self.recovering
+        self.app_updates.installing()
+            || self.recovering
             || self
                 .operations
                 .iter()
@@ -1105,6 +1113,8 @@ impl Controls {
                 self.settings.curseforge_api_key = (!key.is_empty()).then_some(key);
             }
             ui.label(egui::RichText::new("Stored only in local settings. Source attachment always needs your confirmation.").color(ui.visuals().weak_text_color()));
+            ui.add_space(24.0); ui.separator(); ui.add_space(16.0);
+            self.app_updates.settings(ui, &mut self.settings.check_app_updates);
             ui.add_space(16.0);
             ui.add_space(24.0); ui.separator(); ui.add_space(16.0);
             ui.collapsing("Import and export settings", |ui| {

@@ -3988,6 +3988,7 @@ dependencies = [
  "fastframe-text",
  "image",
  "rfd",
+ "semver",
  "serde",
  "serde_json",
  "sha2",
