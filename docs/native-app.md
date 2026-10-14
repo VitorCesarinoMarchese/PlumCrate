@@ -166,6 +166,12 @@ The [update-check design](mod-updates.md) explains release identity, provider va
 
 ## Settings and custom themes
 
+AppImage users can check GitHub releases in **App updates**. Automatic checks run
+on startup and once a day while open; downloads and restarts need approval.
+The update notice opens a review with release notes, download progress, and
+**Restart to update**. Save the checkbox preference with **Save settings**.
+See [AppImage updates](app-updates.md) for backups and release requirements.
+
 Settings replaces the central library. Back to library returns to browsing; on wide windows, selecting a library filter also leaves Settings. The page scrolls below its title and always-visible Save settings and Discard actions. Use `--settings` to open it directly. Light, Dark, System and saved custom-theme choices apply immediately in Settings; select Save settings to persist them. The header light/dark switch saves only the appearance mode immediately. Other edits remain drafts until Save settings. Leaving the page keeps drafts; Discard restores saved preferences, including both theme palettes, while keeping any header mode change.
 
 Each custom theme has separate light and dark palettes. The header switch and the Light, Dark and System appearance choices use the matching palette. Use default colors explicitly returns to the built-in palette, retaining saved custom themes; select Save settings to persist that choice.

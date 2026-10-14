@@ -25,6 +25,7 @@ Browse your collection by photo, find a file by name, and choose which mods are 
 | Choose what loads | Review the files before enabling or disabling a managed mod. |
 | Keep track of sources | Save a source link yourself, or review CurseForge suggestions and confirm a match. |
 | Check for updates | Check attached CurseForge projects for newer public releases, then open the mod page to download manually. Record the release you installed before comparing versions. |
+| Update the AppImage | Receive app update notices from GitHub, approve a verified download, and restart with the previous AppImage preserved. |
 | Recover removed mods | Move managed mods to trash and review where they will go before restoring them. |
 | Make it yours | Choose light, dark, or system appearance, create a custom theme, and remember your game folders. |
 
@@ -51,7 +52,7 @@ See the [app guide](docs/native-app.md) for [browser-assisted installation](docs
 
 ## Your files stay yours
 
-Your library and settings stay on your computer. Local browsing and mod management work without CurseForge. Optional CurseForge browsing, browser-assisted installation, source lookup, update checks, and remote preview images use network requests.
+Your library and settings stay on your computer. Local browsing and mod management work without CurseForge. Optional CurseForge browsing, browser-assisted installation, source lookup, update checks, and remote preview images use network requests. AppImages also check GitHub releases for app updates; you can turn off automatic app checks in Settings. See [AppImage updates](docs/app-updates.md).
 
 Management actions require review. The app checks ownership before removing its links, leaves unmanaged files alone, and moves removed managed mods to recoverable trash. Read the [storage and safety details](docs/development.md#local-storage-and-safety) for locations and recovery behavior.
 

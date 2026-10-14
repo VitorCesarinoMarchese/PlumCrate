@@ -4,10 +4,12 @@
 
 - [App guide](native-app.md): library controls, game folders, themes, CurseForge browsing, source lookup, settings, and command-line options.
 - [Storage and safety](development.md#local-storage-and-safety): local file locations, source attachment, and recoverable management actions.
+- [AppImage updates](app-updates.md): automatic checks, approved downloads and restarts, backups, and release assets.
 
 ## Develop and package
 
 - [Development guide](development.md): requirements, build commands, validation, repository layout, and Linux release packaging.
+- [AppImage packaging](appimage.md): Ubuntu baseline build and runtime checks.
 - [Management safety design](native-management-design.md): ownership checks, reviewed operations, recovery, and filesystem contracts.
 - [Process-crash verification](process-crash-verification.md): twelve SIGKILL scenarios, the migration recovery regression, and test limits.
 - [Native design system](native-design.md): layout, colors, typography, and interaction behavior.

@@ -87,6 +87,10 @@ dependency licenses. It uses the host graphics drivers and X11 or Wayland
 libraries. `appimagetool` may download its AppImage runtime during packaging.
 For a fully reproducible release, pin the tool and runtime versions.
 
+Packaging also writes a `.AppImage.sha256` file beside the AppImage. Publish both
+files in a GitHub release with a tag matching `native/Cargo.toml` to offer an
+in-app update. See [AppImage updates](app-updates.md) for release requirements.
+
 Automated checks cover the Ubuntu user-space baseline and software rendering.
 Hardware graphics, portal file dialogs, Wayland integration, desktop installation,
 and FUSE mounting still need testing in a desktop session before a public release.
