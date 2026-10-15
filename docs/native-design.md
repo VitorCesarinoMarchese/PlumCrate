@@ -81,7 +81,7 @@ This guide describes the Linux Fastframe/egui app. `native/src/settings.rs::Them
 
 ### Primary
 
-Blue identifies navigation, links and the Add mods title-menu action. The rail keeps its blue fill in both built-in themes. The Add mods trigger uses the light accent with white text in both modes; its menu returns to the content theme.
+Blue identifies navigation, links and the Add mods title-menu action. The rail keeps its blue fill in both built-in themes. The built-in Add mods trigger uses the light accent with white text in both modes; its menu returns to the content theme. Active custom palettes also style the rail, its selected destination, Add mods, and mod switches. The custom surface and text colors style the rail, its selection uses the existing selection fill, and the accent styles the primary action and enabled switches. Custom action text and switch knobs use the surface color, preserving the palette's validated accent-to-surface contrast. Switching back to a built-in theme restores Plumbob colors.
 
 ### Secondary
 
@@ -129,7 +129,7 @@ Cards use the card radius, search uses the search radius, and ordinary widgets u
 - Reviews retain visible confirmation actions and scroll long paths and bodies. Cancel, Escape and backdrop dismissal approve nothing. Low-confidence source warnings remain visible. Settings retains draft handling, separate light/dark custom palettes, contrast validation, theme JSON transfer and immediate header appearance-mode persistence.
 - Preview requests omit Referer. Failed provider images hide. Mod photos come from user files or actual saved URLs, never bundled generated examples. API keys stay in local settings or ignored environment files and never enter mod metadata.
 
-Plumbob verification uses `native/verify_navigation.py` for 13 isolated navigation and theme captures, including 640 by 480 and 1200 by 480, and `verify_updates` for nine synthetic update captures. Capture runs preserve fixture inputs and approve no operations. The finish review found one duplicate inert summary Review on Updates. The final verdict scored its removal resolved after a regression click test and fresh captures. Library summaries keep Review navigation; Updates keeps per-mod Review actions. All eight required repository checks passed, including the release build and packaged workflow verification.
+Plumbob verification uses `native/verify_navigation.py` for 15 isolated navigation and theme captures, including custom-themed libraries in both modes, 640 by 480 and 1200 by 480, and `verify_updates` for nine synthetic update captures. Capture runs preserve fixture inputs and approve no operations. The finish review found one duplicate inert summary Review on Updates. The final verdict scored its removal resolved after a regression click test and fresh captures. Library summaries keep Review navigation; Updates keeps per-mod Review actions. All eight required repository checks passed, including the release build and packaged workflow verification.
 
 ## Do's and Don'ts
 

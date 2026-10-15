@@ -68,7 +68,15 @@ def main():
             subprocess.run([str(binary), *base, "--settings", *flags, "--screenshot", str(path)], check=True, timeout=60)
             assert path.read_bytes().startswith(b"\x89PNG\r\n\x1a\n")
             assert snapshot(fixture) == before, "Custom-theme captures modified their inputs"
-        print(json.dumps({"captures": len(captures) + len(theme_captures), "inputsUnchanged": True, "fixturePathsOnly": True}))
+        for mode in ["light", "dark"]:
+            settings["theme"] = mode
+            settings_path.write_text(json.dumps(settings))
+            before = snapshot(fixture)
+            path = args.capture_dir.resolve() / f"navigation-custom-library-{mode}.png"
+            subprocess.run([str(binary), *base, "--screenshot", str(path)], check=True, timeout=60)
+            assert_preview_pixels(path)
+            assert snapshot(fixture) == before, "Custom-theme library captures modified their inputs"
+        print(json.dumps({"captures": len(captures) + len(theme_captures) + 2, "inputsUnchanged": True, "fixturePathsOnly": True}))
 
 
 if __name__ == "__main__":

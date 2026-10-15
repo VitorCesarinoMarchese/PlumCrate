@@ -29,27 +29,78 @@ fastframe_icons::icons! {
     }
 }
 
+const CUSTOM_CHROME: &str = "custom-theme-chrome";
+
+pub(crate) struct ChromeColors {
+    pub rail: Color32,
+    pub rail_text: Color32,
+    pub rail_muted: Color32,
+    pub rail_selected: Color32,
+    pub rail_selected_text: Color32,
+    pub primary: Color32,
+    pub primary_text: Color32,
+    pub switch_on: Color32,
+    pub switch_off: Color32,
+    pub switch_knob: Color32,
+}
+
+pub(crate) fn chrome_colors(ui: &egui::Ui) -> ChromeColors {
+    let dark = ui.visuals().dark_mode;
+    let custom = ui.ctx().data(|data| data.get_temp::<[bool; 2]>(egui::Id::new(CUSTOM_CHROME))).unwrap_or_default();
+    if custom[usize::from(dark)] {
+        let style = ui.ctx().style_of(if dark { egui::Theme::Dark } else { egui::Theme::Light });
+        let v = &style.visuals;
+        let text = v.override_text_color.unwrap_or(v.text_color());
+        ChromeColors {
+            rail: v.extreme_bg_color,
+            rail_text: text,
+            rail_muted: v.weak_text_color(),
+            rail_selected: v.selection.bg_fill,
+            rail_selected_text: text,
+            primary: v.hyperlink_color,
+            primary_text: v.extreme_bg_color,
+            switch_on: v.hyperlink_color,
+            switch_off: v.weak_text_color(),
+            switch_knob: v.extreme_bg_color,
+        }
+    } else {
+        ChromeColors {
+            rail: Color32::from_rgb(8, 99, 185),
+            rail_text: Color32::WHITE,
+            rail_muted: Color32::from_rgb(218, 235, 252),
+            rail_selected: Color32::WHITE,
+            rail_selected_text: Color32::from_rgb(9, 87, 162),
+            primary: Color32::from_rgb(18, 99, 202),
+            primary_text: Color32::WHITE,
+            switch_on: Color32::from_rgb(66, 126, 22),
+            switch_off: if dark { Color32::from_rgb(89, 112, 132) } else { Color32::from_rgb(166, 185, 199) },
+            switch_knob: Color32::WHITE,
+        }
+    }
+}
+
 fn rail_button(ui: &mut egui::Ui, icon: Icon, label: &str, active: bool) -> egui::Response {
-    let ink = if active { Color32::from_rgb(9, 87, 162) } else { Color32::WHITE };
+    let colors = chrome_colors(ui);
+    let ink = if active { colors.rail_selected_text } else { colors.rail_text };
     ui.scope(|ui| {
         let v = ui.visuals_mut();
         for widget in [&mut v.widgets.inactive, &mut v.widgets.hovered, &mut v.widgets.active] {
             widget.fg_stroke.color = ink;
         }
         ui.add_sized([ui.available_width(), 46.0], egui::Button::image_and_text(icon.image(ink, 19.0), RichText::new(label).color(ink).strong())
-            .fill(if active { Color32::WHITE } else { Color32::TRANSPARENT }).stroke(egui::Stroke::NONE))
+            .fill(if active { colors.rail_selected } else { Color32::TRANSPARENT }).stroke(egui::Stroke::NONE))
     }).inner
 }
 
 fn mod_switch(ui: &mut egui::Ui, enabled: bool, name: &str) -> egui::Response {
     let (rect, response) = ui.allocate_exact_size(egui::vec2(42.0, 28.0), egui::Sense::click());
     let track = egui::Rect::from_center_size(rect.center(), egui::vec2(40.0, 24.0));
+    let colors = chrome_colors(ui);
     let fill = if !ui.is_enabled() { ui.visuals().widgets.noninteractive.bg_stroke.color }
-        else if enabled { Color32::from_rgb(66, 126, 22) }
-        else { if ui.visuals().dark_mode { Color32::from_rgb(89, 112, 132) } else { Color32::from_rgb(166, 185, 199) } };
+        else if enabled { colors.switch_on } else { colors.switch_off };
     ui.painter().rect_filled(track, 12, fill);
     let x = if enabled { track.right() - 12.0 } else { track.left() + 12.0 };
-    ui.painter().circle_filled(egui::pos2(x, track.center().y), 9.0, Color32::WHITE);
+    ui.painter().circle_filled(egui::pos2(x, track.center().y), 9.0, colors.switch_knob);
     if response.has_focus() { ui.painter().rect_stroke(rect.expand(2.0), 12, ui.visuals().selection.stroke, egui::StrokeKind::Outside); }
     response.widget_info(|| egui::WidgetInfo::selected(egui::WidgetType::Checkbox, ui.is_enabled(), enabled, format!("{name}: {}", if enabled { "On" } else { "Off" })));
     response.on_hover_text(if enabled { "On in game. Click to review turning off." } else { "Off in game. Click to review turning on." })
@@ -66,6 +117,7 @@ pub fn setup(ctx: &egui::Context) {
 }
 
 fn base_style(ctx: &egui::Context) {
+    ctx.data_mut(|data| data.insert_temp(egui::Id::new(CUSTOM_CHROME), [false; 2]));
     let rendering = fastframe_text::detect();
     ctx.all_styles_mut(|style| {
         let colors = crate::settings::ThemeColors::base(style.visuals.dark_mode);
@@ -134,6 +186,7 @@ pub fn apply_settings_theme(ctx: &egui::Context, settings: &crate::settings::Set
                 (a.b() as f32 * (1.0 - ratio) + b.b() as f32 * ratio) as u8,
             )
         };
+        let mut custom_chrome = [false; 2];
         ctx.all_styles_mut(|style| {
             let colors = theme.palette(style.visuals.dark_mode);
             if !colors.contrast_warnings().is_empty() { return; }
@@ -151,6 +204,7 @@ pub fn apply_settings_theme(ctx: &egui::Context, settings: &crate::settings::Set
             .and_then(|v| <Vec<Color32> as TryInto<[Color32; 6]>>::try_into(v).ok()) else {
                 return;
             };
+            custom_chrome[usize::from(style.visuals.dark_mode)] = true;
             let v = &mut style.visuals;
             v.panel_fill = background;
             v.extreme_bg_color = surface;
@@ -177,6 +231,7 @@ pub fn apply_settings_theme(ctx: &egui::Context, settings: &crate::settings::Set
                 widget.fg_stroke.color = text;
             }
         });
+        ctx.data_mut(|data| data.insert_temp(egui::Id::new(CUSTOM_CHROME), custom_chrome));
     }
 }
 
@@ -277,15 +332,16 @@ impl View {
         if search_requested { self.detail_open = None; self.help_open = false; self.updates_page = false; }
         if !review_open && ui.input_mut(|input| input.consume_key(egui::Modifiers::NONE, egui::Key::F1)) { self.help_open = true; }
         if !narrow {
+            let colors = chrome_colors(ui);
             egui::Panel::left("library-navigation").exact_size(240.0).resizable(false)
-                .frame(egui::Frame::new().fill(Color32::from_rgb(8, 99, 185)).inner_margin(24))
+                .frame(egui::Frame::new().fill(colors.rail).inner_margin(24))
                 .show(ui, |ui| {
-                    ui.visuals_mut().override_text_color = Some(Color32::WHITE);
-                    ui.visuals_mut().weak_text_color = Some(Color32::from_rgb(218, 235, 252));
+                    ui.visuals_mut().override_text_color = Some(colors.rail_text);
+                    ui.visuals_mut().weak_text_color = Some(colors.rail_muted);
                     ui.horizontal(|ui| { self.brand(ui); });
                     if ui.available_height() >= 600.0 {
                         ui.add_space(34.0);
-                        ui.label(RichText::new("A little more\nyou.").size(30.0).strong().color(Color32::WHITE));
+                        ui.label(RichText::new("A little more\nyou.").size(30.0).strong().color(colors.rail_text));
                         ui.add_space(24.0);
                     } else { ui.add_space(20.0); }
                     self.destinations(ui, &mut controls, true);

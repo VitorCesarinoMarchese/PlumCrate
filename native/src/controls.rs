@@ -814,17 +814,18 @@ impl Controls {
         if let Some(identity) = self.identity(catalog) { self.submit(identity, Action::ReviewToggle { enabled }); }
     }
     pub fn add_mods_button(&mut self, ui: &mut egui::Ui, catalog: &Catalog) {
+        let colors = crate::ui::chrome_colors(ui);
         let ready = catalog.root.is_some() && !catalog.loading && !self.picker_open();
         ui.add_enabled_ui(ready, |ui| {
             ui.scope(|ui| {
                 let v = ui.visuals_mut();
-                for widget in [&mut v.widgets.inactive, &mut v.widgets.hovered, &mut v.widgets.open] {
-                    widget.weak_bg_fill = egui::Color32::from_rgb(18, 99, 202);
+                for widget in [&mut v.widgets.inactive, &mut v.widgets.hovered, &mut v.widgets.active, &mut v.widgets.open] {
+                    widget.weak_bg_fill = colors.primary;
                     widget.bg_fill = widget.weak_bg_fill;
-                    widget.fg_stroke.color = egui::Color32::WHITE;
+                    widget.fg_stroke.color = colors.primary_text;
                 }
-                ui.menu_image_text_button(crate::ui::Icon::Plus.image(egui::Color32::WHITE, 18.0), egui::RichText::new("Add mods").color(egui::Color32::WHITE).strong(), |ui| {
-                    // Popup actions inherit the content theme, not the blue trigger.
+                ui.menu_image_text_button(crate::ui::Icon::Plus.image(colors.primary_text, 18.0), egui::RichText::new("Add mods").color(colors.primary_text).strong(), |ui| {
+                    // Restore the content palette inside the menu.
                     let style = ui.ctx().style_of(ui.ctx().theme());
                     *ui.style_mut() = (*style).clone();
                     for (label, zip) in [("Import folder", false), ("Import ZIP", true)] {

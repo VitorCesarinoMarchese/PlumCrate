@@ -420,7 +420,7 @@
     "plumbobVerification": {
       "navigationCaptureSource": "native/verify_navigation.py",
       "navigationCaptureDirectory": "native/target/plumbob-captures",
-      "navigationCaptureCount": 13,
+      "navigationCaptureCount": 15,
       "updateCaptureSource": "native/examples/verify_updates.rs",
       "updateCaptureDirectory": "native/target/plumbob-updates",
       "updateCaptureCount": 9,
@@ -439,6 +439,16 @@
       "discoveryCaptureCount": 12,
       "discoveryCaptureSource": "native/examples/verify_discovery.rs",
       "minimumDiscoveryCapture": "Scrolled to results within the shared short-window scroll area before checking fixture image pixels."
+    },
+    "customThemeChrome": {
+      "scope": [
+        "navigation rail and selected destination",
+        "Add mods button including pressed state",
+        "mod switch track and knob"
+      ],
+      "palette": "Valid custom colors apply per light/dark mode. Rail uses surface/text, selected destination uses existing selection fill/text, primary and enabled switch use accent/surface, disabled-state switch uses muted/surface.",
+      "fallback": "Unreadable or invalid custom modes retain the built-in chrome; choosing a built-in theme clears custom chrome.",
+      "verification": "Rendered light/dark regression failed before the fix and passes afterward, including switching back to built-in chrome. Fifteen native fixture captures preserve inputs."
     }
   },
   "components": [],
