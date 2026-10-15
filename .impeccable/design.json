@@ -1,10 +1,10 @@
 {
   "schemaVersion": 2,
-  "generatedAt": "2026-10-11T21:03:59.617648+00:00",
+  "generatedAt": "2026-10-15T00:00:00Z",
   "title": "Design System: Sims 4 Mod Manager native",
   "extensions": {
     "platform": "Linux Fastframe/egui",
-    "source": "docs/native-design.md",
+    "source": "DESIGN.md -> docs/native-design.md",
     "implementationSources": [
       "native/src/ui.rs",
       "native/src/catalog.rs",
@@ -19,69 +19,110 @@
     ],
     "units": "egui logical points",
     "colorMeta": {
+      "accent-light": {
+        "role": "primary",
+        "displayName": "accent light",
+        "value": "#1263CA"
+      },
+      "accent-dark": {
+        "role": "primary",
+        "displayName": "accent dark",
+        "value": "#9BC7FF"
+      },
       "panel-light": {
         "role": "neutral",
-        "displayName": "panel light"
+        "displayName": "panel light",
+        "value": "#EDF4F8"
       },
       "panel-dark": {
         "role": "neutral",
-        "displayName": "panel dark"
+        "displayName": "panel dark",
+        "value": "#122C49"
       },
       "surface-light": {
         "role": "neutral",
-        "displayName": "surface light"
+        "displayName": "surface light",
+        "value": "#FFFFFF"
       },
       "surface-dark": {
         "role": "neutral",
-        "displayName": "surface dark"
+        "displayName": "surface dark",
+        "value": "#1D3A57"
       },
       "text-light": {
         "role": "neutral",
-        "displayName": "text light"
+        "displayName": "text light",
+        "value": "#173452"
       },
       "text-dark": {
         "role": "neutral",
-        "displayName": "text dark"
+        "displayName": "text dark",
+        "value": "#F4F8FB"
       },
       "muted-light": {
         "role": "neutral",
-        "displayName": "muted light"
+        "displayName": "muted light",
+        "value": "#52687C"
       },
       "muted-dark": {
         "role": "neutral",
-        "displayName": "muted dark"
-      },
-      "selection-fill-light": {
-        "role": "primary",
-        "displayName": "selection fill light"
-      },
-      "selection-fill-dark": {
-        "role": "primary",
-        "displayName": "selection fill dark"
-      },
-      "selection-stroke-light": {
-        "role": "primary",
-        "displayName": "selection stroke light"
-      },
-      "selection-stroke-dark": {
-        "role": "primary",
-        "displayName": "selection stroke dark"
+        "displayName": "muted dark",
+        "value": "#BED0DF"
       },
       "border-light": {
         "role": "neutral",
-        "displayName": "border light"
+        "displayName": "border light",
+        "value": "#D4E0E9"
       },
       "border-dark": {
         "role": "neutral",
-        "displayName": "border dark"
+        "displayName": "border dark",
+        "value": "#405C75"
+      },
+      "selection-fill-light": {
+        "role": "secondary",
+        "displayName": "selection fill light",
+        "value": "#DFECCB"
+      },
+      "selection-fill-dark": {
+        "role": "secondary",
+        "displayName": "selection fill dark",
+        "value": "#2F4E2A"
+      },
+      "selection-stroke-light": {
+        "role": "secondary",
+        "displayName": "selection stroke light",
+        "value": "#2E5710"
+      },
+      "selection-stroke-dark": {
+        "role": "secondary",
+        "displayName": "selection stroke dark",
+        "value": "#CCEBA2"
       },
       "widget-fill-light": {
         "role": "neutral",
-        "displayName": "widget fill light"
+        "displayName": "widget fill light",
+        "value": "#FFFFFF"
       },
       "widget-fill-dark": {
         "role": "neutral",
-        "displayName": "widget fill dark"
+        "displayName": "widget fill dark",
+        "value": "#1D3A57"
+      },
+      "hover-light": {
+        "role": "neutral",
+        "displayName": "hover light",
+        "value": "#E1EDF5"
+      },
+      "hover-dark": {
+        "role": "neutral",
+        "displayName": "hover dark",
+        "value": "#2D4D6C"
+      },
+      "rail": {
+        "role": "primary",
+        "displayName": "rail",
+        "value": "#0863B9"
       }
     },
     "typographyMeta": {
@@ -108,8 +149,12 @@
     },
     "breakpoints": [
       {
-        "name": "narrow-library",
-        "value": "1040pt"
+        "name": "compact-navigation",
+        "value": "900pt"
+      },
+      {
+        "name": "short-library-list",
+        "value": "220pt available content height"
       },
       {
         "name": "short-browser",
@@ -117,26 +162,27 @@
       }
     ],
     "nativeLayout": {
-      "railWidth": 176,
-      "inspectorDefaultWidth": 300,
-      "inspectorMinWidth": 280,
-      "inspectorMaxWidth": 400,
-      "cardHeight": 262,
-      "cardImageHeight": 150,
+      "railWidth": 240,
+      "cardHeight": 238,
+      "cardImageHeight": 140,
       "cardGap": 16,
       "columnBudget": 236,
       "columnFormula": "max(1, floor((available_width + 16) / 236))",
       "cardWidthFormula": "(available_width - 16 * (columns - 1)) / columns",
       "listRowHeight": 64,
       "listPreviewSize": 44,
-      "detailPreviewHeight": 180,
+      "detailPreviewHeight": 240,
       "searchHeight": 40,
       "fileRowHeight": 48,
       "settingsContentMaxWidth": 720,
       "settingsSavePlacement": "Above the Settings scroll region.",
       "statusMarginHorizontal": 24,
       "statusMarginVertical": 6,
-      "activityMaxHeight": 90
+      "activityMaxHeight": 90,
+      "cardHeightWithoutPreviews": 186,
+      "cardImageHeightWithoutPreviews": 88,
+      "shortDetailPreviewHeight": 120,
+      "shortLibraryFallback": "Compact list below 220pt available content height; preserves saved view choice."
     },
     "nativeStates": {
       "cardSelection": "Immediate 1.5-point selection-stroke outline.",
@@ -145,91 +191,48 @@
       "list": "egui interact_selectable visuals.",
       "customSelectionAnimation": false,
       "contextMenuSelection": "Right-click selects the clicked card or list identity before opening the shared mod menu.",
-      "settingsSelection": "Header Settings toggles the full-page route; Back to library and wide library filters return to browsing."
+      "settingsSelection": "Main destinations leave Settings; rail Settings or compact header Settings opens the full page."
     },
     "nativeComponents": [
       {
         "name": "Photo card",
         "source": "native/src/ui.rs::card_grid",
-        "refersTo": [
-          "card-light",
-          "card-dark"
-        ]
+        "description": "140pt photo plus 98pt footer; reviewed On/Off switch and selected/focused outline."
       },
       {
         "name": "Search",
-        "source": "native/src/ui.rs::View::show"
+        "source": "native/src/ui.rs::View::show",
+        "description": "Name and filename search with icon and keyboard focus."
       },
       {
-        "name": "State navigation",
-        "source": "native/src/ui.rs::View::show"
+        "name": "Main navigation",
+        "source": "native/src/ui.rs::destinations",
+        "description": "Your mods, Discover and Updates in blue rail or compact top navigation."
       },
       {
-        "name": "List row",
-        "source": "native/src/ui.rs::library_list"
+        "name": "Add mods",
+        "source": "native/src/controls.rs::Controls::add_mods_button",
+        "description": "Blue title-menu trigger opens reviewed folder and ZIP import routes."
       },
       {
-        "name": "Inspector",
-        "source": "native/src/ui.rs::details"
+        "name": "Mod details",
+        "source": "native/src/ui.rs::details",
+        "description": "Centered popup at every width with file and source inspection."
       },
       {
-        "name": "Management actions",
-        "source": "native/src/controls.rs::Controls::toolbar",
-        "refersTo": [
-          "button-primary-light",
-          "button-primary-dark"
-        ],
-        "description": "Library imports and restore; selected-mod controls live in the inspector or narrow details."
+        "name": "Updates",
+        "source": "native/src/controls.rs::Controls::updates_content",
+        "description": "Manual checks of linked projects; Review opens existing mod details."
       },
       {
-        "name": "More actions and context menu",
-        "source": "native/src/controls.rs::Controls::mod_menu",
-        "description": "Shared reviewed actions for the selected mod; right-click selects the clicked identity in cards and lists."
-      },
-      {
-        "name": "Settings page",
+        "name": "Settings",
         "source": "native/src/controls.rs::Controls::settings_content",
-        "description": "Full-page preferences with persistent Save settings and Back to library above scrollable form content."
+        "description": "Persistent Save settings and Discard above theme, folder and local source settings."
       },
       {
-        "name": "Custom-theme editor",
-        "source": "native/src/controls.rs::Controls::settings_content",
-        "description": "Name and six hex/color-picker controls, reset, JSON copy/import for editing and validated save."
-      },
-      {
-        "name": "Status and activity",
-        "source": "native/src/controls.rs::Controls::activity",
-        "description": "Bottom status, notices and errors with disclosed operation history."
-      },
-      {
-        "name": "CurseForge browser",
+        "name": "Discover",
         "source": "native/src/discovery.rs::DiscoverView::content",
-        "description": "Provider search, category and sort controls, result counts and pagination using the existing native theme."
-      },
-      {
-        "name": "CurseForge project card",
-        "source": "native/src/discovery.rs::DiscoverView::cards",
-        "description": "Provider logo, name, author, bounded summary and metadata with aligned header, summary and View details rows."
-      },
-      {
-        "name": "CurseForge project details",
-        "source": "native/src/discovery.rs::DiscoverView::details",
-        "description": "Pinned Back to results above full summary, categories, supplied links and screenshots in one scroll region."
-      },
-      {
-        "name": "Update-check toolbar and summary",
-        "source": "native/src/controls.rs::Controls::toolbar and Controls::update_summary",
-        "description": "Manual Check updates for explicitly attached CurseForge projects, pending spinner, and checked-result counts using existing native colors."
-      },
-      {
-        "name": "Mod update details",
-        "source": "native/src/controls.rs::Controls::update_details",
-        "description": "Check this mod, distinct version and failure states, a provider-page action, and installed-release selector using existing native controls."
-      },
-      {
-        "name": "Installed-release confirmation",
-        "source": "native/src/controls.rs::Controls::review_installed_release",
-        "description": "Existing confirmation popup after choosing and reviewing a provider release; only final confirmation records metadata."
+        "description": "Real provider search and inspection; separate reviewed browser installation."
       }
     ],
     "previewPolicy": {
@@ -239,7 +242,7 @@
       "httpReferer": false,
       "uriCacheLimit": 32
     },
-    "documentationNote": "Native egui components have no HTML/CSS runtime. Native component records replace web snippets; no HTML/CSS design detector applies. No invented tonal ramps or motion values are added.",
+    "documentationNote": "Native egui components have no HTML/CSS runtime. Native records describe implemented widgets; no HTML/CSS detector or invented tonal ramp applies.",
     "nativeSettings": {
       "customColorRoles": [
         "accent",
@@ -255,17 +258,19 @@
       "localStorage": "~/.config/ts4-mod-manager/settings.json",
       "transfer": "Settings export omits customThemes and activeCustomTheme for compatibility with older version-1 transfers; separate theme JSON transfers custom colors.",
       "importPreservation": "An empty or absent custom-theme collection preserves the local collection; an omitted API key preserves the local key.",
-      "cliRoute": "--settings"
+      "cliRoute": "--settings",
+      "freshDefault": "Light; existing saved themes and custom palettes retained."
     },
     "navigationVerification": {
       "source": "native/verify_navigation.py",
       "captureCount": 9,
       "fixtureInputsUnchanged": true,
-      "independentDisposition": "ship"
+      "independentDisposition": "ship",
+      "historical": true
     },
     "nativeDiscovery": {
-      "theme": "Existing light/dark roles; no new color tokens.",
-      "navigation": "My mods and Browse mods below the logo; browser uses the full central panel without the library rail.",
+      "theme": "Plumbob built-in light and navy dark roles, with saved custom palettes retained.",
+      "navigation": "Discover in the shared 240pt rail at widths of at least 900pt; compact top destinations below that width.",
       "layout": {
         "searchHeight": 42,
         "searchButtonSize": [
@@ -370,7 +375,7 @@
       }
     },
     "nativeUpdates": {
-      "theme": "Existing light/dark colors and native controls; no token changes.",
+      "theme": "Plumbob light and navy dark paired colors and native controls.",
       "scope": "Manual checks for managed mods with explicitly attached CurseForge projects and an API key saved in local Settings.",
       "notices": "In-app summary and Update available on checked cards and list rows; no automatic startup checks or operating-system notifications.",
       "details": "Check this mod distinguishes unknown installed version, changed local files, unavailable recorded release, incomplete history, operational failure, and comparison results.",
@@ -408,36 +413,60 @@
         "fixtureContent": "Production widgets with synthetic provider responses; captures approve no operations.",
         "independentDisposition": "ship; five-section finish review found no material fixes",
         "fullValidation": "All eight AGENTS.md commands passed.",
-        "liveProvider": "Project and file metadata fields checked with a local untracked key; no mod-file downloads."
+        "liveProvider": "Project and file metadata fields checked with a local untracked key; no mod-file downloads.",
+        "historical": true
       }
+    },
+    "plumbobVerification": {
+      "navigationCaptureSource": "native/verify_navigation.py",
+      "navigationCaptureDirectory": "native/target/plumbob-captures",
+      "navigationCaptureCount": 13,
+      "updateCaptureSource": "native/examples/verify_updates.rs",
+      "updateCaptureDirectory": "native/target/plumbob-updates",
+      "updateCaptureCount": 9,
+      "fixtureInputsUnchanged": true,
+      "operationsApproved": false,
+      "finishReview": "Initial review found a duplicate inert summary Review on Updates; final verdict scored it resolved after regression test and fresh captures.",
+      "regressions": [
+        "plumbob navigation and paired palette",
+        "visible short-window mod names",
+        "unselected card switch requests review without writing metadata",
+        "Add mods exposes folder and ZIP without submitting work",
+        "Updates navigation preserves search and selection without checking",
+        "only per-mod Review is offered on Updates and opens details"
+      ],
+      "requiredValidation": "All eight commands in AGENTS.md passed, including core/native tests, all-target clippy, release build, Python tests, catalog, workflows and package verification.",
+      "discoveryCaptureCount": 12,
+      "discoveryCaptureSource": "native/examples/verify_discovery.rs",
+      "minimumDiscoveryCapture": "Scrolled to results within the shared short-window scroll area before checking fixture image pixels."
     }
   },
   "components": [],
   "narrative": {
-    "northStar": "The local mod library",
-    "overview": "The native library follows the user-approved Deadlock Mod Manager and CurseForge direction. Large previews carry recognition; warm neutral surfaces, gold selection and visible installed state keep local management clear. The light and dark themes share the same hierarchy.\n\nThis design applies to the Linux Fastframe/egui app. The Rust implementation is authoritative. Dimensions use egui logical points, not CSS pixels. Fastframe supplies default fonts and platform text rendering.",
+    "northStar": "Plumbob",
+    "overview": "The user chose Plumbob from five concepts and approved its implementation. A blue navigation rail, pale blue background, white cards and green installed-state accents give the app a Sims-inspired identity. Keep words short, use recognizable icons, and let actual mod photos carry the library's personality. The navy dark counterpart keeps the same hierarchy.\n\nThis guide describes the Linux Fastframe/egui app. `native/src/settings.rs::ThemeColors::base` and `native/src/ui.rs::base_style` define the built-in colors. Rust widgets are authoritative; dimensions use egui logical points. Fresh settings default to light. Existing saved appearance choices and custom themes remain intact.",
     "keyCharacteristics": [
-      "Photo cards by default, with a compact list switch.",
-      "Warm light and charcoal dark themes with gold selection.",
-      "A persistent inspector on wide windows and a return path on narrow windows."
+      "Blue navigation with Your mods, Discover and Updates.",
+      "Photo cards with reviewed On/Off switches and a compact list option.",
+      "Short labels, original plumbob and compass icons, and recoverable management actions."
     ],
     "rules": [
       {
         "name": "readable metadata",
-        "body": "Use the explicit muted theme color for secondary text; do not substitute egui's default weak alpha for it.",
+        "body": "Use the explicit muted color for secondary text. Custom palettes retain six roles per appearance mode. Invalid or low-contrast palettes fall back to built-in colors for that mode while their stored values remain editable. Save-time contrast checks require 4.5:1 for text and links on their relevant fills.",
         "section": "colors"
       }
     ],
     "dos": [
-      "Do preserve photo proportions with destination-aware centered cover crops in cards and contain sizing in the inspector.",
-      "Do keep explicit weak text colors readable on panels, cards, widgets and selected fills.",
-      "Do preserve search and selected identity when switching card/list layouts.",
-      "Do show No Preview for missing or broken mod photos and keep weak source-match warnings visible.",
-      "Do require user initiation for future mod downloads and updates."
+      "Do keep navigation and management labels short and recognizable.",
+      "Do preserve real photos, readable muted text, keyboard focus and selected identity.",
+      "Do require confirmation for source attachment and reviewed management actions.",
+      "Do require user initiation for downloads and update checks."
     ],
     "donts": [
-      "Don't fabricate mod photography, authors, source candidates or discovery counters.",
-      "Don't replace native focus and hover behavior with a custom selection animation."
+      "Don't invent photos, authors, provider candidates or counters.",
+      "Don't turn the On/Off switch into an immediate file operation.",
+      "Don't permanently delete user files or remove unmanaged files."
     ]
   }
 }

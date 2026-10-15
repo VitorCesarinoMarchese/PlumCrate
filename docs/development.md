@@ -73,7 +73,7 @@ python3 native/verify_navigation.py --capture-dir native/target/navigation-captu
 The README screenshot comes from these isolated fixtures. To refresh it after inspecting the capture:
 
 ```bash
-cp native/target/navigation-captures/navigation-library-dark.png docs/images/library-dark.png
+cp native/target/navigation-captures/navigation-library-light.png docs/images/library-light.png
 ```
 
 ## Package a Linux release

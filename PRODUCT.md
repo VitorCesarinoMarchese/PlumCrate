@@ -22,7 +22,7 @@ Project inspection includes the author's description, safe links, images, and fi
 
 ## Brand commitments
 
-The user requested a replacement design closer to Deadlock Mod Manager and CurseForge, with photo cards as the default library and a list switch. Preserve the Sims 4 Mod Manager name. Build directly in the app rather than generating a mockup.
+The user chose the Plumbob concept from five directions and approved implementation. Use a clean Sims-inspired interface with short, nontechnical labels, recognizable icons and personality. Preserve the Sims 4 Mod Manager name. The blue rail, light default, green state accents and navy dark counterpart share one identity. Photo cards remain the default library view with a compact list switch. Existing saved appearance preferences and custom themes remain intact.
 
 ## Evidence on hand
 

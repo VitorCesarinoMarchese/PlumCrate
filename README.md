@@ -10,7 +10,7 @@ Browse your collection by photo, find a file by name, and choose which mods are 
 
 [Getting started](#getting-started) · [Documentation](docs/README.md) · [Report a bug](https://github.com/VitorCesarinoMarchese/TS4ModManager/issues) · [Releases](https://github.com/VitorCesarinoMarchese/TS4ModManager/releases)
 
-![Sims 4 Mod Manager in dark mode, showing the mod library with photo cards](docs/images/library-dark.png)
+![Sims 4 Mod Manager in light mode, showing the mod library with photo cards](docs/images/library-light.png)
 
 *The app running with sample mods. The screenshot uses synthetic test data.*
 
@@ -40,11 +40,11 @@ The app manages local mods and checks attached CurseForge projects for newer rel
 ## Getting started
 
 1. Open the app and choose your **The Sims 4** folder, the folder containing **Mods**. Use **Change folder** if the detected location is wrong.
-2. Browse your existing mods, or select **Import folder** or **Import ZIP** to add files you have downloaded.
+2. Browse your existing mods, or open **Add mods** and select **Import folder** or **Import ZIP** to add files you have downloaded.
 3. Select a managed mod to inspect its files. Choose **Enable** or **Disable**, review the proposed changes, and confirm.
 4. Right-click a mod for more actions. Use **Restore from trash** to recover a removed managed mod.
 
-To install a CurseForge mod, open **Browse mods**, view a project, and choose **Download via website…**. Review the release and folders, then select **Start browser download**. After you save the file in your browser, the app imports and enables the verified download without another click.
+To install a CurseForge mod, open **Discover**, view a project, and choose **Download via website…**. Review the release and folders, then select **Start browser download**. After you save the file in your browser, the app imports and enables the verified download without another click.
 
 Read the project's **Description** and **Dependencies** before downloading. Required, optional, and tool dependencies offer their own download review. Each download needs separate approval; the app does not install a dependency chain automatically.
 
