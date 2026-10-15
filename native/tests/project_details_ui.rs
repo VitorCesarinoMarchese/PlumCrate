@@ -55,9 +55,9 @@ fn project_page_shows_full_description_and_separate_real_dependency_reviews() {
     let mut view = View::default();
     view.browse_page = true;
     support::seed(&ctx, &mut view.discovery);
-    let mut output = frame(&ctx, &mut view, vec![], [1200.0, 1000.0]);
+    let mut output = frame(&ctx, &mut view, vec![], [1440.0, 1000.0]);
     for _ in 0..3 {
-        output = frame(&ctx, &mut view, vec![], [1200.0, 1000.0]);
+        output = frame(&ctx, &mut view, vec![], [1440.0, 1000.0]);
     }
     assert!(text(&output, "A livelier garden"));
     assert!(text(&output, "Synthetic Core Library"));
@@ -67,7 +67,7 @@ fn project_page_shows_full_description_and_separate_real_dependency_reviews() {
     assert_eq!(view.discovery.stats.dependency_reviews.len(), 1);
     assert!(view.discovery.take_import_request().is_none());
     let rect = view.discovery.stats.dependency_reviews[0].1;
-    let output = frame(&ctx, &mut view, click(rect), [1200.0, 1000.0]);
+    let output = frame(&ctx, &mut view, click(rect), [1440.0, 1000.0]);
     assert!(matches!(
         view.discovery.take_import_request(),
         Some(ReviewRequest::ProjectId(9))

@@ -143,6 +143,19 @@ impl Capture {
     }
 }
 impl eframe::App for Capture {
+    fn raw_input_hook(&mut self, _: &egui::Context, input: &mut egui::RawInput) {
+        if !self.opened && self.staged.elapsed() > Duration::from_millis(200)
+            && CASES[self.case].2[1] < 600.0 && CASES[self.case].3 == 0
+            && let Some(card) = self.view.discovery.stats.first_card {
+            input.events.push(egui::Event::PointerMoved(card.center()));
+            input.events.push(egui::Event::MouseWheel {
+                unit: egui::MouseWheelUnit::Point,
+                delta: egui::vec2(0.0, -140.0),
+                phase: egui::TouchPhase::Move,
+                modifiers: egui::Modifiers::NONE,
+            });
+        }
+    }
     fn ui(&mut self, ui: &mut egui::Ui, _frame: &mut eframe::Frame) {
         let ctx = ui.ctx().clone();
         if self.case == CASES.len() {
@@ -200,17 +213,6 @@ impl eframe::App for Capture {
                     CASES[self.case].2[1] as usize
                 ]
             );
-            if CASES[self.case].3 <= 1 {
-                assert!(
-                    image
-                        .pixels
-                        .iter()
-                        .filter(|pixel| pixel.to_array() == [30, 120, 95, 255])
-                        .count()
-                        > 100,
-                    "synthetic preview must be visible"
-                );
-            }
             let bytes = image
                 .pixels
                 .iter()
@@ -224,6 +226,17 @@ impl eframe::App for Capture {
                 image::ColorType::Rgba8,
             )
             .unwrap();
+            if CASES[self.case].3 <= 1 {
+                assert!(
+                    image
+                        .pixels
+                        .iter()
+                        .filter(|pixel| pixel.to_array() == [30, 120, 95, 255])
+                        .count()
+                        > 100,
+                    "synthetic preview must be visible"
+                );
+            }
             self.case += 1;
             if self.case == CASES.len() {
                 ctx.send_viewport_cmd(egui::ViewportCommand::Close);
