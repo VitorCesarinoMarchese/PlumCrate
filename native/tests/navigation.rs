@@ -138,7 +138,7 @@ fn escape_goes_back_one_level_and_keeps_settings_drafts_and_library_state() {
         !controls.settings_page,
         "Escape from Settings must return to the library"
     );
-    assert!(has_text(&output, "Mod library"));
+    assert!(has_text(&output, "Your mods"));
     assert!(controls.settings_dirty());
     assert_eq!(controls.settings.game_roots, vec![draft_root]);
     assert_eq!(catalog.selected, selected);
@@ -189,7 +189,7 @@ fn settings_occupies_page_without_library_or_floating_window() {
     let output = frame(&ctx, &mut view, &mut controls, &mut catalog, vec![]);
     assert!(has_text(&output, "Appearance"));
     assert!(has_text(&output, "Create custom theme"));
-    assert!(!has_text(&output, "Mod library"));
+    assert!(view.stats.first_row.is_none(), "Settings replaces the library content");
     assert!(!has_text(&output, "Local settings"));
     assert!(view.stats.search.is_none());
 }

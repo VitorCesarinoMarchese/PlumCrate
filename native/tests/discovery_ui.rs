@@ -447,12 +447,12 @@ fn browse_cards_fit_columns_without_overflow_or_squeezed_text() {
         for _ in 0..3 {
             frame(&ctx, &mut view, &mut catalog, size, vec![]);
         }
-        let available = size[0] - 48.0;
+        let available = size[0] - 48.0 - if size[0] >= 900.0 { 240.0 } else { 0.0 };
         let columns = ((available + 16.0) / 280.0).floor().max(1.0);
         let width = (available - (columns - 1.0) * 16.0) / columns;
         assert!(
             view.discovery.stats.first_card.unwrap().width() <= width + 2.0,
-            "cards must fit {columns} columns at {size:?}"
+            "cards must fit {columns} columns at {size:?}: actual {:?}, expected {width}", view.discovery.stats.first_card.unwrap()
         );
     }
 }

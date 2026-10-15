@@ -21,7 +21,38 @@ fastframe_icons::icons! {
         List => "list",
         Library => "library",
         Archive => "archive",
+        Compass => "compass",
+        Settings => lucide "settings",
+        Trash => lucide "trash-2",
+        Plus => lucide "plus",
+
     }
+}
+
+fn rail_button(ui: &mut egui::Ui, icon: Icon, label: &str, active: bool) -> egui::Response {
+    let ink = if active { Color32::from_rgb(9, 87, 162) } else { Color32::WHITE };
+    ui.scope(|ui| {
+        let v = ui.visuals_mut();
+        for widget in [&mut v.widgets.inactive, &mut v.widgets.hovered, &mut v.widgets.active] {
+            widget.fg_stroke.color = ink;
+        }
+        ui.add_sized([ui.available_width(), 46.0], egui::Button::image_and_text(icon.image(ink, 19.0), RichText::new(label).color(ink).strong())
+            .fill(if active { Color32::WHITE } else { Color32::TRANSPARENT }).stroke(egui::Stroke::NONE))
+    }).inner
+}
+
+fn mod_switch(ui: &mut egui::Ui, enabled: bool, name: &str) -> egui::Response {
+    let (rect, response) = ui.allocate_exact_size(egui::vec2(42.0, 28.0), egui::Sense::click());
+    let track = egui::Rect::from_center_size(rect.center(), egui::vec2(40.0, 24.0));
+    let fill = if !ui.is_enabled() { ui.visuals().widgets.noninteractive.bg_stroke.color }
+        else if enabled { Color32::from_rgb(66, 126, 22) }
+        else { if ui.visuals().dark_mode { Color32::from_rgb(89, 112, 132) } else { Color32::from_rgb(166, 185, 199) } };
+    ui.painter().rect_filled(track, 12, fill);
+    let x = if enabled { track.right() - 12.0 } else { track.left() + 12.0 };
+    ui.painter().circle_filled(egui::pos2(x, track.center().y), 9.0, Color32::WHITE);
+    if response.has_focus() { ui.painter().rect_stroke(rect.expand(2.0), 12, ui.visuals().selection.stroke, egui::StrokeKind::Outside); }
+    response.widget_info(|| egui::WidgetInfo::selected(egui::WidgetType::Checkbox, ui.is_enabled(), enabled, format!("{name}: {}", if enabled { "On" } else { "Off" })));
+    response.on_hover_text(if enabled { "On in game. Click to review turning off." } else { "Off in game. Click to review turning on." })
 }
 
 pub fn setup(ctx: &egui::Context) {
@@ -37,64 +68,35 @@ pub fn setup(ctx: &egui::Context) {
 fn base_style(ctx: &egui::Context) {
     let rendering = fastframe_text::detect();
     ctx.all_styles_mut(|style| {
-        let dark = style.visuals.dark_mode;
-        style.visuals.panel_fill = if dark {
-            Color32::from_rgb(19, 19, 21)
-        } else {
-            Color32::from_rgb(246, 244, 239)
-        };
-        style.visuals.extreme_bg_color = if dark {
-            Color32::from_rgb(27, 27, 30)
-        } else {
-            Color32::WHITE
-        };
-        style.visuals.override_text_color = Some(if dark {
-            Color32::from_rgb(245, 243, 238)
-        } else {
-            Color32::from_rgb(31, 30, 27)
-        });
-        style.visuals.weak_text_color = Some(if dark {
-            Color32::from_rgb(179, 177, 171)
-        } else {
-            Color32::from_rgb(101, 96, 86)
-        });
-        style.visuals.selection.bg_fill = if dark {
-            Color32::from_rgb(61, 52, 35)
-        } else {
-            Color32::from_rgb(235, 221, 185)
-        };
-        style.visuals.selection.stroke.color = if dark {
-            Color32::from_rgb(232, 207, 149)
-        } else {
-            Color32::from_rgb(83, 61, 20)
-        };
-        style.visuals.hyperlink_color = style.visuals.selection.stroke.color;
-        style.spacing.item_spacing = egui::vec2(10.0, 8.0);
-        style.spacing.button_padding = egui::vec2(12.0, 8.0);
-        style.spacing.interact_size.y = 34.0;
-        style.visuals.widgets.noninteractive.bg_stroke.color = if dark {
-            Color32::from_rgb(57, 57, 61)
-        } else {
-            Color32::from_rgb(218, 213, 201)
-        };
-        style.visuals.widgets.noninteractive.fg_stroke.color = if dark {
-            Color32::from_rgb(179, 177, 171)
-        } else {
-            Color32::from_rgb(101, 96, 86)
-        };
-        for widget in [
-            &mut style.visuals.widgets.inactive,
-            &mut style.visuals.widgets.hovered,
-            &mut style.visuals.widgets.active,
+        let colors = crate::settings::ThemeColors::base(style.visuals.dark_mode);
+        let v = &mut style.visuals;
+        v.panel_fill = hex_color(&colors.background).unwrap();
+        v.extreme_bg_color = hex_color(&colors.surface).unwrap();
+        v.window_fill = v.extreme_bg_color;
+        v.faint_bg_color = v.extreme_bg_color;
+        v.override_text_color = Some(hex_color(&colors.text).unwrap());
+        v.weak_text_color = Some(hex_color(&colors.muted_text).unwrap());
+        v.selection.bg_fill = if v.dark_mode { Color32::from_rgb(47, 78, 42) } else { Color32::from_rgb(223, 236, 203) };
+        v.selection.stroke.color = if v.dark_mode { Color32::from_rgb(204, 235, 162) } else { Color32::from_rgb(46, 87, 16) };
+        v.hyperlink_color = hex_color(&colors.accent).unwrap();
+        v.window_stroke.color = hex_color(&colors.border).unwrap();
+        v.widgets.noninteractive.bg_stroke.color = v.window_stroke.color;
+        v.widgets.noninteractive.fg_stroke.color = v.weak_text_color();
+        for (widget, fill) in [
+            (&mut v.widgets.inactive, if v.dark_mode { Color32::from_rgb(29, 58, 87) } else { Color32::WHITE }),
+            (&mut v.widgets.hovered, if v.dark_mode { Color32::from_rgb(45, 77, 108) } else { Color32::from_rgb(225, 237, 245) }),
+            (&mut v.widgets.active, v.selection.bg_fill),
         ] {
-            widget.corner_radius = egui::CornerRadius::same(6);
+            widget.corner_radius = egui::CornerRadius::same(9);
+            widget.bg_fill = fill;
+            widget.weak_bg_fill = fill;
+            widget.bg_stroke.color = v.window_stroke.color;
+            widget.fg_stroke.color = v.override_text_color.unwrap();
         }
-        style.visuals.widgets.inactive.weak_bg_fill = if dark {
-            Color32::from_rgb(37, 37, 40)
-        } else {
-            Color32::from_rgb(233, 229, 220)
-        };
-        rendering.apply_to_visuals(&mut style.visuals);
+        style.spacing.item_spacing = egui::vec2(10.0, 8.0);
+        style.spacing.button_padding = egui::vec2(14.0, 10.0);
+        style.spacing.interact_size.y = 36.0;
+        rendering.apply_to_visuals(v);
     });
 }
 
@@ -203,6 +205,7 @@ pub struct View {
     pub scan_ms: Option<f64>,
     pub stats: RenderStats,
     pub browse_page: bool,
+    updates_page: bool,
     pub discovery: crate::discovery::DiscoverView,
     detail_open: Option<EntryId>,
     editing_root: bool,
@@ -219,6 +222,8 @@ pub struct RenderStats {
     pub browse_tab: Option<egui::Rect>,
     pub library_tab: Option<egui::Rect>,
     pub theme_button: Option<egui::Rect>,
+    pub updates_tab: Option<egui::Rect>,
+    pub first_toggle: Option<egui::Rect>,
     pub rows: usize,
     pub skeleton_cards: usize,
     pub files: usize,
@@ -252,7 +257,7 @@ impl View {
         self.previews.begin_frame(ui.ctx(), catalog.generation());
         self.stats = RenderStats::default();
         let mut scan_root = None;
-        let narrow = ui.available_width() < 1040.0;
+        let narrow = ui.available_width() < 900.0;
         let foreground = ui.visuals().text_color();
         let review_open = controls.as_ref().is_some_and(|c| c.review_open() || c.busy());
         if !self.help_open
@@ -269,8 +274,30 @@ impl View {
         }
         let search_requested = !review_open && !controls.as_ref().is_some_and(|c| c.settings_page)
             && ui.input_mut(|input| input.consume_key(egui::Modifiers::CTRL, egui::Key::F));
-        if search_requested { self.detail_open = None; self.help_open = false; }
+        if search_requested { self.detail_open = None; self.help_open = false; self.updates_page = false; }
         if !review_open && ui.input_mut(|input| input.consume_key(egui::Modifiers::NONE, egui::Key::F1)) { self.help_open = true; }
+        if !narrow {
+            egui::Panel::left("library-navigation").exact_size(240.0).resizable(false)
+                .frame(egui::Frame::new().fill(Color32::from_rgb(8, 99, 185)).inner_margin(24))
+                .show(ui, |ui| {
+                    ui.visuals_mut().override_text_color = Some(Color32::WHITE);
+                    ui.visuals_mut().weak_text_color = Some(Color32::from_rgb(218, 235, 252));
+                    ui.horizontal(|ui| { self.brand(ui); });
+                    if ui.available_height() >= 600.0 {
+                        ui.add_space(34.0);
+                        ui.label(RichText::new("A little more\nyou.").size(30.0).strong().color(Color32::WHITE));
+                        ui.add_space(24.0);
+                    } else { ui.add_space(20.0); }
+                    self.destinations(ui, &mut controls, true);
+                    ui.add_space(20.0);
+                    ui.with_layout(egui::Layout::bottom_up(egui::Align::Min), |ui| {
+                        if let Some(c) = controls.as_deref_mut() {
+                            if rail_button(ui, Icon::Settings, "Settings", c.settings_page).clicked() { c.settings_page = !c.settings_page; }
+                            if rail_button(ui, Icon::Trash, "Trash", false).clicked() { c.open_trash(catalog); }
+                        }
+                    });
+                });
+        }
         egui::Panel::top("catalog-header")
             .resizable(false)
             .frame(
@@ -280,20 +307,25 @@ impl View {
             )
             .show(ui, |ui| {
                 ui.horizontal(|ui| {
-                    let logo = ui
-                        .add(
-                            egui::Image::new(egui::include_image!("../assets/logo.svg"))
-                                .fit_to_exact_size(egui::vec2(160.0, 160.0 * 482.0 / 2148.0))
-                                .alt_text("Sims 4 Mod Manager"),
-                        )
-                        .on_hover_text("Sims 4 Mod Manager");
-                    self.stats.logo = Some(logo.rect);
+                    if narrow { self.brand(ui); }
+                    else if let Some(root) = catalog.root.as_ref()
+                        && ui.add(egui::Button::image_and_text(Icon::Folder.image(foreground, 18.0), "The Sims 4")).on_hover_text(root.display().to_string()).clicked() {
+                            if let Some(c) = controls.as_deref_mut() { c.choose_game_folder(ui.ctx(), Some(root.clone())); }
+                            else { self.editing_root = true; self.root_input = root.display().to_string(); }
+                    }
                     ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                        if let Some(c) = controls.as_deref_mut()
+                        if narrow && let Some(c) = controls.as_deref_mut()
                             && ui.selectable_label(c.settings_page, "Settings").clicked()
                         {
                             c.settings_page = !c.settings_page;
                         }
+                        if narrow && let Some(root) = catalog.root.as_ref()
+                            && ui.add(egui::Button::image(Icon::Folder.image(foreground, 18.0))).on_hover_text(format!("Change game folder: {}", root.display())).clicked() {
+                                if let Some(c) = controls.as_deref_mut() { c.choose_game_folder(ui.ctx(), Some(root.clone())); }
+                                else { self.editing_root = true; self.root_input = root.display().to_string(); }
+                        }
+                        if narrow && let Some(c) = controls.as_deref_mut()
+                            && ui.add(egui::Button::image(Icon::Trash.image(foreground, 18.0))).on_hover_text("Restore from trash").clicked() { c.open_trash(catalog); }
                         if let Some(c) = controls.as_deref_mut() {
                             c.app_updates.banner(ui);
                         }
@@ -326,24 +358,8 @@ impl View {
                         }
                     });
                 });
-                ui.add_space(6.0);
-                ui.horizontal(|ui| {
-                    let settings = controls.as_ref().is_some_and(|c| c.settings_page);
-                    let library = ui.add(egui::Button::new("My mods").selected(!self.browse_page && !settings));
-                    self.stats.library_tab = Some(library.rect);
-                    if library.clicked() {
-                        self.browse_page = false;
-                        if let Some(c) = controls.as_deref_mut() { c.settings_page = false; }
-                    }
-                    let browse = ui.add(egui::Button::image_and_text(Icon::Search.image(foreground, 16.0), "Browse mods").selected(self.browse_page && !settings));
-                    self.stats.browse_tab = Some(browse.rect);
-                    if browse.clicked() {
-                        self.browse_page = true;
-                        self.detail_open = None;
-                        if let Some(c) = controls.as_deref_mut() { c.settings_page = false; }
-                    }
-                });
-                if self.browse_page { return; }
+                if narrow { ui.horizontal_wrapped(|ui| self.destinations(ui, &mut controls, false)); }
+                if self.browse_page || self.updates_page || (!self.editing_root && catalog.root.is_some()) { return; }
                 ui.add_space(6.0);
                 ui.horizontal(|ui| {
                     ui.add(Icon::Folder.image(ui.visuals().weak_text_color(), 18.0));
@@ -380,7 +396,7 @@ impl View {
                             let tail: String = path
                                 .chars()
                                 .rev()
-                                .take(64)
+                                .take(if narrow { 36 } else { 64 })
                                 .collect::<String>()
                                 .chars()
                                 .rev()
@@ -478,59 +494,15 @@ impl View {
             });
 
         let settings_page = controls.as_ref().is_some_and(|c| c.settings_page);
-        if !narrow && !self.browse_page {
-            egui::Panel::left("library-navigation")
-                .exact_size(176.0)
-                .resizable(false)
-                .frame(
-                    egui::Frame::new()
-                        .fill(ui.visuals().extreme_bg_color)
-                        .inner_margin(16),
-                )
-                .show(ui, |ui| {
-                    ui.horizontal(|ui| {
-                        ui.add(Icon::Library.image(ui.visuals().selection.stroke.color, 20.0));
-                        ui.label(RichText::new("My library").size(16.0).strong());
-                    });
-                    ui.add_space(24.0);
-                    for filter in [ModFilter::All, ModFilter::Installed, ModFilter::Stored] {
-                        let count = catalog.mods.iter().filter(|m| filter.matches(m)).count();
-                        let icon = match filter {
-                            ModFilter::All => Icon::Grid,
-                            ModFilter::Installed => Icon::Check,
-                            ModFilter::Stored => Icon::Archive,
-                        };
-                        let active = !settings_page && catalog.installation_filter == filter;
-                        let button = egui::Button::image_and_text(
-                            icon.image(
-                                if active {
-                                    ui.visuals().selection.stroke.color
-                                } else {
-                                    ui.visuals().weak_text_color()
-                                },
-                                16.0,
-                            ),
-                            format!("{}  {count}", filter.label()),
-                        )
-                        .selected(active);
-                        if ui.add_sized([ui.available_width(), 40.0], button).clicked() {
-                            catalog.set_filter(filter);
-                            self.browse_page = false;
-                            if let Some(c) = controls.as_deref_mut() {
-                                c.settings_page = false;
-                            }
-                        }
-                        ui.add_space(4.0);
-                    }
-
-                });
-        }
-
-        let settings_page = controls.as_ref().is_some_and(|c| c.settings_page);
         egui::CentralPanel::default().frame(egui::Frame::new().fill(ui.visuals().panel_fill).inner_margin(24))
             .show(ui, |ui| {
                 if settings_page {
                     if let Some(c) = controls.as_deref_mut() { c.settings_content(ui, catalog, if self.browse_page { "Back to browsing" } else { "Back to library" }); }
+                    return;
+                }
+                if self.updates_page {
+                    if let Some(c) = controls.as_deref_mut()
+                        && let Some(index) = c.updates_content(ui, catalog) { catalog.select(index); self.detail_open = catalog.selected.clone(); }
                     return;
                 }
                 if self.browse_page {
@@ -546,17 +518,18 @@ impl View {
                     ui.add_space(16.0);
                 }
                 ui.horizontal(|ui| {
-                    ui.label(RichText::new("Mod library").size(27.0).strong());
+                    ui.label(RichText::new("Your mods").size(32.0).strong());
                     ui.label(RichText::new(format!("{} mods", catalog.visible.len())).size(14.0).color(ui.visuals().weak_text_color()));
                     ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                        if let Some(c) = controls.as_deref_mut() { c.add_mods_button(ui, catalog); }
                         if ui.add_enabled(catalog.root.is_some() && !catalog.loading,
-                            egui::Button::image_and_text(Icon::Refresh.image(foreground, 16.0), "Rescan")).clicked() {
+                            egui::Button::image(Icon::Refresh.image(foreground, 18.0))).on_hover_text("Rescan mods").clicked() {
                             scan_root = catalog.root.clone();
                         }
                     });
                 });
                 ui.add_space(12.0);
-                if let Some(c) = controls.as_deref_mut() { c.toolbar(ui, catalog); c.update_summary(ui); ui.add_space(12.0); }
+                if let Some(c) = controls.as_deref_mut() { c.library_toolbar(ui, catalog); if c.update_summary(ui, true) { self.updates_page = true; } ui.add_space(12.0); }
                 egui::Frame::new()
                     .fill(ui.visuals().extreme_bg_color)
                     .stroke(ui.visuals().widgets.noninteractive.bg_stroke)
@@ -569,7 +542,7 @@ impl View {
                             let response = ui.add_sized(
                                 [ui.available_width(), 40.0],
                                 egui::TextEdit::singleline(&mut query)
-                                    .hint_text("Search mods or filenames")
+                                    .hint_text("Search mods")
                                     .frame(egui::Frame::NONE.inner_margin(egui::Margin::symmetric(0, 11))),
                             );
                             self.stats.search = Some(response.rect);
@@ -580,22 +553,17 @@ impl View {
                     });
                 ui.add_space(16.0);
                 ui.horizontal_wrapped(|ui| {
-                    if narrow {
-                        for filter in [ModFilter::All, ModFilter::Installed, ModFilter::Stored] {
-                            if ui.selectable_label(catalog.installation_filter == filter, filter.label()).clicked() {
-                                catalog.set_filter(filter);
-                            }
-                        }
-                    } else {
-                        ui.label(RichText::new(catalog.installation_filter.label()).size(13.0).color(ui.visuals().weak_text_color()));
+                    for (filter, label) in [(ModFilter::All, "All"), (ModFilter::Installed, "On"), (ModFilter::Stored, "Off")] {
+                        if ui.add(egui::Button::new(label).selected(catalog.installation_filter == filter)).on_hover_text(filter.label()).clicked() { catalog.set_filter(filter); }
                     }
                     ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                        let list = ui.add(egui::Button::image_and_text(Icon::List.image(foreground, 16.0), "List").selected(self.layout == LibraryLayout::List)).on_hover_text("List view");
+                        let list = ui.add(egui::Button::image_and_text(Icon::List.image(foreground, 18.0), "").selected(self.layout == LibraryLayout::List)).on_hover_text("List view");
+                        list.widget_info(|| egui::WidgetInfo::labeled(egui::WidgetType::Button, ui.is_enabled(), "List"));
                         self.stats.list_switch = Some(list.rect);
                         if list.clicked() { self.layout = LibraryLayout::List; }
-                        if ui.add(egui::Button::image_and_text(Icon::Grid.image(foreground, 16.0), "Cards").selected(self.layout == LibraryLayout::Cards)).on_hover_text("Card view").clicked() {
-                            self.layout = LibraryLayout::Cards;
-                        }
+                        let cards = ui.add(egui::Button::image(Icon::Grid.image(foreground, 18.0)).selected(self.layout == LibraryLayout::Cards)).on_hover_text("Card view");
+                        cards.widget_info(|| egui::WidgetInfo::labeled(egui::WidgetType::Button, ui.is_enabled(), "Cards"));
+                        if cards.clicked() { self.layout = LibraryLayout::Cards; }
                     });
                 });
                 ui.add_space(12.0);
@@ -620,7 +588,8 @@ impl View {
                     return;
                 }
                 match self.layout {
-                    LibraryLayout::Cards => self.card_grid(ui, catalog, controls.as_deref_mut()),
+                    LibraryLayout::Cards if ui.available_height() >= 220.0 => self.card_grid(ui, catalog, controls.as_deref_mut()),
+                    LibraryLayout::Cards => self.library_list(ui, catalog, controls.as_deref_mut()),
                     LibraryLayout::List => self.library_list(ui, catalog, controls.as_deref_mut()),
                 }
 
@@ -660,6 +629,35 @@ impl View {
         scan_root
     }
 
+    fn brand(&mut self, ui: &mut egui::Ui) {
+        let logo = ui.add(egui::Image::new(egui::include_image!("../assets/plumbob.svg")).fit_to_exact_size(egui::vec2(22.0, 34.0)).alt_text("Sims 4 Mod Manager"));
+        self.stats.logo = Some(logo.rect);
+        ui.label(RichText::new("Mod Manager").size(18.0).strong().color(ui.visuals().override_text_color.unwrap_or(ui.visuals().text_color())));
+    }
+
+    fn destinations(&mut self, ui: &mut egui::Ui, controls: &mut Option<&mut crate::controls::Controls>, rail: bool) {
+        let settings = controls.as_ref().is_some_and(|c| c.settings_page);
+        for (icon, label, active) in [
+            (Icon::Grid, "Your mods", !self.browse_page && !self.updates_page && !settings),
+            (Icon::Compass, "Discover", self.browse_page && !settings),
+            (Icon::Refresh, "Updates", self.updates_page && !settings),
+        ] {
+            let response = if rail { rail_button(ui, icon, label, active) } else {
+                ui.add(egui::Button::image_and_text(icon.image(ui.visuals().text_color(), 18.0), label).selected(active))
+            };
+            if label == "Your mods" { self.stats.library_tab = Some(response.rect); }
+            if label == "Discover" { self.stats.browse_tab = Some(response.rect); }
+            if label == "Updates" { self.stats.updates_tab = Some(response.rect); }
+            if response.clicked() {
+                self.browse_page = label == "Discover";
+                self.updates_page = label == "Updates";
+                self.detail_open = None;
+                if let Some(c) = controls.as_deref_mut() { c.settings_page = false; }
+            }
+            if rail { ui.add_space(4.0); }
+        }
+    }
+
     fn card_grid(
         &mut self,
         ui: &mut egui::Ui,
@@ -669,8 +667,8 @@ impl View {
         let gap = 16.0;
         let columns = ((ui.available_width() + gap) / 236.0).floor().max(1.0) as usize;
         let width = (ui.available_width() - gap * (columns - 1) as f32) / columns as f32;
-        let photo_height = if catalog.visible.iter().any(|index| catalog.mods[*index].preview.is_some()) { 150.0 } else { 88.0 };
-        let height = photo_height + 112.0;
+        let photo_height = if catalog.visible.iter().any(|index| catalog.mods[*index].preview.is_some()) { 140.0 } else { 88.0 };
+        let height = photo_height + 98.0;
         let rows = catalog.visible.len().div_ceil(columns);
         ui.spacing_mut().item_spacing.y = gap;
         egui::ScrollArea::vertical()
@@ -691,6 +689,7 @@ impl View {
                             let entry = &catalog.mods[index];
                             let identity = EntryId::of(entry);
                             let selected = catalog.selected.as_ref() == Some(&identity);
+                            let mut toggle_requested = false;
                             let response = ui
                                 .push_id(&identity, |ui| {
                                     ui.style_mut().interaction.selectable_labels = false;
@@ -716,8 +715,8 @@ impl View {
                                         egui::StrokeKind::Inside,
                                     );
                                     let image_rect = egui::Rect::from_min_max(
-                                        rect.min + egui::vec2(8.0, 8.0),
-                                        egui::pos2(rect.right() - 8.0, rect.top() + photo_height + 8.0),
+                                        rect.min + egui::vec2(0.0, 0.0),
+                                        egui::pos2(rect.right(), rect.top() + photo_height),
                                     );
                                     self.paint_preview(
                                         ui,
@@ -796,23 +795,12 @@ impl View {
                                     footer.with_layout(
                                         egui::Layout::right_to_left(egui::Align::Center),
                                         |ui| {
-                                            let accent = if entry.enabled {
-                                                ui.visuals().selection.stroke.color
-                                            } else {
-                                                ui.visuals().weak_text_color()
-                                            };
-                                            ui.label(
-                                                RichText::new(if entry.enabled {
-                                                    "Installed"
-                                                } else {
-                                                    "Stored"
-                                                })
-                                                .size(12.0)
-                                                .color(accent),
-                                            );
-                                            if entry.enabled {
-                                                ui.add(Icon::Check.image(accent, 13.0));
-                                            }
+                                            let enabled = entry.enabled;
+                                            let toggle = ui.add_enabled_ui(controls.as_ref().is_some_and(|c| !c.busy()) && entry.id.is_some() && !catalog.loading,
+                                                |ui| mod_switch(ui, enabled, &entry.name)).inner;
+                                            if self.stats.first_toggle.is_none() { self.stats.first_toggle = Some(toggle.rect); }
+                                            if toggle.clicked() { toggle_requested = true; }
+
                                         },
                                     );
                                     response.widget_info(|| {
@@ -826,6 +814,10 @@ impl View {
                                     response.on_hover_text(&entry.name)
                                 })
                                 .inner;
+                            if toggle_requested {
+                                catalog.select(index);
+                                if let Some(c) = controls.as_deref_mut() { c.review_toggle(catalog); }
+                            }
                             if response.secondary_clicked() {
                                 catalog.select(index);
                             }
@@ -836,7 +828,7 @@ impl View {
                                 self.stats.first_row = Some(response.rect.intersect(ui.clip_rect()));
                             }
                             self.stats.rows += 1;
-                            if response.clicked() {
+                            if response.clicked() && !toggle_requested {
                                 catalog.select(index);
                                 self.detail_open = catalog.selected.clone();
                             }
@@ -1460,7 +1452,7 @@ mod tests {
                     .stats
                     .theme_button
                     .expect("Theme control must stay available");
-                assert!((logo.width() / logo.height() - 2148.0 / 482.0).abs() < 0.01);
+                assert!((logo.width() / logo.height() - 22.0 / 34.0).abs() < 0.01);
                 assert!(logo.left() >= 0.0 && button.right() <= width);
                 assert!(!logo.intersects(button));
                 render(

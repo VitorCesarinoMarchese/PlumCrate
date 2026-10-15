@@ -897,10 +897,11 @@ impl DiscoverView {
                             .stroke(ui.visuals().widgets.noninteractive.bg_stroke)
                             .corner_radius(8)
                             .inner_margin(14);
+                        let content_width = width - frame.total_margin().sum().x;
                         let response = frame
                             .show(ui, |ui| {
                                 ui.vertical(|ui| {
-                                    ui.set_width(width - 28.0);
+                                    ui.set_width(content_width);
                                     ui.set_min_height(238.0);
                                     ui.allocate_ui(vec2(ui.available_width(), 64.0), |ui| {
                                         ui.set_min_height(64.0);

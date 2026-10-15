@@ -224,3 +224,94 @@ fn unknown_version_picker_requires_a_choice_before_review() {
     .unwrap();
     assert!(metadata["sourceAttachment"]["installedRelease"].is_null());
 }
+
+#[test]
+fn card_switch_only_requests_a_review_and_preserves_original_files() {
+    let mut fixture = support::fixture();
+    fixture.catalog.selected = None;
+    let metadata = fixture.directory.path().join("managed/mods")
+        .join(fixture.catalog.mods[0].id.as_ref().unwrap()).join("meta.json");
+    let before = std::fs::read(&metadata).unwrap();
+    let ctx = egui::Context::default();
+    ts4_mod_manager_native::ui::setup(&ctx);
+    frame(&ctx, &mut fixture, vec![]);
+    frame(&ctx, &mut fixture, vec![]);
+    let switch = fixture.view.stats.first_toggle.unwrap();
+    frame(&ctx, &mut fixture, click(switch));
+    let deadline = std::time::Instant::now() + std::time::Duration::from_secs(3);
+    while fixture.controls.busy() {
+        fixture.controls.poll(&fixture.catalog);
+        assert!(std::time::Instant::now() < deadline);
+        std::thread::sleep(std::time::Duration::from_millis(2));
+    }
+    frame(&ctx, &mut fixture, vec![]);
+    let output = frame(&ctx, &mut fixture, vec![]);
+    assert!(fixture.controls.review_open(), "card switches require review");
+    assert!(has_text(&output, "Cancel"));
+    assert_eq!(std::fs::read(&metadata).unwrap(), before);
+    assert!(!fixture.catalog.mods[0].enabled);
+}
+
+#[test]
+fn updates_navigation_preserves_library_search_and_checks_only_on_request() {
+    let mut fixture = support::fixture();
+    fixture.catalog.search("Synthetic".into());
+    let selected = fixture.catalog.selected.clone();
+    let ctx = egui::Context::default();
+    ts4_mod_manager_native::ui::setup(&ctx);
+    frame(&ctx, &mut fixture, vec![]);
+    frame(&ctx, &mut fixture, vec![]);
+    let updates = fixture.view.stats.updates_tab.unwrap();
+    frame(&ctx, &mut fixture, click(updates));
+    let output = frame(&ctx, &mut fixture, vec![]);
+    assert!(has_text(&output, "Updates"));
+    assert!(has_text(&output, "Choose installed release"));
+    assert!(!fixture.controls.updates.pending);
+    assert_eq!(fixture.catalog.query, "Synthetic");
+    assert_eq!(fixture.catalog.selected, selected);
+    let library = fixture.view.stats.library_tab.unwrap();
+    frame(&ctx, &mut fixture, click(library));
+    frame(&ctx, &mut fixture, vec![]);
+    assert!(fixture.view.stats.search.is_some());
+    assert_eq!(fixture.catalog.query, "Synthetic");
+}
+
+#[test]
+fn add_mods_menu_exposes_folder_and_zip_without_starting_an_operation() {
+    let mut fixture = support::fixture();
+    let ctx = egui::Context::default();
+    ts4_mod_manager_native::ui::setup(&ctx);
+    frame(&ctx, &mut fixture, vec![]);
+    let output = frame(&ctx, &mut fixture, vec![]);
+    let add = output.shapes.iter().find_map(|shape| match &shape.shape {
+        egui::Shape::Text(text) if text.galley.text() == "Add mods" => Some(egui::Rect::from_min_size(text.pos, text.galley.size())),
+        _ => None,
+    }).expect("primary Add mods action");
+    frame(&ctx, &mut fixture, click(add));
+    frame(&ctx, &mut fixture, vec![]);
+    let output = frame(&ctx, &mut fixture, vec![]);
+    assert!(has_text(&output, "Import folder"));
+    assert!(has_text(&output, "Import ZIP"));
+    assert!(!fixture.controls.busy());
+    assert!(!fixture.controls.review_open());
+}
+
+#[test]
+fn updates_page_has_one_working_review_per_mod() {
+    let mut fixture = support::fixture();
+    let ctx = egui::Context::default();
+    ts4_mod_manager_native::ui::setup(&ctx);
+    frame(&ctx, &mut fixture, vec![]);
+    frame(&ctx, &mut fixture, vec![]);
+    let updates = fixture.view.stats.updates_tab.unwrap();
+    frame(&ctx, &mut fixture, click(updates));
+    let output = frame(&ctx, &mut fixture, vec![]);
+    let reviews: Vec<_> = output.shapes.iter().filter_map(|shape| match &shape.shape {
+        egui::Shape::Text(text) if text.galley.text() == "Review" => Some(egui::Rect::from_min_size(text.pos, text.galley.size())),
+        _ => None,
+    }).collect();
+    assert_eq!(reviews.len(), 1, "only the linked mod has a Review action on Updates");
+    frame(&ctx, &mut fixture, click(reviews[0]));
+    frame(&ctx, &mut fixture, vec![]);
+    assert!(fixture.view.stats.detail_close.is_some(), "Review opens that mod's details");
+}

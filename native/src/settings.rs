@@ -25,11 +25,11 @@ impl ThemeColors {
     pub fn base(dark: bool) -> Self {
         let values = if dark {
             [
-                "#E8CF95", "#131315", "#1B1B1E", "#F5F3EE", "#B3B1AB", "#39393D",
+                "#9BC7FF", "#122C49", "#1D3A57", "#F4F8FB", "#BED0DF", "#405C75",
             ]
         } else {
             [
-                "#533D14", "#F6F4EF", "#FFFFFF", "#1F1E1B", "#656056", "#DAD5C9",
+                "#1263CA", "#EDF4F8", "#FFFFFF", "#173452", "#52687C", "#D4E0E9",
             ]
         };
         Self {
@@ -209,7 +209,7 @@ impl Default for Settings {
             custom_themes: vec![],
             active_custom_theme: None,
             version: 1,
-            theme: Theme::System,
+            theme: Theme::Light,
             game_roots: vec![],
             selected_root: None,
             curseforge_api_key: None,

@@ -35,6 +35,8 @@ def main():
             ("navigation-library-light.png", []),
             ("navigation-library-dark.png", ["--dark"]),
             ("navigation-library-narrow.png", ["--size", "680x760"]),
+            ("navigation-library-minimum.png", ["--size", "640x480"]),
+            ("navigation-library-short.png", ["--size", "1200x480"]),
             ("navigation-library-wide.png", ["--size", "1885x1000", "--dark"]),
             ("navigation-settings-light.png", ["--settings"]),
             ("navigation-settings-dark.png", ["--settings", "--dark"]),

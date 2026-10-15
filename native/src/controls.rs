@@ -158,7 +158,8 @@ impl Controls {
             if !self.operations.last().is_some_and(|job| job.job.identity.operation == operation) { self.updates.pending = false; }
         }
     }
-    pub fn update_summary(&self, ui: &mut egui::Ui) {
+    pub fn update_summary(&self, ui: &mut egui::Ui, offer_navigation: bool) -> bool {
+        let mut review = false;
         if self.updates.pending {
             ui.horizontal(|ui| { ui.spinner(); ui.label("Checking CurseForge releases..."); });
         } else if !self.updates.reports.is_empty() {
@@ -169,8 +170,16 @@ impl Controls {
                 | ts4_mod_manager_core::mod_updates::UpdateStatus::LocalContentChanged
                 | ts4_mod_manager_core::mod_updates::UpdateStatus::InstalledReleaseUnavailable
                 | ts4_mod_manager_core::mod_updates::UpdateStatus::Incomplete))).count();
-            ui.label(format!("Newer releases: {available} · Versions unknown: {unknown} · Failed checks: {errors}. Open a mod for details."));
+            egui::Frame::new().fill(ui.visuals().selection.bg_fill).corner_radius(10).inner_margin(12).show(ui, |ui| {
+                ui.horizontal_wrapped(|ui| {
+                    ui.label(egui::RichText::new(format!("{available} updates found")).color(ui.visuals().selection.stroke.color));
+                    if unknown > 0 { ui.label(format!("{unknown} need a version")); }
+                    if errors > 0 { ui.label(format!("{errors} failed checks")); }
+                    review = offer_navigation && ui.button("Review").clicked();
+                });
+            });
         }
+        review
     }
     pub fn update_details(&mut self, ui: &mut egui::Ui, catalog: &Catalog) {
         use ts4_mod_manager_core::mod_updates::UpdateStatus;
@@ -794,6 +803,96 @@ impl Controls {
         self.selected_actions(ui, catalog);
         self.activity(ui);
         self.show_dialogs(ui.ctx(), catalog);
+    }
+    pub fn open_trash(&mut self, catalog: &Catalog) {
+        if let Some(identity) = self.identity(catalog) { self.submit(identity, Action::ListTrash); }
+    }
+    pub fn review_toggle(&mut self, catalog: &Catalog) {
+        let Some(entry) = catalog.selected_mod().filter(|entry| entry.id.is_some()) else { return; };
+        if catalog.loading || self.busy() { return; }
+        let enabled = !entry.enabled;
+        if let Some(identity) = self.identity(catalog) { self.submit(identity, Action::ReviewToggle { enabled }); }
+    }
+    pub fn add_mods_button(&mut self, ui: &mut egui::Ui, catalog: &Catalog) {
+        let ready = catalog.root.is_some() && !catalog.loading && !self.picker_open();
+        ui.add_enabled_ui(ready, |ui| {
+            ui.scope(|ui| {
+                let v = ui.visuals_mut();
+                for widget in [&mut v.widgets.inactive, &mut v.widgets.hovered, &mut v.widgets.open] {
+                    widget.weak_bg_fill = egui::Color32::from_rgb(18, 99, 202);
+                    widget.bg_fill = widget.weak_bg_fill;
+                    widget.fg_stroke.color = egui::Color32::WHITE;
+                }
+                ui.menu_image_text_button(crate::ui::Icon::Plus.image(egui::Color32::WHITE, 18.0), egui::RichText::new("Add mods").color(egui::Color32::WHITE).strong(), |ui| {
+                    // Popup actions inherit the content theme, not the blue trigger.
+                    let style = ui.ctx().style_of(ui.ctx().theme());
+                    *ui.style_mut() = (*style).clone();
+                    for (label, zip) in [("Import folder", false), ("Import ZIP", true)] {
+                        let response = ui.button(label);
+                        if !zip { self.import_rect = Some(response.rect); }
+                        if response.clicked() && let Some(identity) = self.identity(catalog) {
+                            ui.close();
+                            self.start_picker(PickPurpose::Import(identity, zip), ui.ctx(), None);
+                        }
+                    }
+                });
+            });
+        });
+    }
+    pub fn library_toolbar(&mut self, ui: &mut egui::Ui, catalog: &Catalog) {
+        self.updates.sync(catalog, self.saved_settings.curseforge_api_key.as_deref());
+        if ui.ctx().content_rect().height() >= 600.0 && catalog.mods.iter().any(|entry| entry.source_attachment.as_ref().is_some_and(|source| source.provider_id == "curseforge" && source.project_id.is_some())) {
+            self.check_updates_button(ui, catalog);
+        }
+    }
+    fn check_updates_button(&mut self, ui: &mut egui::Ui, catalog: &Catalog) {
+        let ids: Vec<_> = catalog.mods.iter().filter(|entry| entry.source_attachment.as_ref()
+            .is_some_and(|source| source.provider_id == "curseforge" && source.project_id.is_some()))
+            .filter_map(|entry| entry.id.clone()).collect();
+        let response = ui.add_enabled(catalog.root.is_some() && !catalog.loading && !self.updates.pending && !ids.is_empty(), egui::Button::new("Check updates"))
+            .on_hover_text("Check mods with a confirmed CurseForge source");
+        self.check_updates_rect = Some(response.rect);
+        if response.clicked() { self.check_updates(catalog, ids); }
+    }
+    pub fn updates_content(&mut self, ui: &mut egui::Ui, catalog: &Catalog) -> Option<usize> {
+        use ts4_mod_manager_core::mod_updates::UpdateStatus;
+        self.updates.sync(catalog, self.saved_settings.curseforge_api_key.as_deref());
+        ui.label(egui::RichText::new("Updates").size(32.0).strong());
+        ui.add_space(16.0);
+        self.check_updates_button(ui, catalog);
+        self.update_summary(ui, false);
+        ui.add_space(20.0);
+        let mut selected = None;
+        egui::ScrollArea::vertical().show(ui, |ui| {
+            let mut linked = 0;
+            for (index, entry) in catalog.mods.iter().enumerate().filter(|(_, entry)| entry.source_attachment.as_ref()
+                .is_some_and(|source| source.provider_id == "curseforge" && source.project_id.is_some())) {
+                linked += 1;
+                let status = match entry.id.as_ref().and_then(|id| self.updates.reports.get(id)) {
+                    Some(Ok(report)) => match report.status {
+                        UpdateStatus::Available(_) => "Update available",
+                        UpdateStatus::NoNewerRelease => "Up to date",
+                        UpdateStatus::Untracked => "Choose installed release",
+                        UpdateStatus::LocalContentChanged => "Local files changed",
+                        UpdateStatus::InstalledReleaseUnavailable => "Installed release unavailable",
+                        UpdateStatus::Incomplete => "Check incomplete",
+                    },
+                    Some(Err(_)) => "Check failed",
+                    None => "Not checked",
+                };
+                ui.horizontal(|ui| {
+                    ui.label(egui::RichText::new(&entry.name).strong());
+                    ui.label(status);
+                    if ui.button("Review").clicked() { selected = Some(index); }
+                });
+                ui.separator();
+            }
+            if linked == 0 {
+                ui.heading("No linked mods yet");
+                ui.label("Open a mod and use Find source to link its CurseForge page.");
+            }
+        });
+        selected
     }
     pub fn toolbar(&mut self, ui: &mut egui::Ui, catalog: &Catalog) {
         self.updates.sync(catalog, self.saved_settings.curseforge_api_key.as_deref());
@@ -1839,7 +1938,7 @@ mod tests {
         let fixture = tempfile::tempdir().unwrap();
         let mut theme = crate::settings::CustomTheme::base();
         theme.name = "My theme".into();
-        theme.dark.accent = "#BE73D1".into();
+        theme.dark.accent = "#E8B7F4".into();
         let settings = Settings {
             theme: Theme::Dark,
             active_custom_theme: Some(theme.name.clone()),
@@ -1854,9 +1953,9 @@ mod tests {
         for mode in [egui::Theme::Light, egui::Theme::Dark] {
             let style = ctx.style_of(mode);
             let (background, accent) = if mode == egui::Theme::Dark {
-                ([0x13, 0x13, 0x15], [0xBE, 0x73, 0xD1])
+                ([0x12, 0x2C, 0x49], [0xE8, 0xB7, 0xF4])
             } else {
-                ([0xF6, 0xF4, 0xEF], [0x53, 0x3D, 0x14])
+                ([0xED, 0xF4, 0xF8], [0x12, 0x63, 0xCA])
             };
             assert_eq!(style.visuals.panel_fill, egui::Color32::from_rgb(background[0], background[1], background[2]));
             assert_eq!(style.visuals.hyperlink_color, egui::Color32::from_rgb(accent[0], accent[1], accent[2]));
@@ -1867,7 +1966,7 @@ mod tests {
         let saved = Settings::load(&controls.settings_path).unwrap();
         assert!(saved.theme == Theme::Light);
         assert_eq!(saved.active_custom_theme.as_deref(), Some("My theme"));
-        assert_eq!(saved.custom_themes[0].dark.accent, "#BE73D1");
+        assert_eq!(saved.custom_themes[0].dark.accent, "#E8B7F4");
         controls.set_color_mode(&ctx, Theme::Dark);
         assert_eq!(ctx.theme(), egui::Theme::Dark);
         assert_eq!(controls.settings.active_custom_theme.as_deref(), Some("My theme"));

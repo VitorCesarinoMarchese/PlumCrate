@@ -12,7 +12,7 @@ use ts4_mod_manager_native::{
     ui,
 };
 
-const CASES: [(&str, bool, [f32; 2]); 7] = [
+const CASES: [(&str, bool, [f32; 2]); 9] = [
     ("updates-library-dark", true, [1200.0, 800.0]),
     ("updates-detail-dark", true, [1200.0, 800.0]),
     ("updates-detail-light", false, [1200.0, 800.0]),
@@ -20,6 +20,8 @@ const CASES: [(&str, bool, [f32; 2]); 7] = [
     ("updates-error-small", true, [640.0, 480.0]),
     ("updates-detail-user", true, [1871.0, 1006.0]),
     ("updates-confirm-small", false, [640.0, 480.0]),
+    ("updates-page-light", false, [1200.0, 800.0]),
+    ("updates-page-small", false, [640.0, 480.0]),
 ];
 struct Capture {
     fixture: support::Fixture,
@@ -90,7 +92,7 @@ impl eframe::App for Capture {
     fn raw_input_hook(&mut self, _: &egui::Context, input: &mut egui::RawInput) {
         if !self.opened
             && self.frames >= 2
-            && let Some(row) = self.fixture.view.stats.first_row
+            && let Some(row) = if self.case >= 7 { self.fixture.view.stats.updates_tab } else { self.fixture.view.stats.first_row }
         {
             let pos = row.center();
             input.events.extend([
@@ -166,7 +168,7 @@ impl eframe::App for Capture {
         {
             self.frames += 1;
             if self.frames >= 5 && self.staged.elapsed() >= Duration::from_millis(350) {
-                if self.case != 0 && self.case != 6 {
+                if (1..=5).contains(&self.case) {
                     assert!(
                         ctx.content_rect()
                             .contains_rect(self.fixture.view.stats.detail_close.unwrap())
@@ -233,6 +235,6 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             Ok(Box::new(capture))
         }),
     )?;
-    println!("7 production update captures; synthetic provider data, no operations approved");
+    println!("9 production update captures; synthetic provider data, no operations approved");
     Ok(())
 }
