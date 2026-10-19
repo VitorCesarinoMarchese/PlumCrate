@@ -1,18 +1,32 @@
 <p align="center">
-  <img src="native/assets/logo.svg" width="560" alt="Sims 4 Mod Manager logo">
+  <img src="native/assets/logo.svg" width="640" alt="Sims 4 Mod Manager logo">
 </p>
 
 # Sims 4 Mod Manager
 
 Your Sims 4 mods and custom content, organized on your Linux desktop.
 
-Browse your collection by photo, find a file by name, and choose which mods are active in your game. Keep downloaded mods in a local library, with reviewed changes and recoverable trash.
+Browse your collection by photo, find a file by name, and choose which mods are active in your game. Keep downloaded mods in a local library, with direct on/off switches and recoverable trash.
 
 [Getting started](#getting-started) · [Documentation](docs/README.md) · [Report a bug](https://github.com/VitorCesarinoMarchese/TS4ModManager/issues) · [Releases](https://github.com/VitorCesarinoMarchese/TS4ModManager/releases)
 
 ![Sims 4 Mod Manager in light mode, showing the mod library with photo cards](docs/images/library-light.png)
 
-*The app running with sample mods. The screenshot uses synthetic test data.*
+*The current app with real mod covers in a demo library. [Cover credits and screenshot sources](docs/images/README.md).*
+
+<details>
+<summary>Dark mode</summary>
+
+![The dark mod library with real creator cover art and direct on/off switches](docs/images/library-dark.png)
+
+</details>
+
+<details>
+<summary>Settings and theme preview</summary>
+
+![Settings with appearance choices, a theme preview, and Save changes](docs/images/settings.png)
+
+</details>
 
 ## What you can do
 
@@ -22,7 +36,7 @@ Browse your collection by photo, find a file by name, and choose which mods are 
 | Search CurseForge | Browse Sims 4 mods and custom content by name, content type, category, game version, and sort order. Read author descriptions, inspect release dependencies, and view screenshots inside the app. Requires your API key in local Settings. |
 | Install from CurseForge | Review a public release, Downloads folder, and selected game, then open its official page in your browser. The app verifies the completed download, imports it, and enables it automatically. |
 | Bring your own mods | Import a local folder or ZIP archive, or review existing game mods before moving them into the managed library. |
-| Choose what loads | Review the files before enabling or disabling a managed mod. |
+| Choose what loads | Turn mods on or off directly from their cards or list rows. New imports start enabled. |
 | Keep track of sources | Save a source link yourself, or review CurseForge suggestions and confirm a match. |
 | Check for updates | Check attached CurseForge projects for newer public releases, then open the mod page to download manually. Record the release you installed before comparing versions. |
 | Update the AppImage | Receive app update notices from GitHub, approve a verified download, and restart with the previous AppImage preserved. |
@@ -41,7 +55,7 @@ The app manages local mods and checks attached CurseForge projects for newer rel
 
 1. Open the app and choose your **The Sims 4** folder, the folder containing **Mods**. Use **Change folder** if the detected location is wrong.
 2. Browse your existing mods, or open **Add mods** and select **Import folder** or **Import ZIP** to add files you have downloaded.
-3. Select a managed mod to inspect its files. Choose **Enable** or **Disable**, review the proposed changes, and confirm.
+3. Use the switch on a mod card or list row to turn it on or off. New imports start enabled. Select the card to inspect its files.
 4. Right-click a mod for more actions. Use **Restore from trash** to recover a removed managed mod.
 
 To install a CurseForge mod, open **Discover**, view a project, and choose **Download via website…**. Review the release and folders, then select **Start browser download**. After you save the file in your browser, the app imports and enables the verified download without another click.
@@ -54,7 +68,7 @@ See the [app guide](docs/native-app.md) for [browser-assisted installation](docs
 
 Your library and settings stay on your computer. Local browsing and mod management work without CurseForge. Optional CurseForge browsing, browser-assisted installation, source lookup, update checks, and remote preview images use network requests. AppImages also check GitHub releases for app updates; you can turn off automatic app checks in Settings. See [AppImage updates](docs/app-updates.md).
 
-Management actions require review. The app checks ownership before removing its links, leaves unmanaged files alone, and moves removed managed mods to recoverable trash. Read the [storage and safety details](docs/development.md#local-storage-and-safety) for locations and recovery behavior.
+Imports, source changes, migration, trash, and restore keep their review steps. On/off switches apply directly. The app checks ownership before removing its links, leaves unmanaged files alone, and moves removed managed mods to recoverable trash. Read the [storage and safety details](docs/development.md#local-storage-and-safety) for locations and recovery behavior.
 
 ## Help and contribute
 
