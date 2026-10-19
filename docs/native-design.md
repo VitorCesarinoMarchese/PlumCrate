@@ -74,7 +74,7 @@ This guide describes the Linux Fastframe/egui app. `native/src/settings.rs::Them
 **Key Characteristics:**
 
 - Blue navigation with Your mods, Discover and Updates.
-- Photo cards with reviewed On/Off switches and a compact list option.
+- Photo cards and compact list rows with direct On/Off switches.
 - Short labels, original plumbob and compass icons, and recoverable management actions.
 
 ## Colors
@@ -105,7 +105,7 @@ At widths of at least 900 points, a fixed 240-point blue rail contains the brand
 
 Your mods places Add mods in its title row, followed by manual Check updates for linked mods in windows at least 600 points tall, any actual result summary, search, All/On/Off filters and icon card/list controls. These filters intersect name and filename search without changing files. Your mods, Discover and Updates remain reachable while Settings occupies the central page.
 
-Cards use a 16-point gap, 140-point image and 98-point information/footer region. If no visible mod has a saved preview, the image region is 88 points and cards total 186 points. Columns use `max(1, floor((available_width + 16) / 236))`; remaining width divides evenly. Below 220 points of available content height, cards temporarily render as compact list rows without changing the saved view choice. Rows are 64 points high with 44-point previews. Both views virtualize visible rows.
+Cards use a 16-point gap, 140-point image and 98-point information/footer region. If no visible mod has a saved preview, the image region is 88 points and cards total 186 points. Columns use `max(1, floor((available_width + 16) / 236))`; remaining width divides evenly. Below 220 points of available content height, cards temporarily render as compact list rows without changing the saved view choice. Rows normally use 64-point height, 44-point previews and 10-point vertical padding. Below 64 points of available list height, rows use 40-point height, 32-point previews and 4-point vertical padding to keep the whole switch visible above footer notices. Both views virtualize visible rows.
 
 Selecting a mod opens the same centered details popup at every width. The popup preserves the library behind it, pins its title and actions, and scrolls files and source details together. It leaves 24 points around its frame in narrow windows, has a content width up to 600 points, and reduces its preview from 240 to 120 points in short windows. Close, Escape or backdrop click dismisses it without clearing selection. Previous/Next and Alt+Left/Right follow the filtered order.
 
@@ -121,8 +121,8 @@ Cards use the card radius, search uses the search radius, and ordinary widgets u
 
 ## Components
 
-- Cards show real names, saved authors when available, file counts and On/Off switches. Clicking a switch requests `Action::ReviewToggle`; only confirmation applies a file operation. External mods retain their migration review. Cards and list rows share clicked-identity context menus.
-- Add mods opens Import folder and Import ZIP, followed by desktop picking and the existing import review. Originals stay in place. Trash is recoverable and requires the existing ownership checks.
+- Cards show real names, saved authors when available, file counts and On/Off switches. Cards and list rows use the same direct `Action::Toggle { enabled }` switch without opening details or a review. Failures remain visible in the bottom status. Core locking, ownership, collision checks and journaling still apply. External mods retain their migration review. Cards and list rows share clicked-identity context menus.
+- Add mods opens Import folder and Import ZIP, followed by desktop picking and the existing import review. New folder and ZIP imports enable in the selected game by default. If enabling is blocked, the app keeps the imported library content and unrelated game files, and shows a warning. Originals stay in place. Trash is recoverable and requires the existing ownership checks.
 - Search filters as text changes. Ctrl+F focuses search and dismisses details while preserving selection. Card/list changes retain search and selected identity. Missing or broken photos show No Preview; details use contain sizing and cards use centered destination-aware cover crops.
 - Updates shows only mods with explicitly attached CurseForge projects and their actual reports. Check updates is manual. The library summary's Review opens Updates; each report's Review opens the existing mod details popup. Unknown versions, changed files, incomplete checks and failures remain distinct. Recording an installed release requires review and writes metadata only. Update checks never download or replace files.
 - Discover uses real provider search, filters, summaries, author descriptions, dependencies and supplied images. Browser-assisted installation retains release, source, Downloads-folder and game-destination consent. After that approval, verified import and enabling follow the existing workflow. Every desired dependency needs its own review. Source search never attaches a candidate silently.
@@ -138,5 +138,5 @@ Plumbob verification uses `native/verify_navigation.py` for 15 isolated navigati
 - Do require confirmation for source attachment and reviewed management actions.
 - Do require user initiation for downloads and update checks.
 - Don't invent photos, authors, provider candidates or counters.
-- Don't turn the On/Off switch into an immediate file operation.
+- Don't open details or a confirmation popup when a managed mod's On/Off switch is clicked.
 - Don't permanently delete user files or remove unmanaged files.

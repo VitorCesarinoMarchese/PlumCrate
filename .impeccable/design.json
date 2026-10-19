@@ -171,6 +171,11 @@
       "cardWidthFormula": "(available_width - 16 * (columns - 1)) / columns",
       "listRowHeight": 64,
       "listPreviewSize": 44,
+      "listRowVerticalPadding": 10,
+      "compactListAvailableHeightThreshold": 64,
+      "compactListRowHeight": 40,
+      "compactListPreviewSize": 32,
+      "compactListRowVerticalPadding": 4,
       "detailPreviewHeight": 240,
       "searchHeight": 40,
       "fileRowHeight": 48,
@@ -197,7 +202,7 @@
       {
         "name": "Photo card",
         "source": "native/src/ui.rs::card_grid",
-        "description": "140pt photo plus 98pt footer; reviewed On/Off switch and selected/focused outline."
+        "description": "140pt photo plus 98pt footer; direct On/Off switch shared with list rows and selected/focused outline."
       },
       {
         "name": "Search",
@@ -453,7 +458,7 @@
       "regressions": [
         "plumbob navigation and paired palette",
         "visible short-window mod names",
-        "unselected card switch requests review without writing metadata",
+        "card and list switches enable and disable directly without opening details or a review; collisions report visible failures",
         "Add mods exposes folder and ZIP without submitting work",
         "Updates navigation preserves search and selection without checking",
         "only per-mod Review is offered on Updates and opens details"
@@ -472,6 +477,24 @@
       "palette": "Valid custom fills and accents apply per light/dark mode. Rail uses surface, selected destination uses selection fill, primary actions and enabled switches use accent. Text and knobs adjust against their painted fills.",
       "fallback": "Invalid hex colors prevent Settings saving. Low contrast adjusts text against each painted background without replacing the palette; choosing Built-in restores Plumbob after Save changes.",
       "verification": "Rendered light/dark regression failed before the fix and passes afterward, including switching back to built-in chrome. Fifteen native fixture captures preserve inputs."
+    },
+    "nativeLibraryActions": {
+      "toggle": "Cards, list rows, details and context menus submit Action::Toggle { enabled } directly. Switch clicks open no details or review; failures appear in the bottom status.",
+      "safety": "Core toggle operations retain locking, ownership and collision checks, and journaling.",
+      "newImports": "Folder and ZIP imports enable in the selected game after storage. An enable conflict retains imported library content and unrelated game files, shows a warning and offers no retry-import. Browser-assisted imports retain their existing consent and automatic enabling.",
+      "captureVerification": {
+        "source": "native/examples/verify_toggles.rs",
+        "captureDirectory": ".impeccable/review/toggles",
+        "captureCount": 5,
+        "cases": [
+          "cards-enabled 1200x800",
+          "list-enabled-dark 1200x800",
+          "list-disabled-narrow 680x760",
+          "list-enabled-minimum 640x480",
+          "cards-enabled-user 1876x996"
+        ],
+        "fixturePolicy": "Only temporary fixture symlinks change; original file bytes are verified."
+      }
     }
   },
   "components": [],
@@ -480,7 +503,7 @@
     "overview": "The user chose Plumbob from five concepts and approved its implementation. A blue navigation rail, pale blue background, white cards and green installed-state accents give the app a Sims-inspired identity. Keep words short, use recognizable icons, and let actual mod photos carry the library's personality. The navy dark counterpart keeps the same hierarchy.\n\nThis guide describes the Linux Fastframe/egui app. `native/src/settings.rs::ThemeColors::base` and `native/src/ui.rs::base_style` define the built-in colors. Rust widgets are authoritative; dimensions use egui logical points. Fresh settings default to light. Existing saved appearance choices and custom themes remain intact.",
     "keyCharacteristics": [
       "Blue navigation with Your mods, Discover and Updates.",
-      "Photo cards with reviewed On/Off switches and a compact list option.",
+      "Photo cards and compact list rows with direct On/Off switches.",
       "Short labels, original plumbob and compass icons, and recoverable management actions."
     ],
     "rules": [
@@ -498,7 +521,7 @@
     ],
     "donts": [
       "Don't invent photos, authors, provider candidates or counters.",
-      "Don't turn the On/Off switch into an immediate file operation.",
+      "Don't open details or a confirmation popup when a managed mod's On/Off switch is clicked.",
       "Don't permanently delete user files or remove unmanaged files."
     ]
   }
