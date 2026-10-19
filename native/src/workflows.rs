@@ -21,20 +21,7 @@ impl Fixture {
 
     fn toggle(&mut self, id: &str, enabled: bool) -> Result<(), String> {
         let entry = Some(EntryId::Managed(id.into()));
-        let Output::Review(review) = self.run(entry.clone(), Action::ReviewToggle { enabled })?
-        else {
-            return Err("Expected review".into());
-        };
-        if !review.can_apply {
-            return Err("Toggle review denied".into());
-        }
-        self.run(
-            entry,
-            Action::Toggle {
-                enabled,
-                review: serde_json::to_string(&review).map_err(|e| e.to_string())?,
-            },
-        )?;
+        self.run(entry, Action::Toggle { enabled })?;
         Ok(())
     }
 }
@@ -74,7 +61,9 @@ pub fn verify() -> Result<serde_json::Value, String> {
         .iter()
         .find_map(|m| m.id.clone())
         .ok_or("Folder import missing")?;
-    fixture.toggle(&id, true)?;
+    if !catalog.mods.iter().any(|entry| entry.id.as_deref() == Some(&id) && entry.enabled) {
+        return Err("Folder import did not start enabled".into());
+    }
     fixture.root = root_b.clone();
     fixture.toggle(&id, true)?;
     fixture.root = root.clone();
@@ -135,6 +124,9 @@ pub fn verify() -> Result<serde_json::Value, String> {
             name: "Fixture ZIP".into(),
         },
     )?;
+    if !worker::scan(&root, &fixture.managed)?.mods.iter().any(|entry| entry.files == ["zip.package"] && entry.enabled) {
+        return Err("ZIP import did not start enabled".into());
+    }
     std::fs::create_dir_all(root.join("Mods/External")).map_err(|e| e.to_string())?;
     std::fs::write(root.join("Mods/External/external.package"), bytes)
         .map_err(|e| e.to_string())?;
@@ -178,6 +170,6 @@ pub fn verify() -> Result<serde_json::Value, String> {
         }
     }
     Ok(
-        serde_json::json!({"passed":true,"workflows":["folder import","ZIP import","reviewed two-instance enable and disable","external migration","rename","confirmed manual source attach and remove","trash list and restore","missing API key error","refreshed catalog","source and managed byte preservation"],"mods":catalog.mods.len(),"operations":fixture.next-1,"fixturePathsOnly":true}),
+        serde_json::json!({"passed":true,"workflows":["folder import","ZIP import","direct two-instance enable and disable","external migration","rename","confirmed manual source attach and remove","trash list and restore","missing API key error","refreshed catalog","source and managed byte preservation"],"mods":catalog.mods.len(),"operations":fixture.next-1,"fixturePathsOnly":true}),
     )
 }

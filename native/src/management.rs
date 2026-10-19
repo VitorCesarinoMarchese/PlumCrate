@@ -25,8 +25,7 @@ impl Identity {
 pub enum Action {
     ImportFolder { path: PathBuf, name: String },
     ImportZip { path: PathBuf, name: String },
-    ReviewToggle { enabled: bool },
-    Toggle { enabled: bool, review: String },
+    Toggle { enabled: bool },
     Migrate { files: Vec<String> },
     Rename(String),
     ManualSource(String),
@@ -53,8 +52,8 @@ impl Action {
         match self {
             Self::ImportFolder { .. } => "Import folder",
             Self::ImportZip { .. } => "Import ZIP",
-            Self::ReviewToggle { enabled: true } | Self::Toggle { enabled: true, .. } => "Enable",
-            Self::ReviewToggle { enabled: false } | Self::Toggle { enabled: false, .. } => {
+            Self::Toggle { enabled: true } => "Enable",
+            Self::Toggle { enabled: false } => {
                 "Disable"
             }
             Self::Migrate { .. } => "Manage external mod",
@@ -80,7 +79,7 @@ pub struct Job {
 }
 pub enum Output {
     Changed(Vec<String>),
-    Review(toggle::DryRunResult),
+    Imported { name: String, enable_error: Option<String> },
     Candidates(Vec<SourceCandidate>),
     Trash(Vec<ts4_mod_manager_core::lifecycle::TrashEntry>),
     Updates { token: u64, reports: Vec<(String, Result<UpdateReport, String>)> },
@@ -190,6 +189,19 @@ fn id(job: &Job) -> Result<&str, String> {
 fn changed() -> Result<Output, String> {
     Ok(Output::Changed(vec![]))
 }
+fn set_enabled(managed: &std::path::Path, mods: &std::path::Path, id: &str, enabled: bool) -> Result<Vec<String>, String> {
+    let result = toggle::apply_toggle(managed, mods, id, enabled)
+        .map_err(|error| format!("{}: {}", error.code.as_str(), error.message))?;
+    let issues: Vec<_> = result.issues.into_iter().map(|issue| issue.message).collect();
+    if !result.applied { return Err(issues.join("\n")); }
+    Ok(issues)
+}
+
+fn imported(job: &Job, metadata: storage::ModMetadata) -> Output {
+    let enable_error = set_enabled(&job.managed, &job.identity.root.join("Mods"), &metadata.mod_id, true).err();
+    Output::Imported { name: metadata.effective_display_name().into(), enable_error }
+}
+
 pub fn execute(job: &Job) -> Result<Output, String> {
     let mods = job.identity.root.join("Mods");
     let managed = &job.managed;
@@ -198,53 +210,21 @@ pub fn execute(job: &Job) -> Result<Output, String> {
     };
     match &job.action {
         Action::ImportFolder { path, name } => {
-            storage::create_managed_mod(
+            let metadata = storage::create_managed_mod(
                 managed,
-                storage::ImportRequest {
-                    name: name.clone(),
-                    slug: None,
-                    source_dir: path.clone(),
-                },
-            )
-            .map_err(error)?;
-            changed()
+                storage::ImportRequest { name: name.clone(), slug: None, source_dir: path.clone() },
+            ).map_err(error)?;
+            Ok(imported(job, metadata))
         }
         Action::ImportZip { path, name } => {
-            ts4_mod_manager_core::archive_import::import_archive_to_managed(
-                managed,
-                path,
-                name.clone(),
-                None,
-            )
-            .map_err(error)?;
-            changed()
+            let metadata = ts4_mod_manager_core::archive_import::import_archive_to_managed(
+                managed, path, name.clone(), None,
+            ).map_err(error)?;
+            Ok(imported(job, metadata))
         }
-        Action::ReviewToggle { enabled } => Ok(Output::Review(
-            toggle::dry_run_toggle(managed, &mods, id(job)?, *enabled).map_err(error)?,
-        )),
-        Action::Toggle { enabled, review } => {
-            let _authority = ts4_mod_manager_core::operation::acquire(managed).map_err(error)?;
-            let current =
-                toggle::dry_run_toggle(managed, &mods, id(job)?, *enabled).map_err(error)?;
-            if !current.can_apply
-                || serde_json::to_string(&current).map_err(|e| e.to_string())? != *review
-            {
-                return Err(
-                    "Files changed since review. Review the paths again before applying.".into(),
-                );
-            }
-            let result = toggle::apply_toggle(managed, &mods, id(job)?, *enabled).map_err(error)?;
-            if !result.applied {
-                return Err(result
-                    .issues
-                    .iter()
-                    .map(|i| i.message.clone())
-                    .collect::<Vec<_>>()
-                    .join("\n"));
-            }
-            Ok(Output::Changed(
-                result.issues.into_iter().map(|i| i.message).collect(),
-            ))
+        Action::Toggle { enabled } => {
+            let issues = set_enabled(managed, &mods, id(job)?, *enabled)?;
+            Ok(Output::Changed(issues))
         }
         Action::Migrate { files } => {
             let _authority = ts4_mod_manager_core::operation::acquire(managed).map_err(error)?;

@@ -226,30 +226,40 @@ fn unknown_version_picker_requires_a_choice_before_review() {
 }
 
 #[test]
-fn card_switch_only_requests_a_review_and_preserves_original_files() {
-    let mut fixture = support::fixture();
-    fixture.catalog.selected = None;
-    let metadata = fixture.directory.path().join("managed/mods")
-        .join(fixture.catalog.mods[0].id.as_ref().unwrap()).join("meta.json");
-    let before = std::fs::read(&metadata).unwrap();
-    let ctx = egui::Context::default();
-    ts4_mod_manager_native::ui::setup(&ctx);
-    frame(&ctx, &mut fixture, vec![]);
-    frame(&ctx, &mut fixture, vec![]);
-    let switch = fixture.view.stats.first_toggle.unwrap();
-    frame(&ctx, &mut fixture, click(switch));
-    let deadline = std::time::Instant::now() + std::time::Duration::from_secs(3);
-    while fixture.controls.busy() {
-        fixture.controls.poll(&fixture.catalog);
-        assert!(std::time::Instant::now() < deadline);
-        std::thread::sleep(std::time::Duration::from_millis(2));
+fn library_switches_enable_and_disable_without_opening_details_or_review() {
+    for list in [false, true] {
+        let mut fixture = support::fixture();
+        fixture.catalog.selected = None;
+        let original = fixture.directory.path().join("source/fixture.package");
+        let ctx = egui::Context::default();
+        ts4_mod_manager_native::ui::setup(&ctx);
+        frame(&ctx, &mut fixture, vec![]);
+        frame(&ctx, &mut fixture, vec![]);
+        if list {
+            let button = fixture.view.stats.list_switch.unwrap();
+            frame(&ctx, &mut fixture, click(button));
+            frame(&ctx, &mut fixture, vec![]);
+        }
+        for enabled in [true, false] {
+            let switch = fixture.view.stats.first_toggle.expect("both library layouts need a switch");
+            frame(&ctx, &mut fixture, click(switch));
+            let deadline = std::time::Instant::now() + std::time::Duration::from_secs(3);
+            while fixture.controls.busy() {
+                fixture.controls.poll(&fixture.catalog);
+                assert!(std::time::Instant::now() < deadline);
+                std::thread::sleep(std::time::Duration::from_millis(2));
+            }
+            let root = fixture.catalog.root.clone().unwrap();
+            let mods = ts4_mod_manager_native::worker::scan(&root, &fixture.directory.path().join("managed")).unwrap().mods;
+            assert_eq!(mods[0].enabled, enabled, "one switch click must apply the change");
+            let generation = fixture.catalog.begin_scan(root);
+            fixture.catalog.accept_scan(generation, Ok(mods));
+            frame(&ctx, &mut fixture, vec![]);
+            assert!(!fixture.controls.review_open());
+            assert!(fixture.view.stats.detail_close.is_none());
+            assert_eq!(std::fs::read(&original).unwrap(), b"synthetic fixture bytes");
+        }
     }
-    frame(&ctx, &mut fixture, vec![]);
-    let output = frame(&ctx, &mut fixture, vec![]);
-    assert!(fixture.controls.review_open(), "card switches require review");
-    assert!(has_text(&output, "Cancel"));
-    assert_eq!(std::fs::read(&metadata).unwrap(), before);
-    assert!(!fixture.catalog.mods[0].enabled);
 }
 
 #[test]
@@ -314,4 +324,51 @@ fn updates_page_has_one_working_review_per_mod() {
     frame(&ctx, &mut fixture, click(reviews[0]));
     frame(&ctx, &mut fixture, vec![]);
     assert!(fixture.view.stats.detail_close.is_some(), "Review opens that mod's details");
+}
+
+#[test]
+fn a_blocked_switch_shows_the_problem_without_touching_the_existing_file() {
+    let mut fixture = support::fixture();
+    let existing = fixture.directory.path().join("game/Mods/fixture.package");
+    std::fs::write(&existing, b"unmanaged original").unwrap();
+    let ctx = egui::Context::default();
+    ts4_mod_manager_native::ui::setup(&ctx);
+    frame(&ctx, &mut fixture, vec![]);
+    frame(&ctx, &mut fixture, vec![]);
+    let switch = fixture.view.stats.first_toggle.unwrap();
+    frame(&ctx, &mut fixture, click(switch));
+    let deadline = std::time::Instant::now() + std::time::Duration::from_secs(3);
+    while fixture.controls.busy() {
+        fixture.controls.poll(&fixture.catalog);
+        assert!(std::time::Instant::now() < deadline);
+        std::thread::sleep(std::time::Duration::from_millis(2));
+    }
+    frame(&ctx, &mut fixture, vec![]);
+    let out = frame(&ctx, &mut fixture, vec![]);
+    assert!(!fixture.controls.review_open());
+    assert!(has_text(&out, "Path collision"), "the failure must be visible without opening Activity");
+    assert_eq!(std::fs::read(existing).unwrap(), b"unmanaged original");
+}
+
+#[test]
+fn a_duplicate_content_warning_does_not_report_a_successful_switch_as_failed() {
+    let mut fixture = support::fixture();
+    std::fs::write(fixture.directory.path().join("game/Mods/other.package"), b"synthetic fixture bytes").unwrap();
+    let ctx = egui::Context::default();
+    ts4_mod_manager_native::ui::setup(&ctx);
+    frame(&ctx, &mut fixture, vec![]);
+    frame(&ctx, &mut fixture, vec![]);
+    let switch = fixture.view.stats.first_toggle.unwrap();
+    frame(&ctx, &mut fixture, click(switch));
+    let deadline = std::time::Instant::now() + std::time::Duration::from_secs(3);
+    while fixture.controls.busy() {
+        fixture.controls.poll(&fixture.catalog);
+        assert!(std::time::Instant::now() < deadline);
+        std::thread::sleep(std::time::Duration::from_millis(2));
+    }
+    assert!(fixture.controls.error.is_none(), "the change applied successfully");
+    frame(&ctx, &mut fixture, vec![]);
+    let out = frame(&ctx, &mut fixture, vec![]);
+    assert!(has_text(&out, "Mod enabled"));
+    assert!(has_text(&out, "Duplicate content"), "keep the nonblocking warning visible");
 }

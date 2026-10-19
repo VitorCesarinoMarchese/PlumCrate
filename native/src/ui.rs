@@ -88,7 +88,7 @@ fn mod_switch(ui: &mut egui::Ui, enabled: bool, name: &str) -> egui::Response {
     ui.painter().circle_filled(egui::pos2(x, track.center().y), 9.0, colors.switch_knob);
     if response.has_focus() { ui.painter().rect_stroke(rect.expand(2.0), 12, ui.visuals().selection.stroke, egui::StrokeKind::Outside); }
     response.widget_info(|| egui::WidgetInfo::selected(egui::WidgetType::Checkbox, ui.is_enabled(), enabled, format!("{name}: {}", if enabled { "On" } else { "Off" })));
-    response.on_hover_text(if enabled { "On in game. Click to review turning off." } else { "Off in game. Click to review turning on." })
+    response.on_hover_text(if enabled { "On in game. Click to turn off." } else { "Off in game. Click to turn on." })
 }
 
 pub fn setup(ctx: &egui::Context) {
@@ -706,7 +706,7 @@ impl View {
             let popup = crate::popup::show(ui.ctx(), "task-help", "Using your mod library", |ui| {
                 egui::ScrollArea::vertical().max_height(crate::popup::body_height(ui.ctx())).show(ui, |ui| {
                     for (title, body) in [
-                        ("Add mods", "Choose your Sims 4 game folder, then Import folder or Import ZIP. Originals stay in place. Open the imported mod and Enable it when ready."),
+                        ("Add mods", "Choose your Sims 4 game folder, then Import folder or Import ZIP. New mods start enabled. Use the library switch to turn a mod on or off. Originals stay in place."),
                         ("Inspect and organize", "Click a card or list row for details. Use Previous/Next to browse. Right-click a mod for rename, source and trash actions. Trash remains recoverable."),
                         ("Browse CurseForge", "Browse mods searches The Sims 4 mods and custom content on CurseForge. Save your API key in Settings, then search, filter by category or sort. Open a project to read its summary and view screenshots. Download via website lets you review a release, source and game folder. After you start, the app watches your Downloads folder and installs the verified file automatically."),
                         ("Save a source", "Find source uses your locally saved CurseForge key. No match? Attach a known URL manually. Review every attachment before saving."),
@@ -912,7 +912,7 @@ impl View {
                                 .inner;
                             if toggle_requested {
                                 catalog.select(index);
-                                if let Some(c) = controls.as_deref_mut() { c.review_toggle(catalog); }
+                                if let Some(c) = controls.as_deref_mut() { c.toggle_selected(catalog); }
                             }
                             if response.secondary_clicked() {
                                 catalog.select(index);
@@ -940,11 +940,13 @@ impl View {
         catalog: &mut Catalog,
         mut controls: Option<&mut crate::controls::Controls>,
     ) {
+        let compact = ui.available_height() < 64.0;
+        let row_height = if compact { 40.0 } else { 64.0 };
         let root_id = catalog.root.clone();
         egui::ScrollArea::vertical()
             .id_salt(("catalog", root_id))
             .auto_shrink([false, false])
-            .show_rows(ui, 64.0, catalog.visible.len(), |ui, range| {
+            .show_rows(ui, row_height, catalog.visible.len(), |ui, range| {
                 for visible_index in range {
                     let index = catalog.visible[visible_index];
                     let entry = &catalog.mods[index];
@@ -961,10 +963,11 @@ impl View {
                     );
                     if entry.id.as_ref().is_some_and(|id| controls.as_ref().is_some_and(|c| c.updates.available(id))) { subtitle.push_str(" · Update available"); }
                     let selected = catalog.selected.as_ref() == Some(&identity);
+                    let mut toggle_requested = false;
                     let response = ui
                         .push_id(identity, |ui| {
                             let (rect, response) = ui.allocate_exact_size(
-                                egui::vec2(ui.available_width(), 64.0),
+                                egui::vec2(ui.available_width(), row_height),
                                 egui::Sense::click(),
                             );
                             let visuals = ui.style().interact_selectable(&response, selected);
@@ -973,9 +976,9 @@ impl View {
                             }
                             let fill = if selected || response.hovered() || response.has_focus() { visuals.bg_fill } else { ui.visuals().panel_fill };
                             text_on_fill(ui, fill);
-                            let inner = rect.shrink2(egui::vec2(12.0, 10.0));
+                            let inner = rect.shrink2(egui::vec2(12.0, if compact {4.0} else {10.0}));
                             let thumbnail =
-                                egui::Rect::from_min_size(inner.min, egui::Vec2::splat(44.0));
+                                egui::Rect::from_min_size(inner.min, egui::Vec2::splat(inner.height().min(44.0)));
                             self.paint_preview(
                                 ui,
                                 entry.preview.as_deref(),
@@ -991,7 +994,7 @@ impl View {
                                     ))
                                     .layout(egui::Layout::top_down(egui::Align::Min)),
                             );
-                            row.spacing_mut().item_spacing.y = 5.0;
+                            row.spacing_mut().item_spacing.y = if compact {0.0} else {5.0};
                             row.add(
                                 egui::Label::new(
                                     RichText::new(&entry.name).size(15.0).color(ui.visuals().text_color()),
@@ -1017,7 +1020,14 @@ impl View {
                                     ))
                                     .layout(egui::Layout::right_to_left(egui::Align::Center)),
                             );
-                            status.label(RichText::new(state).size(12.0).color(secondary));
+                            if entry.id.is_some() {
+                                let toggle = status.add_enabled_ui(controls.as_ref().is_some_and(|c| !c.busy()) && !catalog.loading,
+                                    |ui| mod_switch(ui, entry.enabled, &entry.name)).inner;
+                                if self.stats.first_toggle.is_none() { self.stats.first_toggle = Some(toggle.rect); }
+                                toggle_requested = toggle.clicked();
+                            } else {
+                                status.label(RichText::new(state).size(12.0).color(secondary));
+                            }
                             response.widget_info(|| {
                                 egui::WidgetInfo::selected(
                                     egui::WidgetType::SelectableLabel,
@@ -1029,6 +1039,10 @@ impl View {
                             response.on_hover_text(&entry.name)
                         })
                         .inner;
+                    if toggle_requested {
+                        catalog.select(index);
+                        if let Some(c) = controls.as_deref_mut() { c.toggle_selected(catalog); }
+                    }
                     if response.secondary_clicked() {
                         catalog.select(index);
                     }
@@ -1039,7 +1053,7 @@ impl View {
                         self.stats.first_row = Some(response.rect.intersect(ui.clip_rect()));
                     }
                     self.stats.rows += 1;
-                    if response.clicked() {
+                    if response.clicked() && !toggle_requested {
                         catalog.select(index);
                         self.detail_open = catalog.selected.clone();
                     }

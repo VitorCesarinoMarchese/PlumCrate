@@ -160,3 +160,57 @@ fn settings_export_never_overwrites_an_existing_user_file() {
     assert!(Settings::default().save_new(&path).is_err());
     assert_eq!(std::fs::read(path).unwrap(), b"user original");
 }
+
+#[test]
+fn imported_folders_and_archives_start_enabled_in_the_selected_game() {
+    use std::io::Write;
+    use ts4_mod_manager_native::management::{Action, Identity, Job, execute};
+    for archive in [false, true] {
+        let dir = tempfile::tempdir().unwrap();
+        let source = dir.path().join("source");
+        let game = dir.path().join("game");
+        let managed = dir.path().join("managed");
+        std::fs::create_dir(&source).unwrap();
+        std::fs::create_dir_all(game.join("Mods")).unwrap();
+        std::fs::write(source.join("fixture.package"), b"original").unwrap();
+        let zip_path = dir.path().join("fixture.zip");
+        let action = if archive {
+            let mut zip = zip::ZipWriter::new(std::fs::File::create(&zip_path).unwrap());
+            zip.start_file("fixture.package", zip::write::SimpleFileOptions::default()).unwrap();
+            zip.write_all(b"original").unwrap();
+            zip.finish().unwrap();
+            Action::ImportZip { path: zip_path.clone(), name: "Fixture".into() }
+        } else { Action::ImportFolder { path: source.clone(), name: "Fixture".into() } };
+        let archive_before = archive.then(|| std::fs::read(&zip_path).unwrap());
+        execute(&Job { identity: Identity {operation:1, root:game.clone(), entry:None, generation:1}, managed:managed.clone(),trash:dir.path().join("trash"),action }).unwrap();
+        let mods = ts4_mod_manager_native::worker::scan(&game, &managed).unwrap().mods;
+        assert_eq!(mods.len(), 1);
+        assert!(mods[0].enabled, "new imports should already be enabled");
+        assert_eq!(std::fs::read(source.join("fixture.package")).unwrap(), b"original");
+        if let Some(before) = archive_before { assert_eq!(std::fs::read(zip_path).unwrap(), before); }
+    }
+}
+
+#[test]
+fn a_blocked_auto_enable_keeps_the_import_and_unmanaged_file() {
+    use ts4_mod_manager_native::management::{Action, Identity, Job, Output, execute};
+    let dir = tempfile::tempdir().unwrap();
+    let source = dir.path().join("source");
+    let game = dir.path().join("game");
+    let managed = dir.path().join("managed");
+    std::fs::create_dir(&source).unwrap();
+    std::fs::create_dir_all(game.join("Mods")).unwrap();
+    std::fs::write(source.join("fixture.package"), b"download").unwrap();
+    let existing = game.join("Mods/fixture.package");
+    std::fs::write(&existing, b"unmanaged original").unwrap();
+    let result = execute(&Job { identity: Identity {operation:1, root:game.clone(), entry:None, generation:1}, managed:managed.clone(),trash:dir.path().join("trash"),action: Action::ImportFolder {path:source,name:"Fixture".into()} }).unwrap();
+    let Output::Imported {enable_error:Some(error), ..} = result else {panic!("import must report why it stayed disabled")};
+    assert!(error.contains("collision"));
+    assert_eq!(std::fs::read(&existing).unwrap(), b"unmanaged original");
+    let entry = std::fs::read_dir(managed.join("mods")).unwrap().next().unwrap().unwrap();
+    assert_eq!(std::fs::read(entry.path().join("files/fixture.package")).unwrap(), b"download");
+    let id = entry.file_name().to_string_lossy().into_owned();
+    let job = Job {identity:Identity {operation:2,root:game.clone(),entry:Some(ts4_mod_manager_native::catalog::EntryId::Managed(id)),generation:1},managed,trash:dir.path().join("trash"),action:Action::Toggle {enabled:true}};
+    assert!(matches!(execute(&job), Err(error) if error.contains("collision")));
+    assert_eq!(std::fs::read(&existing).unwrap(), b"unmanaged original");
+}

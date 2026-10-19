@@ -573,8 +573,7 @@ impl Controls {
         let identity = self.identity(&catalog).ok_or("Missing fixture root")?;
         let operation = if matches!(
             &action,
-            Action::Toggle { .. }
-                | Action::Migrate { .. }
+            Action::Migrate { .. }
                 | Action::ManualSource(_)
                 | Action::Attach(_)
                 | Action::RemoveSource
@@ -700,58 +699,28 @@ impl Controls {
                             self.notice = Some(format!("{} imported and enabled in {}", metadata.effective_display_name(), identity.root.display()));
                         },
                         Ok(Output::Changed(issues)) => {
+                            let toggled = self.operations.iter().find(|operation| operation.job.identity.operation == identity.operation)
+                                .and_then(|operation| match operation.job.action { Action::Toggle {enabled} => Some(enabled), _ => None });
+                            if catalog.root.as_ref() == Some(&identity.root)
+                                && let Some(enabled) = toggled {
+                                self.error = None;
+                                let mut notice = if enabled {"Mod enabled"} else {"Mod disabled"}.to_string();
+                                if !issues.is_empty() { notice.push_str(&format!(". {}", issues.join("\n"))); }
+                                self.notice = Some(notice);
+                            }
                             self.updates.invalidate();
                             self.refresh = catalog.root.clone();
-                            if !issues.is_empty() {
+                            if !issues.is_empty() && toggled.is_none() {
                                 failure = Some(issues.join("\n"))
                             }
                         }
-                        Ok(Output::Review(review))
-                            if identity.current(
-                                catalog.root.as_ref(),
-                                catalog.selected.as_ref(),
-                                catalog.generation(),
-                            ) =>
-                        {
-                            let enabled = self
-                                .operations
-                                .iter()
-                                .find(|o| o.job.identity.operation == identity.operation)
-                                .and_then(|o| match o.job.action {
-                                    Action::ReviewToggle { enabled } => Some(enabled),
-                                    _ => None,
-                                })
-                                .unwrap_or(false);
-                            let mut lines = review
-                                .operations
-                                .iter()
-                                .map(|o| {
-                                    format!(
-                                        "{}: {}{}",
-                                        o.action,
-                                        identity.root.join("Mods").join(&o.path).display(),
-                                        o.reason
-                                            .as_ref()
-                                            .map(|r| format!("\n{r}"))
-                                            .unwrap_or_default()
-                                    )
-                                })
-                                .collect::<Vec<_>>();
-                            lines.extend(review.issues.iter().map(|i| i.message.clone()));
-                            if review.can_apply {
-                                let token = serde_json::to_string(&review).expect("review JSON");
-                                self.dialog = Some(Dialog::Confirm {
-                                    identity: identity.clone(),
-                                    action: Action::Toggle {
-                                        enabled,
-                                        review: token,
-                                    },
-                                    title: if enabled { "Enable mod" } else { "Disable mod" }
-                                        .into(),
-                                    lines,
-                                });
+                        Ok(Output::Imported { name, enable_error }) => {
+                            self.updates.invalidate();
+                            self.refresh = catalog.root.clone();
+                            if let Some(error) = enable_error {
+                                self.error = Some(format!("{name} was added but could not be enabled. Resolve the issue below, then turn it on.\n{error}"));
                             } else {
-                                failure = Some(lines.join("\n"))
+                                self.notice = Some(format!("{name} added and enabled"));
                             }
                         }
                         Ok(Output::Candidates(candidates))
@@ -787,6 +756,10 @@ impl Controls {
                         .iter_mut()
                         .find(|o| o.job.identity.operation == identity.operation)
                     {
+                        if let Some(error) = &failure
+                            && identity.root == catalog.root.clone().unwrap_or_default() {
+                            self.error = Some(format!("{} failed: {error}", op.job.action.label()));
+                        }
                         op.error = failure.is_some();
                         op.status = failure.unwrap_or_else(|| "Finished".into());
                     }
@@ -813,11 +786,11 @@ impl Controls {
     pub fn open_trash(&mut self, catalog: &Catalog) {
         if let Some(identity) = self.identity(catalog) { self.submit(identity, Action::ListTrash); }
     }
-    pub fn review_toggle(&mut self, catalog: &Catalog) {
+    pub fn toggle_selected(&mut self, catalog: &Catalog) {
         let Some(entry) = catalog.selected_mod().filter(|entry| entry.id.is_some()) else { return; };
         if catalog.loading || self.busy() { return; }
         let enabled = !entry.enabled;
-        if let Some(identity) = self.identity(catalog) { self.submit(identity, Action::ReviewToggle { enabled }); }
+        if let Some(identity) = self.identity(catalog) { self.submit(identity, Action::Toggle { enabled }); }
     }
     pub fn add_mods_button(&mut self, ui: &mut egui::Ui, catalog: &Catalog) {
         let colors = crate::ui::chrome_colors(ui);
@@ -957,7 +930,7 @@ impl Controls {
                 {
                     self.submit(
                         id,
-                        Action::ReviewToggle {
+                        Action::Toggle {
                             enabled: !entry.enabled,
                         },
                     );
@@ -983,7 +956,7 @@ impl Controls {
                                 && let Some(id) = self.identity(catalog)
                             {
                                 ui.close();
-                            self.submit(id, Action::ReviewToggle { enabled: !entry.enabled })
+                            self.submit(id, Action::Toggle { enabled: !entry.enabled })
                             }
                             if ui.button("Rename").clicked()
                                 && let Some(identity) = self.identity(catalog)
@@ -1089,12 +1062,7 @@ impl Controls {
         if let Some(mut job) = retry {
             job.identity.operation = self.next;
             self.next += 1;
-            match job.action {
-                Action::Toggle { enabled, .. } => {
-                    self.submit(job.identity, Action::ReviewToggle { enabled })
-                }
-                _ => self.submit(job.identity, job.action),
-            }
+            self.submit(job.identity, job.action);
         }
     }
     pub fn review_open(&self) -> bool {
@@ -1239,7 +1207,7 @@ impl Controls {
                             ui.label(if *zip { "ZIP path" } else { "Folder path" });
                             ui.label(egui::RichText::new(path.display().to_string()).color(ui.visuals().weak_text_color()));
                             ui.add_space(12.0);
-                            ui.label("A copy goes into your managed library. The original stays where it is. Enable the mod separately to install it in this game folder.");
+                            ui.label("A copy goes into your managed library. The original stays where it is. It starts enabled in this game folder. You can turn it off from the library.");
                             ui.collapsing("Storage location", |ui| { ui.label(self.managed.join("mods").display().to_string()); });
                             ui.add_space(12.0);
                             crate::popup::text_field(ui, "Mod name", name);
@@ -2044,7 +2012,7 @@ mod tests {
         }
         controls.refresh = None;
         let identity = controls.identity(&catalog).unwrap();
-        controls.submit(identity.clone(), Action::ReviewToggle { enabled: true });
+        controls.submit(identity.clone(), Action::Toggle { enabled: true });
         catalog.begin_scan(dir.path().join("new"));
         let deadline = std::time::Instant::now() + std::time::Duration::from_secs(5);
         while controls.busy() {
