@@ -174,8 +174,8 @@
       "detailPreviewHeight": 240,
       "searchHeight": 40,
       "fileRowHeight": 48,
-      "settingsContentMaxWidth": 720,
-      "settingsSavePlacement": "Above the Settings scroll region.",
+      "settingsContentMaxWidth": 1120,
+      "settingsSavePlacement": "Save changes, Discard changes and Saved or Not saved section status stay above the Settings scroll region.",
       "statusMarginHorizontal": 24,
       "statusMarginVertical": 6,
       "activityMaxHeight": 90,
@@ -226,8 +226,8 @@
       },
       {
         "name": "Settings",
-        "source": "native/src/controls.rs::Controls::settings_content",
-        "description": "Persistent Save settings and Discard above theme, folder and local source settings."
+        "source": "native/src/controls/preferences.rs::Controls::settings_content",
+        "description": "Pinned Save changes and Discard changes with section status above Appearance, Folders, Connections, App updates and Backup tabs."
       },
       {
         "name": "Discover",
@@ -252,14 +252,37 @@
         "mutedText",
         "border"
       ],
-      "save": "Save settings and Save custom theme validate, apply and persist the custom draft.",
-      "settingsThemeSelection": "Built-in and saved-theme choices apply immediately; Save settings persists them.",
-      "headerThemeToggle": "Applies and persists light/dark mode while preserving custom colors and the editor draft. Use default colors explicitly restores the built-in palette.",
+      "save": "Only Save changes validates, applies and persists the draft. Invalid hex colors, empty names and conflicting names prevent saving.",
+      "settingsThemeSelection": "Built-in and custom-theme choices, creation, editing and removal stay staged with a scoped production-widget preview until Save changes.",
+      "headerThemeToggle": "Hidden in Settings. Outside Settings, applies and persists only light/dark mode using saved custom colors; preserves drafts and never applies draft colors.",
       "localStorage": "~/.config/ts4-mod-manager/settings.json",
-      "transfer": "Settings export omits customThemes and activeCustomTheme for compatibility with older version-1 transfers; separate theme JSON transfers custom colors.",
+      "transfer": "Backup export uses saved values, omits the key unless explicitly included, and omits customThemes and activeCustomTheme for older version-1 compatibility; separate theme JSON transfers both palettes.",
       "importPreservation": "An empty or absent custom-theme collection preserves the local collection; an omitted API key preserves the local key.",
       "cliRoute": "--settings",
-      "freshDefault": "Light; existing saved themes and custom palettes retained."
+      "freshDefault": "Light; existing saved themes and custom palettes retained.",
+      "sections": [
+        "Appearance",
+        "Folders",
+        "Connections",
+        "App updates",
+        "Backup"
+      ],
+      "draftStatus": "Saved or Not saved lists changed sections. Back and Escape preserve drafts; Discard changes restores saved preferences and reverses staged theme removal.",
+      "paletteEditor": "Independent Light colors and Dark colors editors with full #RRGGBB fields and pickers. Editor and scoped preview sit side by side at wide widths and stack at narrow widths.",
+      "paletteReadability": "Valid fills and accents stay as chosen. Text, metadata and links adjust against each actual painted background, targeting 4.5:1 contrast. Low contrast never replaces the whole palette.",
+      "imports": "Theme JSON previews and reviewed backup imports stage the current draft; Save changes is still required.",
+      "captureVerification": {
+        "source": "native/examples/verify_preferences.rs",
+        "captureDirectory": ".impeccable/review/settings",
+        "captureCount": 10,
+        "sizes": [
+          "1876x996",
+          "1200x800",
+          "680x760",
+          "640x480"
+        ],
+        "scope": "Production Settings widgets with isolated synthetic themes, editor and section states, and opposing background/surface fills. No dedicated App updates capture."
+      }
     },
     "navigationVerification": {
       "source": "native/verify_navigation.py",
@@ -446,8 +469,8 @@
         "Add mods button including pressed state",
         "mod switch track and knob"
       ],
-      "palette": "Valid custom colors apply per light/dark mode. Rail uses surface/text, selected destination uses existing selection fill/text, primary and enabled switch use accent/surface, disabled-state switch uses muted/surface.",
-      "fallback": "Unreadable or invalid custom modes retain the built-in chrome; choosing a built-in theme clears custom chrome.",
+      "palette": "Valid custom fills and accents apply per light/dark mode. Rail uses surface, selected destination uses selection fill, primary actions and enabled switches use accent. Text and knobs adjust against their painted fills.",
+      "fallback": "Invalid hex colors prevent Settings saving. Low contrast adjusts text against each painted background without replacing the palette; choosing Built-in restores Plumbob after Save changes.",
       "verification": "Rendered light/dark regression failed before the fix and passes afterward, including switching back to built-in chrome. Fifteen native fixture captures preserve inputs."
     }
   },
@@ -463,7 +486,7 @@
     "rules": [
       {
         "name": "readable metadata",
-        "body": "Use the explicit muted color for secondary text. Custom palettes retain six roles per appearance mode. Invalid or low-contrast palettes fall back to built-in colors for that mode while their stored values remain editable. Save-time contrast checks require 4.5:1 for text and links on their relevant fills.",
+        "body": "Use the explicit muted color for secondary text. Custom palettes retain six roles per appearance mode. Valid fills and accents remain as chosen. Adjust text, metadata and links against each actual painted background, targeting 4.5:1 contrast. Invalid hex colors prevent saving; low contrast does not replace a whole palette.",
         "section": "colors"
       }
     ],

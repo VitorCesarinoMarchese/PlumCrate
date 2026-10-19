@@ -166,19 +166,21 @@ The [update-check design](mod-updates.md) explains release identity, provider va
 
 ## Settings and custom themes
 
-AppImage users can check GitHub releases in **App updates**. Automatic checks run
-on startup and once a day while open; downloads and restarts need approval.
-The update notice opens a review with release notes, download progress, and
-**Restart to update**. Save the checkbox preference with **Save settings**.
-See [AppImage updates](app-updates.md) for backups and release requirements.
+Settings replaces the central library and opens directly with `--settings`. Appearance, Folders, Connections, App updates and Backup organize the page. **Save changes** and **Discard changes** stay above the scrolling section. **Saved** or **Not saved** identifies the state and lists changed sections. Back to library, a main destination or Escape leaves Settings with the draft intact. Discard changes restores saved preferences and reverses staged theme removal.
 
-Settings replaces the central library. Back to library returns to browsing; selecting a main destination also leaves Settings. The page scrolls below its title and always-visible Save settings and Discard actions. Use `--settings` to open it directly. Light, Dark, System and saved custom-theme choices apply immediately in Settings; select Save settings to persist them. The header light/dark switch saves only the appearance mode immediately. Other edits remain drafts until Save settings. Leaving the page keeps drafts; Discard restores saved preferences, including both theme palettes, while keeping any header mode change.
+Appearance choices and custom-theme selection, creation, editing and removal affect the draft and its preview. **Save changes** validates, applies and persists all Settings edits together. Light, Dark and System choose the window mode after saving. **Built-in** stages the Plumbob palette while retaining saved custom themes. Outside Settings, the header light/dark switch immediately saves only the mode and applies the saved custom palette. It preserves the Settings draft and never applies draft colors. The switch hides while Settings is open.
 
-Each custom theme has separate light and dark palettes. The header switch and the Light, Dark and System appearance choices use the matching palette. Use default colors explicitly returns to the built-in palette, retaining saved custom themes; select Save settings to persist that choice.
+**New theme** starts a named draft with both built-in palettes. **Edit colors** opens separate **Light colors** and **Dark colors** editors, independent of the window mode. Each palette has six full `#RRGGBB` fields and color pickers for Buttons & links, Page background, Cards & menus, Main text, Secondary text and Outlines. The preview uses production widgets with styling scoped to the preview. At wide widths the editor and preview sit side by side; narrow windows stack them. **Reset these colors** resets only the palette being edited.
 
-Create custom theme starts a named draft with both built-in palettes. Choose Light or Dark above the editor to edit that version's six #RRGGBB fields: Accent, Background, Surface, Text, Muted text and Border. Each valid field has a color picker. Switching modes preserves edits in both versions. Reset colors restores only the displayed version. Copy theme JSON copies both palettes. Import a theme accepts paired JSON or an older single-palette theme. Older themes keep their original colors in the version matching their background brightness and use built-in colors for the companion version. Save settings or the top Save settings validates both palettes, applies and persists the draft. Invalid colors, an empty name or a conflicting saved-theme name produce an error.
+Invalid hex colors, an empty name or a conflicting saved-theme name prevent saving. Valid backgrounds, surfaces and accents remain as chosen, including low-contrast combinations. The app adjusts text and links for readability against the actual painted background. It does not replace the whole palette because of low contrast.
 
-Settings save locally in `~/.config/ts4-mod-manager/settings.json` using atomic replacement and mode 0600 on Unix. Save settings persists the theme, local custom-theme collection and active custom-theme name, remembered game folders, selected folder, and optional API key. CLI overrides apply to that launch. Settings export requires an unused file path and omits the API key unless Include API key in export is checked. It also omits custom themes and their active name for compatibility with version-1 transfers from older releases; use the separate theme JSON copy/import controls to transfer custom colors. Settings import reads at most 1 MiB, validates and previews version 1 JSON before confirmation. It preserves the existing API key when omitted and the local custom-theme collection when the imported collection is empty or absent. Keys stay outside mod metadata and operation history.
+**Copy theme JSON** copies both palettes from the editor. **Preview imported theme** stages paired JSON or an older single-palette theme, then requires Save changes. Older themes keep their original colors in the version matching their background brightness and use built-in colors for the companion version.
+
+Folders manages remembered game folders and the selected startup folder. Connections edits the local CurseForge API key; requests continue using the saved key until Save changes. AppImage users can check GitHub releases in App updates. Automatic checks run on startup and once a day while open; downloads and restarts need approval. The update notice opens a review with release notes, download progress and **Restart to update**. Save the automatic-check preference with Save changes. See [AppImage updates](app-updates.md) for backups and release requirements.
+
+Settings save locally in `~/.config/ts4-mod-manager/settings.json` using atomic replacement and mode 0600 on Unix. Save changes persists the theme, local custom-theme collection and active custom-theme name, remembered game folders, selected folder, update-check preference and optional API key. CLI overrides apply to that launch.
+
+Backup exports saved settings, requires an unused file path and omits the API key unless **Include API key in export** is checked. It also omits custom themes and their active name for compatibility with version-1 transfers from older releases. Use the separate theme JSON controls to transfer custom colors. Settings import reads at most 1 MiB and validates and previews version 1 JSON before confirmation. Confirmation stages the import in the current draft; Save changes applies and persists it. An omitted API key preserves the local key, and an empty or absent custom-theme collection preserves local themes. Keys stay outside mod metadata and operation history.
 
 ## Verify and capture the app
 
@@ -199,13 +201,22 @@ native/target/debug/ts4-mod-manager-native --verify-workflows
 python native/verify.py --sizes 100 --capture-dir native/target/captures
 ```
 
-This captures real light, dark, and narrow windows. To capture the current navigation and custom-theme editor on a graphical desktop:
+This captures real light, dark, and narrow windows. To capture navigation and selected custom themes on a graphical desktop:
 
 ```bash
 python3 native/verify_navigation.py --capture-dir native/target/navigation-captures
 ```
 
-`verify_navigation.py` defaults to the release binary; pass `--binary PATH` to use another build. It creates isolated synthetic game, managed and home directories and produces eleven PNGs: four library views, three Settings views and four custom-theme editor views covering light and dark versions at wide and narrow sizes. It checks preview pixels in library captures and verifies that fixture inputs remain unchanged. Screenshot mode fixes the window size and quits after writing the PNG. Normal launches remain resizable. For release measurements, build with `cargo build --manifest-path native/Cargo.toml --release --locked` and pass `--binary native/target/release/ts4-mod-manager-native` to the script.
+`verify_navigation.py` defaults to the release binary; pass `--binary PATH` to use another build. It creates isolated synthetic game, managed and home directories and produces fifteen PNGs: six built-in library views, three built-in Settings views, four Settings views with a custom theme selected and two custom-themed library views. The legacy `navigation-theme-editor.png` and related theme filenames show the selected theme with its editor closed. They do not verify color editing. The script checks preview pixels in library captures and verifies that fixture inputs remain unchanged. Screenshot mode fixes the window size and quits after writing the PNG. Normal launches remain resizable.
+
+The Settings capture example exercises the production editor and preview with isolated synthetic themes:
+
+```sh
+cargo run --manifest-path native/Cargo.toml --locked --example verify_preferences -- .impeccable/review/settings
+```
+
+It produces ten captures covering the 1876-by-996 user window, 1200-by-800 desktop, 680-by-760 narrow window, 640-by-480 minimum window, Folders, Connections and Backup sections, and opposite black/white background and card fills. It uses temporary settings and makes no provider requests. The opposing-fill cases check text against each painted background. App updates has no dedicated capture in this example.
+
 
 Update-check captures use production widgets with synthetic provider responses and do not approve operations:
 
@@ -258,4 +269,4 @@ Navigation and Settings validation passed 46 native tests, native clippy and the
 
 Cards and List have visible labels. Ctrl+F focuses search; details have Previous/Next controls and Alt+Left/Right shortcuts that follow the current filter. Help (F1) explains imports, sources, recoverable removal, settings and keyboard controls. Escape goes back one level: an open menu closes first; Help and management reviews return to the underlying page or mod details; mod details return to the library. From Settings, Escape returns to the library even with a text field focused or background work running. Unsaved settings drafts, search and selection stay intact. At the library, Escape keeps the app open. Views without saved previews use smaller cards.
 
-Custom palettes below 4.5:1 for their text, metadata or links display contrast warnings. The affected mode uses built-in colors until corrected, preserving the stored palette for editing. Reset colors restores the displayed version. Settings exports and source lookup use saved preferences.
+Custom palettes retain valid fills and accents even when requested text has low contrast. Text, metadata and links adjust toward readable colors against each painted background, targeting 4.5:1 contrast. Reset these colors restores only the palette being edited. Settings exports and source lookup use saved preferences.
