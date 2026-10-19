@@ -31,6 +31,7 @@ fastframe_icons::icons! {
 
 const CUSTOM_CHROME: &str = "custom-theme-chrome";
 
+#[derive(Clone, Copy)]
 pub(crate) struct ChromeColors {
     pub rail: Color32,
     pub rail_text: Color32,
@@ -46,24 +47,8 @@ pub(crate) struct ChromeColors {
 
 pub(crate) fn chrome_colors(ui: &egui::Ui) -> ChromeColors {
     let dark = ui.visuals().dark_mode;
-    let custom = ui.ctx().data(|data| data.get_temp::<[bool; 2]>(egui::Id::new(CUSTOM_CHROME))).unwrap_or_default();
-    if custom[usize::from(dark)] {
-        let style = ui.ctx().style_of(if dark { egui::Theme::Dark } else { egui::Theme::Light });
-        let v = &style.visuals;
-        let text = v.override_text_color.unwrap_or(v.text_color());
-        ChromeColors {
-            rail: v.extreme_bg_color,
-            rail_text: text,
-            rail_muted: v.weak_text_color(),
-            rail_selected: v.selection.bg_fill,
-            rail_selected_text: text,
-            primary: v.hyperlink_color,
-            primary_text: v.extreme_bg_color,
-            switch_on: v.hyperlink_color,
-            switch_off: v.weak_text_color(),
-            switch_knob: v.extreme_bg_color,
-        }
-    } else {
+    let custom = ui.ctx().data(|data| data.get_temp::<[Option<ChromeColors>; 2]>(egui::Id::new(CUSTOM_CHROME))).unwrap_or([None; 2]);
+    if let Some(colors) = custom[usize::from(dark)] { colors } else {
         ChromeColors {
             rail: Color32::from_rgb(8, 99, 185),
             rail_text: Color32::WHITE,
@@ -117,7 +102,7 @@ pub fn setup(ctx: &egui::Context) {
 }
 
 fn base_style(ctx: &egui::Context) {
-    ctx.data_mut(|data| data.insert_temp(egui::Id::new(CUSTOM_CHROME), [false; 2]));
+    ctx.data_mut(|data| data.insert_temp(egui::Id::new(CUSTOM_CHROME), [None::<ChromeColors>; 2]));
     let rendering = fastframe_text::detect();
     ctx.all_styles_mut(|style| {
         let colors = crate::settings::ThemeColors::base(style.visuals.dark_mode);
@@ -179,59 +164,80 @@ pub fn apply_settings_theme(ctx: &egui::Context, settings: &crate::settings::Set
         .iter()
         .find(|t| settings.active_custom_theme.as_ref() == Some(&t.name))
     {
-        let blend = |a: Color32, b: Color32, ratio: f32| {
-            Color32::from_rgb(
-                (a.r() as f32 * (1.0 - ratio) + b.r() as f32 * ratio) as u8,
-                (a.g() as f32 * (1.0 - ratio) + b.g() as f32 * ratio) as u8,
-                (a.b() as f32 * (1.0 - ratio) + b.b() as f32 * ratio) as u8,
-            )
-        };
-        let mut custom_chrome = [false; 2];
+        let mut custom_chrome = [None; 2];
         ctx.all_styles_mut(|style| {
             let colors = theme.palette(style.visuals.dark_mode);
-            if !colors.contrast_warnings().is_empty() { return; }
-            let Some([accent, background, surface, text, muted, border]) = [
-                &colors.accent,
-                &colors.background,
-                &colors.surface,
-                &colors.text,
-                &colors.muted_text,
-                &colors.border,
-            ]
-            .map(|s| hex_color(s))
-            .into_iter()
-            .collect::<Option<Vec<_>>>()
-            .and_then(|v| <Vec<Color32> as TryInto<[Color32; 6]>>::try_into(v).ok()) else {
-                return;
-            };
-            custom_chrome[usize::from(style.visuals.dark_mode)] = true;
-            let v = &mut style.visuals;
-            v.panel_fill = background;
-            v.extreme_bg_color = surface;
-            v.window_fill = surface;
-            v.faint_bg_color = surface;
-            v.code_bg_color = surface;
-            v.override_text_color = Some(text);
-            v.weak_text_color = Some(muted);
-            v.selection.bg_fill = blend(surface, accent, 0.2);
-            v.selection.stroke.color = text;
-            v.hyperlink_color = accent;
-            v.window_stroke.color = border;
-            v.widgets.noninteractive.bg_stroke.color = border;
-            v.widgets.noninteractive.fg_stroke.color = muted;
-            for (widget, amount) in [
-                (&mut v.widgets.inactive, 0.06),
-                (&mut v.widgets.hovered, 0.13),
-                (&mut v.widgets.active, 0.20),
-                (&mut v.widgets.open, 0.13),
-            ] {
-                widget.bg_fill = blend(surface, accent, amount);
-                widget.weak_bg_fill = widget.bg_fill;
-                widget.bg_stroke.color = border;
-                widget.fg_stroke.color = text;
+            if let Some(visuals) = custom_palette_visuals(&style.visuals, colors) {
+                custom_chrome[usize::from(style.visuals.dark_mode)] = Some(custom_palette_chrome(colors, &visuals));
+                style.visuals = visuals;
             }
         });
         ctx.data_mut(|data| data.insert_temp(egui::Id::new(CUSTOM_CHROME), custom_chrome));
+    }
+}
+
+fn blend(a: Color32, b: Color32, amount: f32) -> Color32 {
+    Color32::from_rgb(
+        (f32::from(a.r()) * (1.0 - amount) + f32::from(b.r()) * amount) as u8,
+        (f32::from(a.g()) * (1.0 - amount) + f32::from(b.g()) * amount) as u8,
+        (f32::from(a.b()) * (1.0 - amount) + f32::from(b.b()) * amount) as u8,
+    )
+}
+
+pub(crate) fn readable_text(requested: Color32, backgrounds: &[Color32]) -> Color32 {
+    let luminance = |color: Color32| {
+        let channels = [color.r(), color.g(), color.b()].map(|value| {
+            let value = f32::from(value) / 255.0;
+            if value <= 0.04045 { value / 12.92 } else { ((value + 0.055) / 1.055).powf(2.4) }
+        });
+        channels[0] * 0.2126 + channels[1] * 0.7152 + channels[2] * 0.0722
+    };
+    let contrast = |ink: Color32| backgrounds.iter().map(|background| {
+        let a = luminance(ink); let b = luminance(*background);
+        (a.max(b) + 0.05) / (a.min(b) + 0.05)
+    }).fold(f32::INFINITY, f32::min);
+    if contrast(requested) >= 4.5 { return requested; }
+    let destination = if contrast(Color32::BLACK) >= contrast(Color32::WHITE) { Color32::BLACK } else { Color32::WHITE };
+    for step in 1..=100 {
+        let ink = blend(requested, destination, step as f32 / 100.0);
+        if contrast(ink) >= 4.5 { return ink; }
+    }
+    destination
+}
+
+pub(crate) fn custom_palette_visuals(base: &egui::Visuals, colors: &crate::settings::ThemeColors) -> Option<egui::Visuals> {
+    let [accent, background, surface, text, muted, border] = [
+        &colors.accent, &colors.background, &colors.surface, &colors.text, &colors.muted_text, &colors.border,
+    ].map(|value| hex_color(value));
+    let (accent, background, surface, text, muted, border) = (accent?, background?, surface?, text?, muted?, border?);
+    let fills = [0.06, 0.13, 0.20].map(|amount| blend(surface, accent, amount));
+    let backgrounds = [background, surface, fills[0], fills[1], fills[2]];
+    let mut v = base.clone();
+    v.panel_fill = background; v.extreme_bg_color = surface; v.window_fill = surface;
+    v.faint_bg_color = surface; v.code_bg_color = surface;
+    v.override_text_color = Some(readable_text(text, &backgrounds));
+    v.weak_text_color = Some(readable_text(muted, &backgrounds));
+    v.selection.bg_fill = fills[2]; v.selection.stroke.color = readable_text(text, &[fills[2]]);
+    v.hyperlink_color = readable_text(accent, &[surface, background]);
+    v.window_stroke.color = border; v.widgets.noninteractive.bg_stroke.color = border;
+    v.widgets.noninteractive.fg_stroke.color = v.weak_text_color();
+    for (widget, fill) in [(&mut v.widgets.inactive, fills[0]), (&mut v.widgets.hovered, fills[1]), (&mut v.widgets.active, fills[2]), (&mut v.widgets.open, fills[1])] {
+        widget.bg_fill = fill; widget.weak_bg_fill = fill; widget.bg_stroke.color = border;
+        widget.fg_stroke.color = readable_text(text, &[fill]);
+    }
+    Some(v)
+}
+
+pub(crate) fn custom_palette_chrome(colors: &crate::settings::ThemeColors, visuals: &egui::Visuals) -> ChromeColors {
+    let accent = hex_color(&colors.accent).expect("validated palette");
+    let surface = visuals.extreme_bg_color;
+    let text = visuals.override_text_color.unwrap_or(visuals.text_color());
+    let muted = visuals.weak_text_color();
+    ChromeColors {
+        rail: surface, rail_text: readable_text(text, &[surface]), rail_muted: readable_text(muted, &[surface]),
+        rail_selected: visuals.selection.bg_fill, rail_selected_text: readable_text(text, &[visuals.selection.bg_fill]),
+        primary: accent, primary_text: readable_text(surface, &[accent]),
+        switch_on: accent, switch_off: muted, switch_knob: readable_text(surface, &[accent, muted]),
     }
 }
 
@@ -1347,7 +1353,7 @@ impl View {
 mod tests {
     use super::*;
     #[test]
-    fn unreadable_custom_colors_keep_the_app_usable_with_builtin_colors() {
+    fn unreadable_custom_text_is_adjusted_without_replacing_the_palette() {
         let ctx = egui::Context::default();
         setup(&ctx);
         let mut theme = crate::settings::CustomTheme::base();

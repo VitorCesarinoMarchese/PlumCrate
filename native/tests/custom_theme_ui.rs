@@ -124,3 +124,22 @@ fn custom_palettes_reach_sidebar_primary_actions_and_mod_switches() {
         assert!(reset.shapes.iter().any(|s| matches!(&s.shape, egui::Shape::Rect(r) if r.rect.width() >= 239.0 && r.rect.width() <= 241.0 && r.rect.height() > 700.0 && r.fill == egui::Color32::from_rgb(8, 99, 185))), "switching back must restore the built-in rail");
     }
 }
+
+#[test]
+fn a_valid_earth_palette_keeps_its_colors_even_when_text_needs_adjustment() {
+    let mut theme = CustomTheme::base();
+    theme.light.accent = "#8A6F3E".into();
+    theme.light.background = "#F3F0E8".into();
+    theme.light.surface = "#FFFFFF".into();
+    theme.light.text = "#282B29".into();
+    theme.light.muted_text = "#6F7774".into();
+    theme.light.border = "#A38E5A".into();
+    assert!(!theme.light.contrast_warnings().is_empty());
+    let settings = Settings { theme: Theme::Light, active_custom_theme: Some(theme.name.clone()), custom_themes: vec![theme.clone()], ..Default::default() };
+    let ctx = egui::Context::default();
+    ui::setup(&ctx);
+    ui::apply_settings_theme(&ctx, &settings);
+    let v = ctx.style_of(egui::Theme::Light);
+    assert_eq!(v.visuals.panel_fill, ui::hex_color(&theme.light.background).unwrap(), "a contrast warning must not discard the entire theme");
+    assert!(settings.custom_themes[0] == theme, "readability adjustments must not overwrite saved colors");
+}

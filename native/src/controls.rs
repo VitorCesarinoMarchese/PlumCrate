@@ -1159,7 +1159,7 @@ impl Controls {
                 for (mode, palette) in [("Light", &theme.light), ("Dark", &theme.dark)] {
                     let warnings = palette.contrast_warnings();
                     if !warnings.is_empty() {
-                        ui.label(egui::RichText::new(format!("{mode} colors need more contrast. Built-in colors keep that mode readable until corrected.")).strong());
+                        ui.label(egui::RichText::new(format!("{mode} text will be adjusted for readability. Your chosen colors are kept.")).strong());
                         ui.collapsing(format!("{mode} contrast details"), |ui| { for warning in warnings { ui.label(warning); } });
                     }
                 }
@@ -1237,7 +1237,7 @@ impl Controls {
     pub fn activity(&mut self, ui: &mut egui::Ui) {
         if let Some(theme) = self.settings.custom_themes.iter().find(|theme| Some(&theme.name) == self.settings.active_custom_theme.as_ref())
             && !theme.palette(ui.visuals().dark_mode).contrast_warnings().is_empty() {
-            ui.label("Custom colors need more contrast. Built-in colors are active; correct or reset the palette in Settings.");
+            ui.label("Theme text is adjusted for readability. Your chosen colors are kept.");
         }
         if self.recovering {
             ui.label("Checking interrupted operations. Waiting for other app writes if needed.");
