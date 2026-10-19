@@ -2,6 +2,7 @@
 import json
 from pathlib import Path
 import subprocess
+import tempfile
 import unittest
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -9,10 +10,14 @@ ROOT = Path(__file__).resolve().parents[2]
 
 class NativeRepository(unittest.TestCase):
     def test_retired_build_cache_is_ignored_without_hiding_source_files(self):
-        for path, ignored in [("src-tauri/target/debug/cache.json", True),
-                              ("src-tauri/Cargo.toml", False)]:
-            result = subprocess.run(["git", "check-ignore", "--no-index", "-q", path], cwd=ROOT)
-            self.assertEqual(result.returncode, 0 if ignored else 1, path)
+        with tempfile.TemporaryDirectory(prefix="ts4-ignore-test-") as directory:
+            checkout = Path(directory)
+            (checkout / ".gitignore").write_bytes((ROOT / ".gitignore").read_bytes())
+            subprocess.run(["git", "init", "--quiet", str(checkout)], check=True)
+            for path, ignored in [("src-tauri/target/debug/cache.json", True),
+                                  ("src-tauri/Cargo.toml", False)]:
+                result = subprocess.run(["git", "check-ignore", "--no-index", "-q", path], cwd=checkout)
+                self.assertEqual(result.returncode, 0 if ignored else 1, path)
 
     def test_ci_fetches_full_graph_before_offline_audit(self):
         workflow = (ROOT / ".github/workflows/ci.yml").read_text()
