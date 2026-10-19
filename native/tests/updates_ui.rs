@@ -155,7 +155,7 @@ fn recording_a_release_writes_only_after_the_confirmation_button() {
     frame(&ctx, &mut fixture, click(confirm));
     let deadline = std::time::Instant::now() + std::time::Duration::from_secs(5);
     while fixture.controls.busy() {
-        fixture.controls.poll(&fixture.catalog);
+        fixture.controls.poll(&mut fixture.catalog);
         assert!(std::time::Instant::now() < deadline);
         std::thread::sleep(std::time::Duration::from_millis(2));
     }
@@ -230,6 +230,9 @@ fn library_switches_enable_and_disable_without_opening_details_or_review() {
     for list in [false, true] {
         let mut fixture = support::fixture();
         fixture.catalog.selected = None;
+        fixture.controls.refresh = None;
+        let catalog_generation = fixture.catalog.generation();
+        let update_reports = fixture.controls.updates.reports.len();
         let original = fixture.directory.path().join("source/fixture.package");
         let ctx = egui::Context::default();
         ts4_mod_manager_native::ui::setup(&ctx);
@@ -245,15 +248,18 @@ fn library_switches_enable_and_disable_without_opening_details_or_review() {
             frame(&ctx, &mut fixture, click(switch));
             let deadline = std::time::Instant::now() + std::time::Duration::from_secs(3);
             while fixture.controls.busy() {
-                fixture.controls.poll(&fixture.catalog);
+                fixture.controls.poll(&mut fixture.catalog);
                 assert!(std::time::Instant::now() < deadline);
                 std::thread::sleep(std::time::Duration::from_millis(2));
             }
             let root = fixture.catalog.root.clone().unwrap();
             let mods = ts4_mod_manager_native::worker::scan(&root, &fixture.directory.path().join("managed")).unwrap().mods;
             assert_eq!(mods[0].enabled, enabled, "one switch click must apply the change");
-            let generation = fixture.catalog.begin_scan(root);
-            fixture.catalog.accept_scan(generation, Ok(mods));
+            assert!(fixture.controls.refresh.is_none(), "a toggle must not request a library reload");
+            assert_eq!(fixture.catalog.generation(), catalog_generation);
+            assert!(!fixture.catalog.loading);
+            assert_eq!(fixture.catalog.mods[0].enabled, enabled, "patch the confirmed item in place");
+            assert_eq!(fixture.controls.updates.reports.len(), update_reports, "unrelated update results stay visible");
             frame(&ctx, &mut fixture, vec![]);
             assert!(!fixture.controls.review_open());
             assert!(fixture.view.stats.detail_close.is_none());
@@ -339,7 +345,7 @@ fn a_blocked_switch_shows_the_problem_without_touching_the_existing_file() {
     frame(&ctx, &mut fixture, click(switch));
     let deadline = std::time::Instant::now() + std::time::Duration::from_secs(3);
     while fixture.controls.busy() {
-        fixture.controls.poll(&fixture.catalog);
+        fixture.controls.poll(&mut fixture.catalog);
         assert!(std::time::Instant::now() < deadline);
         std::thread::sleep(std::time::Duration::from_millis(2));
     }
@@ -362,7 +368,7 @@ fn a_duplicate_content_warning_does_not_report_a_successful_switch_as_failed() {
     frame(&ctx, &mut fixture, click(switch));
     let deadline = std::time::Instant::now() + std::time::Duration::from_secs(3);
     while fixture.controls.busy() {
-        fixture.controls.poll(&fixture.catalog);
+        fixture.controls.poll(&mut fixture.catalog);
         assert!(std::time::Instant::now() < deadline);
         std::thread::sleep(std::time::Duration::from_millis(2));
     }
@@ -371,4 +377,30 @@ fn a_duplicate_content_warning_does_not_report_a_successful_switch_as_failed() {
     let out = frame(&ctx, &mut fixture, vec![]);
     assert!(has_text(&out, "Mod enabled"));
     assert!(has_text(&out, "Duplicate content"), "keep the nonblocking warning visible");
+}
+
+#[test]
+fn finishing_a_toggle_does_not_refresh_or_patch_a_different_game() {
+    let mut fixture = support::fixture();
+    fixture.controls.refresh = None;
+    let original_game = fixture.catalog.root.clone().unwrap();
+    let ctx = egui::Context::default();
+    ts4_mod_manager_native::ui::setup(&ctx);
+    frame(&ctx, &mut fixture, vec![]);
+    frame(&ctx, &mut fixture, vec![]);
+    let switch = fixture.view.stats.first_toggle.unwrap();
+    frame(&ctx, &mut fixture, click(switch));
+    let same_mod_in_another_game = fixture.catalog.mods[0].clone();
+    let generation = fixture.catalog.begin_scan(fixture.directory.path().join("other-game"));
+    fixture.catalog.accept_scan(generation, Ok(vec![same_mod_in_another_game]));
+    let deadline = std::time::Instant::now() + std::time::Duration::from_secs(3);
+    while fixture.controls.busy() {
+        fixture.controls.poll(&mut fixture.catalog);
+        assert!(std::time::Instant::now() < deadline);
+        std::thread::sleep(std::time::Duration::from_millis(2));
+    }
+    assert!(!fixture.catalog.mods[0].enabled);
+    assert!(fixture.controls.refresh.is_none());
+    assert_eq!(fixture.catalog.generation(), generation);
+    assert!(ts4_mod_manager_native::worker::scan(&original_game, &fixture.directory.path().join("managed")).unwrap().mods[0].enabled);
 }

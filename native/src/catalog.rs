@@ -108,6 +108,13 @@ impl Catalog {
         true
     }
 
+    pub fn set_enabled(&mut self, mod_id: &str, enabled: bool) {
+        if let Some(entry) = self.mods.iter_mut().find(|entry| entry.id.as_deref() == Some(mod_id)) {
+            entry.enabled = enabled;
+            self.filter();
+        }
+    }
+
     pub fn search(&mut self, query: String) {
         if self.query != query {
             self.query = query;
@@ -160,6 +167,29 @@ mod tests {
             "group_path": [name], "enabled": true
         }))
         .expect("fixture")
+    }
+
+    #[test]
+    fn enabled_patch_preserves_catalog_state_and_reapplies_the_active_filter() {
+        let mut catalog = Catalog::default();
+        let generation = catalog.begin_scan("game".into());
+        catalog.accept_scan(generation, Ok(vec![entry("First", Some("one")), entry("Second", Some("two"))]));
+        catalog.select(1);
+        catalog.search("script".into());
+        catalog.set_filter(ModFilter::Installed);
+        let untouched = catalog.mods[1].clone();
+        let selected = catalog.selected.clone();
+        catalog.set_enabled("one", false);
+        assert_eq!(catalog.visible, vec![1]);
+        assert_eq!(catalog.mods[1], untouched);
+        assert_eq!(catalog.selected, selected);
+        assert_eq!(catalog.query, "script");
+        assert_eq!(catalog.generation(), generation);
+        assert!(!catalog.loading);
+        catalog.set_filter(ModFilter::Stored);
+        assert_eq!(catalog.visible, vec![0]);
+        catalog.set_enabled("one", true);
+        assert!(catalog.visible.is_empty());
     }
 
     #[test]

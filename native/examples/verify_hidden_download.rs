@@ -15,7 +15,7 @@ struct Probe {
 }
 impl eframe::App for Probe {
     fn logic(&mut self, ctx: &egui::Context, _: &mut eframe::Frame) {
-        self.fixture.controls.poll(&self.fixture.catalog);
+        self.fixture.controls.poll(&mut self.fixture.catalog);
         if self.fixture.controls.browser_import.phase == Phase::Complete {
             let root = self.fixture.directory.path();
             assert_eq!(

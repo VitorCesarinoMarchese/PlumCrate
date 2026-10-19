@@ -87,7 +87,7 @@ fn escape_goes_back_one_level_and_keeps_settings_drafts_and_library_state() {
     controls.settings_page = true;
     let deadline = std::time::Instant::now() + std::time::Duration::from_secs(5);
     while controls.busy() {
-        controls.poll(&catalog);
+        controls.poll(&mut catalog);
         assert!(std::time::Instant::now() < deadline);
         std::thread::sleep(std::time::Duration::from_millis(2));
     }
@@ -747,7 +747,7 @@ fn details_popup_yields_to_reviews_and_returns_after_cancel() {
     .unwrap();
     let deadline = std::time::Instant::now() + std::time::Duration::from_secs(5);
     while controls.busy() {
-        controls.poll(&catalog);
+        controls.poll(&mut catalog);
         assert!(std::time::Instant::now() < deadline);
         std::thread::sleep(std::time::Duration::from_millis(2));
     }

@@ -101,7 +101,7 @@ fn a_dependency_review_confirms_only_that_project_then_imports_and_enables_it() 
     assert!(output.platform_output.commands.iter().any(|c|matches!(c,egui::OutputCommand::OpenUrl(url) if url.url.ends_with("/synthetic-core/files/200"))));
     let deadline=std::time::Instant::now()+std::time::Duration::from_secs(5);
     while fixture.controls.browser_import.phase!=Phase::Complete {
-        fixture.controls.poll(&fixture.catalog);
+        fixture.controls.poll(&mut fixture.catalog);
         assert!(std::time::Instant::now()<deadline,"{:?}",fixture.controls.browser_import.error);
         std::thread::sleep(std::time::Duration::from_millis(10));
     }
@@ -153,7 +153,7 @@ fn one_approval_opens_the_release_page_then_imports_and_enables_without_more_cli
     while fixture.controls.browser_import.phase
         != ts4_mod_manager_native::browser_import::Phase::Complete
     {
-        fixture.controls.poll(&fixture.catalog);
+        fixture.controls.poll(&mut fixture.catalog);
         frame(&ctx, &mut fixture, vec![]);
         assert!(
             std::time::Instant::now() < deadline,
@@ -198,7 +198,7 @@ fn cancelling_the_review_does_not_import_an_existing_matching_download() {
     }
     let cancel = fixture.controls.browser_cancel_rect.unwrap();
     frame(&ctx, &mut fixture, click(cancel));
-    fixture.controls.poll(&fixture.catalog);
+    fixture.controls.poll(&mut fixture.catalog);
     assert_eq!(
         fixture.controls.browser_import.phase,
         ts4_mod_manager_native::browser_import::Phase::Cancelled

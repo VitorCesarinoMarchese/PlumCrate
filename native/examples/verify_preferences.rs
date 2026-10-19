@@ -149,7 +149,7 @@ impl Capture {
 impl eframe::App for Capture {
     fn ui(&mut self, ui: &mut egui::Ui, _: &mut eframe::Frame) {
         let ctx = ui.ctx().clone();
-        self.controls.poll(&self.catalog);
+        self.controls.poll(&mut self.catalog);
         self.view
             .show_with_controls(ui, &mut self.catalog, &mut self.controls);
         let screenshot = ctx.input(|i| {

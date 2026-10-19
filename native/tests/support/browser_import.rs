@@ -49,7 +49,7 @@ pub fn fixture_with_wake(wake: impl Fn() + Send + Sync + 'static) -> Fixture {
     .unwrap();
     let deadline = std::time::Instant::now() + std::time::Duration::from_secs(3);
     while controls.busy() {
-        controls.poll(&catalog);
+        controls.poll(&mut catalog);
         assert!(std::time::Instant::now() < deadline);
         std::thread::sleep(std::time::Duration::from_millis(2));
     }

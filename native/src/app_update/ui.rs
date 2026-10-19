@@ -375,7 +375,7 @@ mod tests {
         )
         .unwrap();
         for _ in 0..100 {
-            controls.poll(&crate::catalog::Catalog::default());
+            controls.poll(&mut crate::catalog::Catalog::default());
             if !controls.busy() {
                 break;
             }

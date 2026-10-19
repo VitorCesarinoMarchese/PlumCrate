@@ -218,7 +218,7 @@ impl NativeApp {
 impl eframe::App for NativeApp {
     fn logic(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
         self.poll();
-        self.controls.poll(&self.catalog);
+        self.controls.poll(&mut self.catalog);
         let automatic = self.controls.automatic_app_updates();
         self.controls.app_updates.poll(ctx, automatic);
         if std::mem::take(&mut self.controls.app_updates.restart_requested) {

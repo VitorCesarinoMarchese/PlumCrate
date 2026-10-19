@@ -40,7 +40,7 @@ fn custom_palettes_reach_sidebar_primary_actions_and_mod_switches() {
         );
         let deadline = std::time::Instant::now() + std::time::Duration::from_secs(3);
         while controls.busy() {
-            controls.poll(&catalog);
+            controls.poll(&mut catalog);
             assert!(std::time::Instant::now() < deadline);
             std::thread::sleep(std::time::Duration::from_millis(2));
         }

@@ -200,7 +200,7 @@ impl eframe::App for Capture {
 
     fn ui(&mut self, ui: &mut egui::Ui, _frame: &mut eframe::Frame) {
         let ctx = ui.ctx().clone();
-        self.controls.poll(&self.catalog);
+        self.controls.poll(&mut self.catalog);
         self.view
             .show_with_controls(ui, &mut self.catalog, &mut self.controls);
         self.controls.show_dialogs(&ctx, &self.catalog);

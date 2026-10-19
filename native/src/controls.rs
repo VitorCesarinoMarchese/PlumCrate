@@ -1,5 +1,5 @@
 use crate::{
-    catalog::Catalog,
+    catalog::{Catalog, EntryId},
     management::{Action, Event, Identity, Job, Mutations, Output},
     settings::{Settings, Theme},
 };
@@ -508,7 +508,7 @@ impl Controls {
             self.notice = Some("A source lookup is already running. Local actions remain available.".into());
             return;
         }
-        if !action.read_only() {
+        if !action.read_only() && !matches!(action, Action::Toggle { .. }) {
             self.updates.invalidate();
             self.release_choice = None;
         }
@@ -628,7 +628,7 @@ impl Controls {
                 .iter()
                 .any(|o| !o.job.action.read_only() && (o.status == "Queued" || o.status == "Running"))
     }
-    pub fn poll(&mut self, catalog: &Catalog) {
+    pub fn poll(&mut self, catalog: &mut Catalog) {
         self.browser_import.sync(catalog.root.as_ref(), self.saved_settings.curseforge_api_key.as_deref());
         if let Some(request) = self.browser_import.poll() {
             let token = request.token;
@@ -708,8 +708,19 @@ impl Controls {
                                 if !issues.is_empty() { notice.push_str(&format!(". {}", issues.join("\n"))); }
                                 self.notice = Some(notice);
                             }
-                            self.updates.invalidate();
-                            self.refresh = catalog.root.clone();
+                            if toggled.is_some() {
+                                if catalog.root.as_ref() == Some(&identity.root) {
+                                    if catalog.loading {
+                                        // Supersede an explicit scan that may predate this mutation.
+                                        self.refresh = catalog.root.clone();
+                                    } else if let (Some(EntryId::Managed(id)), Some(enabled)) = (&identity.entry, toggled) {
+                                        catalog.set_enabled(id, enabled);
+                                    }
+                                }
+                            } else {
+                                self.updates.invalidate();
+                                self.refresh = catalog.root.clone();
+                            }
                             if !issues.is_empty() && toggled.is_none() {
                                 failure = Some(issues.join("\n"))
                             }
@@ -1792,7 +1803,7 @@ mod tests {
         );
         let deadline = std::time::Instant::now() + std::time::Duration::from_secs(5);
         while controls.busy() {
-            controls.poll(&Catalog::default());
+            controls.poll(&mut Catalog::default());
             assert!(std::time::Instant::now() < deadline);
             std::thread::sleep(std::time::Duration::from_millis(2));
         }
@@ -1985,7 +1996,7 @@ mod tests {
         assert!(controls.dialog.is_none());
         assert!(controls.operations.is_empty());
         controls.picker_sender.take().unwrap().send(Some(dir.path().join("Chosen folder"))).unwrap();
-        controls.poll(&catalog);
+        controls.poll(&mut catalog);
         assert!(matches!(controls.dialog, Some(Dialog::Import { zip: false, .. })));
         assert!(controls.operations.is_empty());
     }
@@ -2006,7 +2017,7 @@ mod tests {
         .unwrap();
         let startup_deadline = std::time::Instant::now() + std::time::Duration::from_secs(5);
         while controls.refresh.is_none() {
-            controls.poll(&catalog);
+            controls.poll(&mut catalog);
             assert!(std::time::Instant::now() < startup_deadline);
             std::thread::sleep(std::time::Duration::from_millis(2));
         }
@@ -2016,7 +2027,7 @@ mod tests {
         catalog.begin_scan(dir.path().join("new"));
         let deadline = std::time::Instant::now() + std::time::Duration::from_secs(5);
         while controls.busy() {
-            controls.poll(&catalog);
+            controls.poll(&mut catalog);
             assert!(std::time::Instant::now() < deadline);
             std::thread::sleep(std::time::Duration::from_millis(2));
         }
@@ -2101,7 +2112,7 @@ mod tests {
         );
         let deadline = std::time::Instant::now() + std::time::Duration::from_secs(5);
         while controls.busy() {
-            controls.poll(&catalog);
+            controls.poll(&mut catalog);
             assert!(std::time::Instant::now() < deadline);
             std::thread::sleep(std::time::Duration::from_millis(2));
         }
@@ -2134,7 +2145,7 @@ mod tests {
         .unwrap();
         let deadline = std::time::Instant::now() + std::time::Duration::from_secs(5);
         while controls.refresh.is_none() {
-            controls.poll(&catalog);
+            controls.poll(&mut catalog);
             assert!(std::time::Instant::now() < deadline);
             std::thread::sleep(std::time::Duration::from_millis(2));
         }
@@ -2149,7 +2160,7 @@ mod tests {
         );
         catalog.begin_scan(root_b.clone());
         while controls.busy() {
-            controls.poll(&catalog);
+            controls.poll(&mut catalog);
             assert!(std::time::Instant::now() < deadline);
             std::thread::sleep(std::time::Duration::from_millis(2));
         }

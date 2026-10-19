@@ -117,7 +117,7 @@ impl eframe::App for Capture {
     }
     fn ui(&mut self, ui: &mut egui::Ui, _: &mut eframe::Frame) {
         let ctx = ui.ctx().clone();
-        self.fixture.controls.poll(&self.fixture.catalog);
+        self.fixture.controls.poll(&mut self.fixture.catalog);
         self.fixture.view.show_with_controls(
             ui,
             &mut self.fixture.catalog,

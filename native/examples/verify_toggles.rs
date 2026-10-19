@@ -25,6 +25,7 @@ struct Capture {
     list_selected: bool,
     clicks: usize,
     requested: bool,
+    scans: usize,
     started: Instant,
 }
 impl Capture {
@@ -42,6 +43,7 @@ impl Capture {
         self.clicks = if enabled { 1 } else { 2 };
         self.frames = 0;
         self.requested = false;
+        self.scans = 0;
         for cmd in [
             egui::ViewportCommand::MinInnerSize(size.into()),
             egui::ViewportCommand::MaxInnerSize(size.into()),
@@ -93,8 +95,9 @@ impl eframe::App for Capture {
     }
     fn ui(&mut self, ui: &mut egui::Ui, _: &mut eframe::Frame) {
         let ctx = ui.ctx().clone();
-        self.fixture.controls.poll(&self.fixture.catalog);
+        self.fixture.controls.poll(&mut self.fixture.catalog);
         if let Some(root) = self.fixture.controls.refresh.take() {
+            self.scans += 1;
             let scan = ts4_mod_manager_native::worker::scan(
                 &root,
                 &self.fixture.directory.path().join("managed"),
@@ -132,6 +135,7 @@ impl eframe::App for Capture {
                     .contains_rect(self.fixture.view.stats.first_toggle.unwrap()),
                 "the complete switch must fit in the visible row"
             );
+            assert_eq!(self.scans, 1, "only initial loading may scan the library");
             assert!(!self.fixture.controls.review_open());
             assert!(self.fixture.view.stats.detail_close.is_none());
             assert_eq!(self.fixture.catalog.mods[0].enabled, CASES[self.case].3);
@@ -200,6 +204,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                 list_selected: false,
                 clicks: 0,
                 requested: false,
+                scans: 0,
                 started: Instant::now(),
             };
             app.stage(&cc.egui_ctx);
