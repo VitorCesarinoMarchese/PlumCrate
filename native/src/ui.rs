@@ -211,16 +211,16 @@ pub(crate) fn custom_palette_visuals(base: &egui::Visuals, colors: &crate::setti
     ].map(|value| hex_color(value));
     let (accent, background, surface, text, muted, border) = (accent?, background?, surface?, text?, muted?, border?);
     let fills = [0.06, 0.13, 0.20].map(|amount| blend(surface, accent, amount));
-    let backgrounds = [background, surface, fills[0], fills[1], fills[2]];
     let mut v = base.clone();
     v.panel_fill = background; v.extreme_bg_color = surface; v.window_fill = surface;
     v.faint_bg_color = surface; v.code_bg_color = surface;
-    v.override_text_color = Some(readable_text(text, &backgrounds));
-    v.weak_text_color = Some(readable_text(muted, &backgrounds));
+    v.override_text_color = None;
+    v.text_edit_bg_color = Some(surface);
+    v.weak_text_color = Some(readable_text(muted, &[background]));
     v.selection.bg_fill = fills[2]; v.selection.stroke.color = readable_text(text, &[fills[2]]);
-    v.hyperlink_color = readable_text(accent, &[surface, background]);
+    v.hyperlink_color = readable_text(accent, &[background]);
     v.window_stroke.color = border; v.widgets.noninteractive.bg_stroke.color = border;
-    v.widgets.noninteractive.fg_stroke.color = v.weak_text_color();
+    v.widgets.noninteractive.fg_stroke.color = readable_text(text, &[background]);
     for (widget, fill) in [(&mut v.widgets.inactive, fills[0]), (&mut v.widgets.hovered, fills[1]), (&mut v.widgets.active, fills[2]), (&mut v.widgets.open, fills[1])] {
         widget.bg_fill = fill; widget.weak_bg_fill = fill; widget.bg_stroke.color = border;
         widget.fg_stroke.color = readable_text(text, &[fill]);
@@ -239,6 +239,36 @@ pub(crate) fn custom_palette_chrome(colors: &crate::settings::ThemeColors, visua
         primary: accent, primary_text: readable_text(surface, &[accent]),
         switch_on: accent, switch_off: muted, switch_knob: readable_text(surface, &[accent, muted]),
     }
+}
+
+pub(crate) fn text_on_fill(ui: &mut egui::Ui, fill: Color32) {
+    if ui.visuals().text_edit_bg_color.is_none() { return; }
+    let text = readable_text(ui.visuals().text_color(), &[fill]);
+    let muted = readable_text(ui.visuals().weak_text_color(), &[fill]);
+    let link = readable_text(ui.visuals().hyperlink_color, &[fill]);
+    let v = ui.visuals_mut();
+    v.override_text_color = None;
+    v.widgets.noninteractive.fg_stroke.color = text;
+    v.weak_text_color = Some(muted);
+    v.hyperlink_color = link;
+}
+
+pub(crate) fn choice_label(ui: &mut egui::Ui, selected: bool, text: impl Into<egui::WidgetText>) -> egui::Response {
+    ui.scope(|ui| {
+        if ui.visuals().text_edit_bg_color.is_some() {
+            ui.visuals_mut().widgets.inactive.fg_stroke.color = ui.visuals().text_color();
+        }
+        ui.selectable_label(selected, text.into())
+    }).inner
+}
+
+pub(crate) fn choice_value<Value: PartialEq>(ui: &mut egui::Ui, current: &mut Value, value: Value, text: impl Into<egui::WidgetText>) -> egui::Response {
+    let mut response = choice_label(ui, *current == value, text);
+    if response.clicked() && *current != value {
+        *current = value;
+        response.mark_changed();
+    }
+    response
 }
 
 fn cover_uv(source: egui::Vec2, destination: egui::Vec2) -> egui::Rect {
@@ -392,6 +422,7 @@ impl View {
                             c.app_updates.banner(ui);
                         }
                         if ui.button("Help").on_hover_text("Tasks and keyboard shortcuts (F1)").clicked() { self.help_open = true; }
+                        if !controls.as_ref().is_some_and(|c| c.settings_page) {
                         let dark = ui.visuals().dark_mode;
                         let icon = if dark { Icon::Sun } else { Icon::Moon };
                         let label = if dark { "Light" } else { "Dark" };
@@ -418,6 +449,7 @@ impl View {
                                 });
                             }
                         }
+                        }
                     });
                 });
                 if narrow { ui.horizontal_wrapped(|ui| self.destinations(ui, &mut controls, false)); }
@@ -439,8 +471,8 @@ impl View {
                             }
                             let response = ui.add_sized(
                                 [(ui.available_width() - 80.0).max(100.0), 36.0],
-                                egui::TextEdit::singleline(&mut self.root_input)
-                                    .hint_text("Game folder containing Mods")
+                                egui::TextEdit::singleline(&mut self.root_input).text_color(crate::ui::readable_text(ui.visuals().text_color(), &[ui.visuals().text_edit_bg_color()]))
+                                    .hint_text(egui::RichText::new("Game folder containing Mods").color(crate::ui::readable_text(ui.visuals().weak_text_color(), &[ui.visuals().text_edit_bg_color()])))
                                     .margin(egui::vec2(10.0, 9.0)),
                             );
                             let enter = response.lost_focus()
@@ -580,7 +612,7 @@ impl View {
                     ui.add_space(16.0);
                 }
                 ui.horizontal(|ui| {
-                    ui.label(RichText::new("Your mods").size(32.0).strong());
+                    ui.label(RichText::new("Your mods").size(32.0).strong().color(ui.visuals().text_color()));
                     ui.label(RichText::new(format!("{} mods", catalog.visible.len())).size(14.0).color(ui.visuals().weak_text_color()));
                     ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
                         if let Some(c) = controls.as_deref_mut() { c.add_mods_button(ui, catalog); }
@@ -598,13 +630,14 @@ impl View {
                     .corner_radius(8)
                     .inner_margin(egui::Margin::symmetric(12, 0))
                     .show(ui, |ui| {
+                        text_on_fill(ui, ui.visuals().extreme_bg_color);
                         ui.horizontal(|ui| {
                             ui.add(Icon::Search.image(ui.visuals().weak_text_color(), 18.0));
                             let mut query = catalog.query.clone();
                             let response = ui.add_sized(
                                 [ui.available_width(), 40.0],
-                                egui::TextEdit::singleline(&mut query)
-                                    .hint_text("Search mods")
+                                egui::TextEdit::singleline(&mut query).text_color(crate::ui::readable_text(ui.visuals().text_color(), &[ui.visuals().text_edit_bg_color()]))
+                                    .hint_text(egui::RichText::new("Search mods").color(crate::ui::readable_text(ui.visuals().weak_text_color(), &[ui.visuals().text_edit_bg_color()])))
                                     .frame(egui::Frame::NONE.inner_margin(egui::Margin::symmetric(0, 11))),
                             );
                             self.stats.search = Some(response.rect);
@@ -678,10 +711,10 @@ impl View {
                         ("Browse CurseForge", "Browse mods searches The Sims 4 mods and custom content on CurseForge. Save your API key in Settings, then search, filter by category or sort. Open a project to read its summary and view screenshots. Download via website lets you review a release, source and game folder. After you start, the app watches your Downloads folder and installs the verified file automatically."),
                         ("Save a source", "Find source uses your locally saved CurseForge key. No match? Attach a known URL manually. Review every attachment before saving."),
                         ("Check updates", "Attach a CurseForge source, then choose Check updates. Record the release you installed to compare versions. Update notices link to the mod page; download there, replace your local files, and record the new release."),
-                        ("Change appearance", "Settings previews your choices. Save settings keeps them; Discard restores saved values. The header Light/Dark switch saves immediately."),
+                        ("Change appearance", "Settings shows a preview. Save changes applies your choices; Discard changes restores saved values."),
                         ("Keyboard shortcuts", "Ctrl+F searches · Alt+Left/Right browses open mod details · Tab moves focus · Enter/Space activates buttons · Escape goes back one level · F1 opens Help."),
                     ] {
-                        ui.label(RichText::new(title).strong()); ui.label(body); ui.add_space(12.0);
+                        ui.label(RichText::new(title).strong().color(ui.visuals().text_color())); ui.label(body); ui.add_space(12.0);
                     }
                 });
                 crate::popup::close(ui).clicked()
@@ -694,7 +727,7 @@ impl View {
     fn brand(&mut self, ui: &mut egui::Ui) {
         let logo = ui.add(egui::Image::new(egui::include_image!("../assets/plumbob.svg")).fit_to_exact_size(egui::vec2(22.0, 34.0)).alt_text("Sims 4 Mod Manager"));
         self.stats.logo = Some(logo.rect);
-        ui.label(RichText::new("Mod Manager").size(18.0).strong().color(ui.visuals().override_text_color.unwrap_or(ui.visuals().text_color())));
+        ui.label(RichText::new("Mod Manager").size(18.0).strong().color(ui.visuals().text_color()));
     }
 
     fn destinations(&mut self, ui: &mut egui::Ui, controls: &mut Option<&mut crate::controls::Controls>, rail: bool) {
@@ -764,6 +797,7 @@ impl View {
                                     } else {
                                         ui.visuals().extreme_bg_color
                                     };
+                                    text_on_fill(ui, color);
                                     let stroke = if selected || response.has_focus() {
                                         egui::Stroke::new(1.5, ui.visuals().selection.stroke.color)
                                     } else {
@@ -803,7 +837,7 @@ impl View {
                                     );
                                     text.add(
                                         egui::Label::new(
-                                            RichText::new(&entry.name).size(15.0).strong(),
+                                            RichText::new(&entry.name).size(15.0).strong().color(ui.visuals().text_color()),
                                         )
                                         .truncate(),
                                     );
@@ -884,7 +918,7 @@ impl View {
                                 catalog.select(index);
                             }
                             if let Some(c) = controls.as_deref_mut() {
-                                response.context_menu(|ui| c.mod_menu(ui, catalog));
+                                response.context_menu(|ui| { text_on_fill(ui, ui.visuals().window_fill); c.mod_menu(ui, catalog) });
                             }
                             if self.stats.first_row.is_none() {
                                 self.stats.first_row = Some(response.rect.intersect(ui.clip_rect()));
@@ -906,7 +940,6 @@ impl View {
         catalog: &mut Catalog,
         mut controls: Option<&mut crate::controls::Controls>,
     ) {
-        let foreground = ui.visuals().text_color();
         let root_id = catalog.root.clone();
         egui::ScrollArea::vertical()
             .id_salt(("catalog", root_id))
@@ -938,6 +971,8 @@ impl View {
                             if selected || response.hovered() || response.has_focus() {
                                 ui.painter().rect_filled(rect, 6.0, visuals.bg_fill);
                             }
+                            let fill = if selected || response.hovered() || response.has_focus() { visuals.bg_fill } else { ui.visuals().panel_fill };
+                            text_on_fill(ui, fill);
                             let inner = rect.shrink2(egui::vec2(12.0, 10.0));
                             let thumbnail =
                                 egui::Rect::from_min_size(inner.min, egui::Vec2::splat(44.0));
@@ -959,7 +994,7 @@ impl View {
                             row.spacing_mut().item_spacing.y = 5.0;
                             row.add(
                                 egui::Label::new(
-                                    RichText::new(&entry.name).size(15.0).color(foreground),
+                                    RichText::new(&entry.name).size(15.0).color(ui.visuals().text_color()),
                                 )
                                 .truncate(),
                             );
@@ -998,7 +1033,7 @@ impl View {
                         catalog.select(index);
                     }
                     if let Some(c) = controls.as_deref_mut() {
-                        response.context_menu(|ui| c.mod_menu(ui, catalog));
+                        response.context_menu(|ui| { text_on_fill(ui, ui.visuals().window_fill); c.mod_menu(ui, catalog) });
                     }
                     if self.stats.first_row.is_none() {
                         self.stats.first_row = Some(response.rect.intersect(ui.clip_rect()));
@@ -1110,6 +1145,7 @@ impl View {
                     .corner_radius(6)
                     .inner_margin(egui::Margin::symmetric(10, 7))
                     .show(ui, |ui| {
+                        text_on_fill(ui, ui.visuals().widgets.inactive.weak_bg_fill);
                         ui.label(
                             RichText::new(state)
                                 .size(12.0)
@@ -1143,7 +1179,7 @@ impl View {
                 if let Some(source) = &entry.source_url {
                     ui.scope(|ui| {
                         ui.spacing_mut().item_spacing.y = 4.0;
-                        ui.label(RichText::new("Saved source").size(16.0).strong());
+                        ui.label(RichText::new("Saved source").size(16.0).strong().color(ui.visuals().text_color()));
                         if let Some(attachment) = &entry.source_attachment {
                             if let Some(author) = &attachment.author {
                                 ui.label(
@@ -1213,7 +1249,7 @@ impl View {
                     .as_ref()
                     .is_some_and(|(id, until)| *id == identity && now < *until);
                 ui.horizontal(|ui| {
-                    ui.label(RichText::new("Files").size(16.0).strong());
+                    ui.label(RichText::new("Files").size(16.0).strong().color(ui.visuals().text_color()));
                     ui.label(
                         RichText::new(format!("{}", entry.files.len()))
                             .size(13.0)
@@ -1362,6 +1398,27 @@ mod tests {
         apply_settings_theme(&ctx, &settings);
         let visuals = &ctx.style_of(egui::Theme::Light).visuals;
         assert_ne!(visuals.text_color(), visuals.extreme_bg_color, "a 1:1 theme must not hide its own recovery controls");
+    }
+
+    #[test]
+    fn opposing_custom_fills_use_their_own_text_inks() {
+        let mut colors = crate::settings::ThemeColors::base(false);
+        colors.background = "#FFFFFF".into();
+        colors.surface = "#000000".into();
+        colors.text = "#000000".into();
+        colors.muted_text = "#000000".into();
+        let visuals = custom_palette_visuals(&egui::Visuals::light(), &colors).unwrap();
+        assert_eq!(visuals.text_color(), Color32::BLACK);
+        let ctx = egui::Context::default();
+        ctx.set_visuals(visuals);
+        let mut output = ctx.run_ui(egui::RawInput::default(), |ui| {
+            text_on_fill(ui, Color32::BLACK);
+            assert_ne!(ui.visuals().text_color(), Color32::BLACK);
+            assert_ne!(ui.visuals().weak_text_color(), Color32::BLACK);
+            assert_eq!(ui.visuals().extreme_bg_color, Color32::BLACK);
+            assert_eq!(ui.visuals().panel_fill, Color32::WHITE);
+        });
+        output.textures_delta.clear();
     }
 
     #[test]

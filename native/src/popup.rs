@@ -25,9 +25,10 @@ pub fn show_width<T>(
     egui::Modal::new(Id::new((id, title)))
         .frame(frame)
         .show(ctx, |ui| {
+            crate::ui::text_on_fill(ui, ui.visuals().extreme_bg_color);
             ui.set_width((ctx.content_rect().width() - 96.0).clamp(240.0, width));
             ui.style_mut().wrap_mode = Some(egui::TextWrapMode::Wrap);
-            ui.label(egui::RichText::new(title).size(23.0).strong());
+            ui.label(egui::RichText::new(title).size(23.0).strong().color(ui.visuals().text_color()));
             ui.add_space(12.0);
             content(ui)
         })
@@ -46,7 +47,7 @@ pub fn actions(ui: &mut Ui, label: &str, enabled: bool) -> (Response, Response) 
             let selection = ui.visuals().selection;
             let approve = ui.add_enabled(
                 enabled,
-                egui::Button::new(label)
+                egui::Button::new(egui::RichText::new(label).color(selection.stroke.color))
                     .min_size(egui::vec2(96.0, 36.0))
                     .fill(selection.bg_fill)
                     .stroke(selection.stroke),
@@ -74,6 +75,7 @@ pub fn text_field(ui: &mut Ui, label: &str, value: &mut String) -> Response {
     ui.add_sized(
         [ui.available_width(), 36.0],
         egui::TextEdit::singleline(value)
+            .text_color(crate::ui::readable_text(ui.visuals().text_color(), &[fill]))
             .background_color(fill)
             .margin(egui::vec2(10.0, 8.0)),
     ).labelled_by(label.id)

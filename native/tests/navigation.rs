@@ -118,7 +118,7 @@ fn escape_goes_back_one_level_and_keeps_settings_drafts_and_library_state() {
         &mut view,
         &mut controls,
         &mut catalog,
-        click_text(&output, "Create custom theme"),
+        click_text(&output, "New theme"),
     );
     let output = frame(&ctx, &mut view, &mut controls, &mut catalog, vec![]);
     frame(
@@ -126,7 +126,7 @@ fn escape_goes_back_one_level_and_keeps_settings_drafts_and_library_state() {
         &mut view,
         &mut controls,
         &mut catalog,
-        click_text(&output, "Custom theme 1"),
+        click_text(&output, "#1263CA"),
     );
     assert!(
         ctx.memory(|memory| memory.focused().is_some()),
@@ -188,7 +188,7 @@ fn settings_occupies_page_without_library_or_floating_window() {
     frame(&ctx, &mut view, &mut controls, &mut catalog, vec![]);
     let output = frame(&ctx, &mut view, &mut controls, &mut catalog, vec![]);
     assert!(has_text(&output, "Appearance"));
-    assert!(has_text(&output, "Create custom theme"));
+    assert!(has_text(&output, "New theme"));
     assert!(view.stats.first_row.is_none(), "Settings replaces the library content");
     assert!(!has_text(&output, "Local settings"));
     assert!(view.stats.search.is_none());
@@ -382,9 +382,12 @@ fn editor_edits_and_saves_both_versions_without_losing_the_other_draft() {
     ui::apply_settings_theme(&ctx, &settings);
     let mut catalog = Catalog::default();
     let mut view = View::default();
+    frame(&ctx, &mut view, &mut controls, &mut catalog, vec![]);
+    let output = frame(&ctx, &mut view, &mut controls, &mut catalog, vec![]);
+    frame(&ctx, &mut view, &mut controls, &mut catalog, click_text(&output, "Edit colors"));
     for (mode, heading, old, new) in [
-        ("Light", "Light colors", "#64387A", "#554466"),
-        ("Dark", "Dark colors", "#B18BD0", "#CCAADD"),
+        ("Light colors", "Light colors", "#64387A", "#554466"),
+        ("Dark colors", "Dark colors", "#B18BD0", "#CCAADD"),
     ] {
         frame(&ctx, &mut view, &mut controls, &mut catalog, vec![]);
         let output = frame(&ctx, &mut view, &mut controls, &mut catalog, vec![]);
@@ -434,7 +437,7 @@ fn editor_edits_and_saves_both_versions_without_losing_the_other_draft() {
         &mut view,
         &mut controls,
         &mut catalog,
-        click_text(&output, "Light"),
+        click_text(&output, "Light colors"),
     );
     let output = frame(&ctx, &mut view, &mut controls, &mut catalog, vec![]);
     assert!(has_text(&output, "#554466"));
@@ -443,7 +446,7 @@ fn editor_edits_and_saves_both_versions_without_losing_the_other_draft() {
         &mut view,
         &mut controls,
         &mut catalog,
-        click_text(&output, "Save settings"),
+        click_text(&output, "Save changes"),
     );
     let saved = Settings::load(&dir.path().join(".config/ts4-mod-manager/settings.json")).unwrap();
     assert_eq!(saved.custom_themes[0].light.accent, "#554466");
@@ -511,7 +514,9 @@ fn reset_changes_only_the_visible_palette_and_copy_exports_both_versions() {
     };
     render(vec![]);
     let output = render(vec![]);
-    render(click_text(&output, "Reset colors"));
+    render(click_text(&output, "Edit colors"));
+    let output = render(vec![]);
+    render(click_text(&output, "Reset these colors"));
     let output = render(vec![]);
     let copied = render(click_text(&output, "Copy theme JSON"));
     let json = copied
@@ -531,7 +536,7 @@ fn reset_changes_only_the_visible_palette_and_copy_exports_both_versions() {
         serde_json::to_value(ts4_mod_manager_native::settings::ThemeColors::base(true)).unwrap()
     );
     let output = render(vec![]);
-    render(click_text(&output, "Save settings"));
+    render(click_text(&output, "Save changes"));
     let saved = Settings::load(&dir.path().join(".config/ts4-mod-manager/settings.json")).unwrap();
     assert_eq!(serde_json::to_value(&saved.custom_themes[0]).unwrap(), json);
 }
@@ -585,7 +590,7 @@ fn theme_editor_saves_and_applies_a_theme_that_survives_restart() {
         &mut view,
         &mut controls,
         &mut catalog,
-        click_text(&output, "Create custom theme"),
+        click_text(&output, "New theme"),
     );
     let output = frame(&ctx, &mut view, &mut controls, &mut catalog, vec![]);
     frame(
@@ -593,7 +598,7 @@ fn theme_editor_saves_and_applies_a_theme_that_survives_restart() {
         &mut view,
         &mut controls,
         &mut catalog,
-        click_text(&output, "Save settings"),
+        click_text(&output, "Save changes"),
     );
     let settings =
         Settings::load(&dir.path().join(".config/ts4-mod-manager/settings.json")).unwrap();
@@ -630,13 +635,15 @@ fn settings_save_button_stays_visible_above_scrolling_content() {
     ui::setup(&ctx);
     frame(&ctx, &mut view, &mut controls, &mut catalog, vec![]);
     let output = frame(&ctx, &mut view, &mut controls, &mut catalog, vec![]);
-    assert!(has_text(&output, "Save settings"));
+    assert!(has_text(&output, "Save changes"));
+    frame(&ctx, &mut view, &mut controls, &mut catalog, click_text(&output, "Dark"));
+    let output = frame(&ctx, &mut view, &mut controls, &mut catalog, vec![]);
     frame(
         &ctx,
         &mut view,
         &mut controls,
         &mut catalog,
-        click_text(&output, "Save settings"),
+        click_text(&output, "Save changes"),
     );
     frame(&ctx, &mut view, &mut controls, &mut catalog, vec![]);
     let output = frame(&ctx, &mut view, &mut controls, &mut catalog, vec![]);
@@ -694,7 +701,7 @@ fn color_mode_switch_preserves_the_custom_editor_draft() {
         &mut view,
         &mut controls,
         &mut catalog,
-        click_text(&output, "Create custom theme"),
+        click_text(&output, "New theme"),
     );
     controls.set_color_mode(&ctx, ts4_mod_manager_native::settings::Theme::Light);
     let output = frame(&ctx, &mut view, &mut controls, &mut catalog, vec![]);
@@ -703,7 +710,7 @@ fn color_mode_switch_preserves_the_custom_editor_draft() {
         &mut view,
         &mut controls,
         &mut catalog,
-        click_text(&output, "Save settings"),
+        click_text(&output, "Save changes"),
     );
     assert!(
         Settings::load(&dir.path().join(".config/ts4-mod-manager/settings.json"))
@@ -712,9 +719,9 @@ fn color_mode_switch_preserves_the_custom_editor_draft() {
             .is_some()
     );
     let output = frame(&ctx, &mut view, &mut controls, &mut catalog, vec![]);
-    frame(&ctx, &mut view, &mut controls, &mut catalog, click_text(&output, "Use default colors"));
+    frame(&ctx, &mut view, &mut controls, &mut catalog, click_text(&output, "Built-in"));
     let output = frame(&ctx, &mut view, &mut controls, &mut catalog, vec![]);
-    frame(&ctx, &mut view, &mut controls, &mut catalog, click_text(&output, "Save settings"));
+    frame(&ctx, &mut view, &mut controls, &mut catalog, click_text(&output, "Save changes"));
     let saved = Settings::load(&dir.path().join(".config/ts4-mod-manager/settings.json")).unwrap();
     assert!(saved.active_custom_theme.is_none());
     assert_eq!(saved.custom_themes.len(), 1);

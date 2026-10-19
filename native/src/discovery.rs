@@ -528,7 +528,7 @@ impl DiscoverView {
             }
         }
         ui.horizontal(|ui| {
-            ui.label(RichText::new("Browse mods").size(27.0).strong());
+            ui.label(RichText::new("Browse mods").size(27.0).strong().color(ui.visuals().text_color()));
             ui.label(
                 RichText::new("The Sims 4 · CurseForge").color(ui.visuals().weak_text_color()),
             );
@@ -553,12 +553,13 @@ impl DiscoverView {
             .corner_radius(8)
             .inner_margin(egui::Margin::symmetric(12, 0))
             .show(ui, |ui| {
+                crate::ui::text_on_fill(ui, ui.visuals().extreme_bg_color);
                 ui.horizontal(|ui| {
                     ui.add(crate::ui::Icon::Search.image(ui.visuals().weak_text_color(), 18.0));
                     let response = ui.add_sized(
                         [(ui.available_width() - 106.0).max(80.0), 42.0],
-                        egui::TextEdit::singleline(&mut self.query)
-                            .hint_text("Search CurseForge mods and custom content")
+                        egui::TextEdit::singleline(&mut self.query).text_color(crate::ui::readable_text(ui.visuals().text_color(), &[ui.visuals().text_edit_bg_color()]))
+                            .hint_text(egui::RichText::new("Search CurseForge mods and custom content").color(crate::ui::readable_text(ui.visuals().weak_text_color(), &[ui.visuals().text_edit_bg_color()])))
                             .frame(egui::Frame::NONE.inner_margin(egui::Margin::symmetric(0, 12))),
                     );
                     self.stats.search = Some(response.rect);
@@ -768,8 +769,8 @@ impl DiscoverView {
                                 .selected_text(name)
                                 .show_ui(ui, |ui| {
                                     ui.add(
-                                        egui::TextEdit::singleline(&mut self.category_search)
-                                            .hint_text("Find a category")
+                                        egui::TextEdit::singleline(&mut self.category_search).text_color(crate::ui::readable_text(ui.visuals().text_color(), &[ui.visuals().text_edit_bg_color()]))
+                                            .hint_text(egui::RichText::new("Find a category").color(crate::ui::readable_text(ui.visuals().weak_text_color(), &[ui.visuals().text_edit_bg_color()])))
                                             .desired_width(240.0),
                                     );
                                     ui.selectable_value(&mut self.category, None, "All categories");
@@ -807,8 +808,8 @@ impl DiscoverView {
                         .selected_text(self.game_version.as_deref().unwrap_or("All versions"))
                         .show_ui(ui, |ui| {
                             ui.add(
-                                egui::TextEdit::singleline(&mut self.version_search)
-                                    .hint_text("Find a version")
+                                egui::TextEdit::singleline(&mut self.version_search).text_color(crate::ui::readable_text(ui.visuals().text_color(), &[ui.visuals().text_edit_bg_color()]))
+                                    .hint_text(egui::RichText::new("Find a version").color(crate::ui::readable_text(ui.visuals().weak_text_color(), &[ui.visuals().text_edit_bg_color()])))
                                     .desired_width(130.0),
                             );
                             ui.selectable_value(&mut self.game_version, None, "All versions");
@@ -900,6 +901,7 @@ impl DiscoverView {
                         let content_width = width - frame.total_margin().sum().x;
                         let response = frame
                             .show(ui, |ui| {
+                                crate::ui::text_on_fill(ui, ui.visuals().extreme_bg_color);
                                 ui.vertical(|ui| {
                                     ui.set_width(content_width);
                                     ui.set_min_height(238.0);
@@ -1045,7 +1047,7 @@ impl DiscoverView {
                 ui.horizontal_top(|ui| {
                     self.photo(ui, project.preview_url.as_deref(), vec2(80.0, 80.0));
                     ui.vertical(|ui| {
-                        ui.label(RichText::new(&project.name).size(26.0).strong());
+                        ui.label(RichText::new(&project.name).size(26.0).strong().color(ui.visuals().text_color()));
                         ui.label(
                             RichText::new(author(&project)).color(ui.visuals().weak_text_color()),
                         );
@@ -1104,7 +1106,7 @@ impl DiscoverView {
                 }
                 ui.add_space(24.0);
                 if !project.screenshots.is_empty() {
-                    ui.label(RichText::new("Screenshots").size(18.0).strong());
+                    ui.label(RichText::new("Screenshots").size(18.0).strong().color(ui.visuals().text_color()));
                     ui.add_space(12.0);
                 }
                 for url in &project.screenshots {
@@ -1115,7 +1117,7 @@ impl DiscoverView {
         self.stats.detail_scroll=Some((scroll.id,scroll.inner_rect));
     }
     fn description_section(&mut self, ui:&mut egui::Ui, project:&BrowseProject) {
-        let heading=ui.label(RichText::new("Description").size(18.0).strong());
+        let heading=ui.label(RichText::new("Description").size(18.0).strong().color(ui.visuals().text_color()));
         self.stats.description_heading=Some(heading.rect);
         if self.detail_jump==Some(DetailSection::Description) {heading.scroll_to_me_animation(Some(egui::Align::Min),egui::style::ScrollAnimation::none());self.detail_jump=None;}
         ui.add_space(12.0);
@@ -1137,7 +1139,7 @@ impl DiscoverView {
                     match block.kind {
                         BlockKind::Heading(level) => {
                             if index>0 {ui.add_space(12.0);}
-                            ui.label(RichText::new(&block.text).size(if level <= 2 {20.0} else {17.0}).strong());
+                            ui.label(RichText::new(&block.text).size(if level <= 2 {20.0} else {17.0}).strong().color(ui.visuals().text_color()));
                         },
                         BlockKind::Rule => { ui.separator(); },
                         BlockKind::Image => {
@@ -1165,7 +1167,7 @@ impl DiscoverView {
     }
     fn dependency_section(&mut self, ui:&mut egui::Ui, summary:&BrowseProject) {
         let mut retry_references=false;
-        let heading=ui.label(RichText::new("Dependencies for this release").size(18.0).strong());
+        let heading=ui.label(RichText::new("Dependencies for this release").size(18.0).strong().color(ui.visuals().text_color()));
         self.stats.dependencies_heading=Some(heading.rect);
         if self.detail_jump==Some(DetailSection::Dependencies) {heading.scroll_to_me_animation(Some(egui::Align::Min),egui::style::ScrollAnimation::none());self.detail_jump=None;}
         ui.add_space(12.0);
@@ -1196,7 +1198,7 @@ impl DiscoverView {
                     ui.add(egui::Label::new(RichText::new(&file.release.file_name).size(12.0).color(ui.visuals().weak_text_color())).wrap());
                     match file.dependencies.completeness {
                         DependencyCompleteness::Unknown => { ui.label("Dependency information is unavailable for this release. Check the author's description."); },
-                        DependencyCompleteness::Partial => { ui.label(RichText::new("Some dependency information could not be read. This list may be incomplete.").strong()); },
+                        DependencyCompleteness::Partial => { ui.label(RichText::new("Some dependency information could not be read. This list may be incomplete.").strong().color(ui.visuals().text_color())); },
                         DependencyCompleteness::Complete if file.dependencies.relations.is_empty() => { ui.label("No dependencies declared for this release. Check the author's description for additional requirements."); },
                         _ => {},
                     }
@@ -1206,7 +1208,7 @@ impl DiscoverView {
                         ui.label(RichText::new(relation.kind.label()).size(12.0).color(if relation.kind==ts4_mod_manager_core::browser_import::RelationKind::Incompatible {ui.visuals().text_color()} else {ui.visuals().weak_text_color()}));
                         match self.details.references.get(&relation.project_id) {
                             Some(Load::Ready(reference)) => {
-                                ui.add(egui::Label::new(RichText::new(&reference.title).strong()).wrap());
+                                ui.add(egui::Label::new(RichText::new(&reference.title).strong().color(ui.visuals().text_color())).wrap());
                                 ui.horizontal_wrapped(|ui| {
                                     ui.hyperlink_to("Open project",reference.source_url.as_str());
                                     if relation.kind.can_install() {
@@ -1240,7 +1242,7 @@ impl DiscoverView {
         let links=match &self.details.description {Load::Ready(document)=>document.author_projects(),_=>vec![]};
         if !links.is_empty() {
             ui.add_space(24.0);
-            ui.label(RichText::new("Author-linked mods").size(18.0).strong());
+            ui.label(RichText::new("Author-linked mods").size(18.0).strong().color(ui.visuals().text_color()));
             ui.label("These links come from the description. They are not declared dependencies.");
             for link in links {
                 ui.add_space(12.0);

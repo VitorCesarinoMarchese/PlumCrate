@@ -4,6 +4,10 @@ use crate::{
     settings::{Settings, Theme},
 };
 use std::path::PathBuf;
+#[path = "controls/preferences.rs"]
+mod preferences;
+pub use preferences::PreferencesSection;
+
 struct Operation {
     job: Job,
     status: String,
@@ -49,6 +53,7 @@ pub struct Controls {
     pub open_update_page_rect: Option<egui::Rect>,
     release_choice: Option<(String, u64)>,
     pub settings_page: bool,
+    preferences: preferences::PreferencesView,
     theme_json: String,
     theme_edit: Option<crate::settings::CustomTheme>,
     theme_edit_original: Option<String>,
@@ -105,6 +110,7 @@ impl Controls {
             open_update_page_rect: None,
             release_choice: None,
             settings_page: false,
+            preferences: Default::default(),
             theme_json: String::new(),
             theme_edit,
             theme_edit_original,
@@ -1023,219 +1029,19 @@ impl Controls {
         });
     }
     pub fn set_color_mode(&mut self, ctx: &egui::Context, theme: Theme) {
-        self.preview_color_mode(ctx, theme);
+        self.settings.theme = theme.clone();
         let mut saved = self.saved_settings.clone();
-        saved.theme = self.settings.theme.clone();
+        saved.theme = theme;
         match saved.save(&self.settings_path) {
-            Ok(()) => self.saved_settings = saved,
-            Err(error) => self.error = Some(error),
-        }
-    }
-    pub fn settings_dirty(&self) -> bool {
-        self.settings != self.saved_settings || self.theme_edit.as_ref().is_some_and(|draft| {
-            self.saved_settings.custom_themes.iter().find(|theme| Some(&theme.name) == self.theme_edit_original.as_ref()) != Some(draft)
-        })
-    }
-    fn discard_preferences(&mut self, ctx: &egui::Context) {
-        self.settings = self.saved_settings.clone();
-        self.theme_edit_original = self.settings.active_custom_theme.clone();
-        self.theme_edit = self.settings.custom_themes.iter().find(|theme| Some(&theme.name) == self.theme_edit_original.as_ref()).cloned();
-        self.theme_json.clear();
-        self.error = None;
-        self.notice = Some("Unsaved settings discarded".into());
-        crate::ui::apply_settings_theme(ctx, &self.settings);
-    }
-    fn preview_color_mode(&mut self, ctx: &egui::Context, theme: Theme) {
-        self.settings.theme = theme;
-        crate::ui::apply_settings_theme(ctx, &self.settings);
-    }
-    fn use_default_colors(&mut self, ctx: &egui::Context) {
-        self.settings.active_custom_theme = None;
-        self.theme_edit = None;
-        self.theme_edit_original = None;
-        crate::ui::apply_settings_theme(ctx, &self.settings);
-    }
-    fn save_preferences(&mut self, ctx: &egui::Context) {
-        let mut next = self.settings.clone();
-        if let Some(theme) = &self.theme_edit {
-            if let Err(error) = theme.validate() {
-                self.error = Some(error);
-                return;
-            }
-            if next
-                .custom_themes
-                .iter()
-                .any(|t| t.name == theme.name && self.theme_edit_original.as_ref() != Some(&t.name))
-            {
-                self.error =
-                    Some("That theme name already exists. Choose a different name.".into());
-                return;
-            }
-            if let Some(original) = &self.theme_edit_original {
-                next.custom_themes.retain(|t| &t.name != original);
-            }
-            next.active_custom_theme = Some(theme.name.clone());
-            next.custom_themes.push(theme.clone());
-        }
-        match next.save(&self.settings_path) {
             Ok(()) => {
-                self.saved_settings = next.clone();
-                self.settings = next;
-                if let Some(theme) = &self.theme_edit {
-                    self.theme_edit_original = Some(theme.name.clone());
-                }
-                crate::ui::apply_settings_theme(ctx, &self.settings);
-                self.error = None;
-                self.notice = Some("Settings saved".into());
-            }
+                crate::ui::apply_settings_theme(ctx, &saved);
+                self.saved_settings = saved;
+            },
             Err(error) => self.error = Some(error),
         }
-    }
-    pub fn settings_content(&mut self, ui: &mut egui::Ui, catalog: &Catalog, back_label: &str) {
-        let ctx = ui.ctx().clone();
-        ui.horizontal(|ui| {
-            ui.label(egui::RichText::new("Settings").size(27.0).strong());
-            ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                if ui.button("Save settings").clicked() {
-                    self.save_preferences(&ctx);
-                }
-                if ui.add_enabled(self.settings_dirty(), egui::Button::new("Discard")).clicked() {
-                    self.discard_preferences(&ctx);
-                }
-                if ui.button(back_label).on_hover_text(format!("{back_label} (Escape)")).clicked() {
-                    self.settings_page = false;
-                }
-            });
-        });
-        ui.label(egui::RichText::new(if self.settings_dirty() {
-            "Unsaved changes · Save or discard when ready. Leaving this page keeps your draft."
-        } else {
-            "Preferences stay on this device. The header Light/Dark switch saves immediately."
-        }).color(ui.visuals().weak_text_color()));
-        ui.add_space(24.0);
-        egui::ScrollArea::vertical().id_salt("settings-page").auto_shrink([false, false]).show(ui, |ui| {
-            ui.set_max_width(ui.available_width().min(720.0));
-            ui.heading("Appearance");
-            ui.add_space(8.0);
-            ui.horizontal_wrapped(|ui| {
-                for (theme, label) in [(Theme::Light, "Light"), (Theme::Dark, "Dark"), (Theme::System, "System")] {
-                    if ui.selectable_label(self.settings.theme == theme, label).clicked() {
-                        self.preview_color_mode(&ctx, theme);
-                    }
-                }
-                if (self.settings.active_custom_theme.is_some() || self.theme_edit.is_some())
-                    && ui.button("Use default colors").clicked() {
-                    self.use_default_colors(&ctx);
-                }
-                if ui.button("Create custom theme").clicked() {
-                    let mut theme = crate::settings::CustomTheme::base();
-                    let mut n = 1;
-                    while self.settings.custom_themes.iter().any(|t| t.name == format!("Custom theme {n}")) { n += 1; }
-                    theme.name = format!("Custom theme {n}");
-                    self.theme_edit = Some(theme); self.theme_edit_original = None;
-                }
-            });
-            if !self.settings.custom_themes.is_empty() {
-                ui.add_space(8.0);
-                ui.horizontal_wrapped(|ui| {
-                    for theme in &self.settings.custom_themes {
-                        if ui.selectable_label(self.settings.active_custom_theme.as_ref() == Some(&theme.name), &theme.name).clicked() {
-                            self.settings.active_custom_theme = Some(theme.name.clone());
-                            self.theme_edit = Some(theme.clone()); self.theme_edit_original = Some(theme.name.clone());
-                            crate::ui::apply_settings_theme(&ctx, &self.settings);
-                        }
-                    }
-                });
-            }
-            if let Some(theme) = &mut self.theme_edit {
-                ui.add_space(16.0);
-                let name_label = ui.label("Theme name");
-                ui.add(egui::TextEdit::singleline(&mut theme.name).desired_width(300.0).min_size(egui::vec2(200.0, 34.0)).margin(egui::vec2(10.0, 9.0))).labelled_by(name_label.id);
-                ui.add_space(16.0);
-                let dark = ui.visuals().dark_mode;
-                ui.label(egui::RichText::new(if dark { "Dark colors" } else { "Light colors" }).strong());
-                ui.label(egui::RichText::new("Choose Light or Dark above to edit each version.").color(ui.visuals().weak_text_color()));
-                ui.add_space(8.0);
-                for (mode, palette) in [("Light", &theme.light), ("Dark", &theme.dark)] {
-                    let warnings = palette.contrast_warnings();
-                    if !warnings.is_empty() {
-                        ui.label(egui::RichText::new(format!("{mode} text will be adjusted for readability. Your chosen colors are kept.")).strong());
-                        ui.collapsing(format!("{mode} contrast details"), |ui| { for warning in warnings { ui.label(warning); } });
-                    }
-                }
-                if ui.button("Reset colors").clicked() { *theme.palette_mut(dark) = crate::settings::ThemeColors::base(dark); }
-                ui.add_space(8.0);
-                egui::Grid::new(("theme-colors", dark)).num_columns(3).spacing([16.0, 10.0]).show(ui, |ui| {
-                    for (label, value) in theme.palette_mut(dark).fields() {
-                        let field_label = ui.label(label);
-                        ui.add(egui::TextEdit::singleline(value).desired_width(112.0).min_size(egui::vec2(112.0, 34.0)).margin(egui::vec2(10.0, 9.0)).char_limit(7)).labelled_by(field_label.id);
-                        if let Some(color) = crate::ui::hex_color(value) {
-                            let mut rgb = [color.r(), color.g(), color.b()];
-                            if ui.color_edit_button_srgb(&mut rgb).labelled_by(field_label.id).changed() { *value = format!("#{:02X}{:02X}{:02X}", rgb[0], rgb[1], rgb[2]); }
-                        } else { ui.label("#RRGGBB"); }
-                        ui.end_row();
-                    }
-                });
-                let valid = theme.validate().is_ok();
-                if let Err(error) = theme.validate() { ui.colored_label(ui.visuals().error_fg_color, error); }
-                ui.horizontal_wrapped(|ui| {
-                    if ui.add_enabled(valid, egui::Button::new("Copy theme JSON")).clicked() {
-                        match serde_json::to_string_pretty(theme) { Ok(json) => { ctx.copy_text(json.clone()); self.theme_json = json; }, Err(_) => self.error = Some("Cannot export theme".into()) }
-                    }
-                });
-                ui.label(egui::RichText::new("Save settings above to keep both color versions.").color(ui.visuals().weak_text_color()));
-            }
-            ui.add_space(12.0);
-            ui.collapsing("Import a theme", |ui| {
-                let json_label = ui.label("Paste theme JSON exported from this app or the previous version.");
-                ui.add(egui::TextEdit::multiline(&mut self.theme_json).desired_width(ui.available_width()).desired_rows(5)).labelled_by(json_label.id);
-                if ui.button("Load theme for editing").clicked() {
-                    match crate::settings::CustomTheme::parse(&self.theme_json) {
-                        Ok(theme) => { self.theme_edit_original = self.settings.custom_themes.iter().find(|t| t.name == theme.name).map(|t| t.name.clone()); self.theme_edit = Some(theme); self.error = None; }
-                        Err(error) => self.error = Some(error),
-                    }
-                }
-            });
-            ui.add_space(24.0); ui.separator(); ui.add_space(16.0);
-            ui.heading("Game folders");
-            ui.label("Remember a folder to open it automatically next time.");
-            for root in &self.settings.game_roots { ui.add(egui::Label::new(root).wrap()); }
-            if let Some(root) = &catalog.root && ui.button("Remember current folder").clicked() {
-                let path = root.to_string_lossy().into_owned();
-                if !self.settings.game_roots.contains(&path) { self.settings.game_roots.push(path.clone()); }
-                self.settings.selected_root = Some(path);
-            }
-            ui.add_space(24.0); ui.separator(); ui.add_space(16.0);
-            ui.heading("Source lookup");
-            let key_label = ui.label("CurseForge API key");
-            let mut key = self.settings.curseforge_api_key.clone().unwrap_or_default();
-            if ui.add(egui::TextEdit::singleline(&mut key).password(true).desired_width(400.0).min_size(egui::vec2(200.0, 34.0)).margin(egui::vec2(10.0, 9.0))).labelled_by(key_label.id).changed() {
-                self.settings.curseforge_api_key = (!key.is_empty()).then_some(key);
-            }
-            ui.label(egui::RichText::new("Stored only in local settings. Source attachment always needs your confirmation.").color(ui.visuals().weak_text_color()));
-            ui.add_space(24.0); ui.separator(); ui.add_space(16.0);
-            self.app_updates.settings(ui, &mut self.settings.check_app_updates);
-            ui.add_space(16.0);
-            ui.add_space(24.0); ui.separator(); ui.add_space(16.0);
-            ui.collapsing("Import and export settings", |ui| {
-                ui.label("Exports saved preferences. Save pending changes first. Custom colors use the separate theme JSON export above.");
-                ui.checkbox(&mut self.include_key, "Include API key in export");
-                ui.horizontal_wrapped(|ui| {
-                    let ready = self.picker.is_none();
-                    if ui.add_enabled(ready, egui::Button::new("Export settings")).clicked() {
-                        let mut exported = self.saved_settings.clone();
-                        if !self.include_key { exported.curseforge_api_key = None; }
-                        self.start_picker(PickPurpose::SettingsExport(exported), ui.ctx(), None);
-                    }
-                    if ui.add_enabled(ready, egui::Button::new("Import settings")).clicked() {
-                        self.start_picker(PickPurpose::SettingsImport, ui.ctx(), None);
-                    }
-                });
-            });
-        });
     }
     pub fn activity(&mut self, ui: &mut egui::Ui) {
-        if let Some(theme) = self.settings.custom_themes.iter().find(|theme| Some(&theme.name) == self.settings.active_custom_theme.as_ref())
+        if let Some(theme) = self.saved_settings.custom_themes.iter().find(|theme| Some(&theme.name) == self.saved_settings.active_custom_theme.as_ref())
             && !theme.palette(ui.visuals().dark_mode).contrast_warnings().is_empty() {
             ui.label("Theme text is adjusted for readability. Your chosen colors are kept.");
         }
@@ -1461,14 +1267,14 @@ impl Controls {
                             (action.label(), current)
                         }
                         Dialog::SettingsImport(settings, key_included) => {
-                            ui.label("Replaces saved preferences and any unsaved drafts after confirmation.");
+                            ui.label("Replaces your current draft. Save changes in Settings to apply it.");
                             ui.label(format!("Theme: {}", match settings.theme {
                                 Theme::Light => "light", Theme::Dark => "dark", Theme::System => "system",
                             }));
                             for root in &settings.game_roots { ui.label(root); }
                             if let Some(selected) = &settings.selected_root { ui.label(format!("Selected folder: {selected}")); }
                             ui.label(if *key_included { "Includes an API key" } else { "API key omitted. Existing local key will be preserved." });
-                            ("Confirm settings import", true)
+                            ("Preview settings", true)
                         }
                     };
                     if let Some(error) = &self.error {
@@ -1530,17 +1336,12 @@ impl Controls {
                         Err(error) => self.error = Some(error),
                     },
                     Dialog::SettingsImport(settings, _) => {
-                        match settings.save(&self.settings_path) {
-                            Ok(()) => {
-                                self.saved_settings = settings.clone();
-                                self.discard_preferences(ctx);
-                                self.notice = Some("Imported settings saved".into());
-                                self.roots_changed =
-                                    settings.selected_root.as_ref().map(PathBuf::from);
-                                keep = false;
-                            }
-                            Err(error) => self.error = Some(error),
-                        }
+                        self.settings = settings.clone();
+                        self.sync_imported_theme();
+                        self.settings_page = true;
+                        self.notice = Some("Backup loaded into draft. Save changes to apply it.".into());
+                        self.error = None;
+                        keep = false;
                     }
                 }
             }
@@ -1925,6 +1726,33 @@ mod tests {
     }
 
     #[test]
+    fn importing_settings_previews_without_saving_or_applying() {
+        let fixture = tempfile::tempdir().unwrap();
+        let saved = Settings { theme: Theme::Light, ..Settings::default() };
+        let mut controls = Controls::new(fixture.path().join("managed"), fixture.path().into(), saved.clone(), || {}).unwrap();
+        saved.save(&controls.settings_path).unwrap();
+        let ctx = egui::Context::default();
+        crate::ui::setup(&ctx);
+        crate::ui::apply_settings_theme(&ctx, &saved);
+        controls.dialog = Some(Dialog::SettingsImport(Settings { theme: Theme::Dark, ..Settings::default() }, false));
+        let mut render = |events| {
+            let mut out = ctx.run_ui(egui::RawInput { events, ..Default::default() }, |ui| controls.show_dialogs(ui.ctx(), &Catalog::default()));
+            out.textures_delta.clear();
+            out
+        };
+        render(vec![]); render(vec![]);
+        let out = render(vec![]);
+        let pos = out.shapes.iter().find_map(|s| match &s.shape { egui::Shape::Text(t) if t.galley.text() == "Preview settings" => Some(t.pos + t.galley.size()/2.0), _ => None }).expect("import must offer a preview");
+        render(vec![egui::Event::PointerMoved(pos), egui::Event::PointerButton {pos, button:egui::PointerButton::Primary,pressed:true,modifiers:Default::default()},egui::Event::PointerButton {pos, button:egui::PointerButton::Primary,pressed:false,modifiers:Default::default()}]);
+        assert!(controls.settings.theme == Theme::Dark);
+        assert!(Settings::load(&controls.settings_path).unwrap().theme == Theme::Light);
+        assert_eq!(ctx.theme(), egui::Theme::Light);
+        assert!(controls.settings_dirty());
+        controls.save_preferences(&ctx);
+        assert!(Settings::load(&controls.settings_path).unwrap().theme == Theme::Dark);
+    }
+
+    #[test]
     fn rendering_settings_does_not_create_an_empty_key_draft() {
         let fixture = tempfile::tempdir().unwrap();
         let mut controls = Controls::new(fixture.path().join("managed"), fixture.path().into(), Settings::default(), || {}).unwrap();
@@ -1971,7 +1799,7 @@ mod tests {
         controls.set_color_mode(&ctx, Theme::Dark);
         assert_eq!(ctx.theme(), egui::Theme::Dark);
         assert_eq!(controls.settings.active_custom_theme.as_deref(), Some("My theme"));
-        controls.preview_color_mode(&ctx, Theme::Light);
+        controls.settings.theme = Theme::Light;
         assert_eq!(controls.theme_edit.as_ref().unwrap().dark.accent, "#123456");
         controls.use_default_colors(&ctx);
         controls.save_preferences(&ctx);
