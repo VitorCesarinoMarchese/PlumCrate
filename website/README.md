@@ -7,16 +7,14 @@ cd website
 npm run dev
 ```
 
-Open <http://localhost:4173>. The preview selector switches between Gallery, Home, Night, Guide, and Studio. EN and PT-BR switch all visitor copy. Screenshot tabs show the actual native app in light mode, dark mode, and Settings. Open clean preview hides the concept selector. Query parameters preserve the selected preview and language.
+Open <http://localhost:4173> for the selected Gallery website. Open <http://localhost:4173/?previews=1> to compare the original five options. The preview selector switches between Gallery, Home, Night, Guide, and Studio. EN and PT-BR switch all visitor copy. Screenshot tabs show the actual native app in light mode, dark mode, and Settings. Open clean preview hides the concept selector. Query parameters preserve the selected preview and language.
 
 ## Deploy the chosen preview to Vercel
 
-The five previews are ready for selection. No version has been deployed.
+The owner selected Gallery. Its production default hides the preview selector. Deployment is pending.
 
-1. Choose a preview with the project owner.
-2. Set the default `currentView` in `public/app.js` to the selected view and add `class="clean"` to the body in `public/index.html` to hide the selector by default.
-3. Import the GitHub repository into Vercel. Set the Root Directory to `website` and Framework Preset to Other. The checked-in `vercel.json` uses `public` as the output directory and disables the build command. The root `api/release.js` becomes a Node.js function.
-4. Deploy, then verify the selected layout, both languages, all screenshot tabs, and `/api/release` on the deployed URL.
+1. Import the GitHub repository into Vercel. Set the Root Directory to `website` and Framework Preset to Other. The checked-in `vercel.json` uses `public` as the output directory and disables the build command. The root `api/release.js` becomes a Node.js function.
+2. Deploy, then verify the selected layout, both languages, all screenshot tabs, and `/api/release` on the deployed URL.
 
 Vercel references: [project configuration](https://vercel.com/docs/project-configuration), [monorepos](https://vercel.com/docs/monorepos), and [functions](https://vercel.com/docs/functions/quickstart).
 

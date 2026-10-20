@@ -15,6 +15,6 @@ function setView(view){currentView=view;document.documentElement.dataset.view=vi
 for(const [i,view] of views.entries()){const button=document.createElement('button');button.dataset.viewButton=view;button.textContent=`${i+1} ${view[0].toUpperCase()+view.slice(1)}`;button.addEventListener('click',()=>setView(view));document.querySelector('#variants').append(button);}
 document.querySelectorAll('[data-lang]').forEach(b=>b.addEventListener('click',()=>setLanguage(b.dataset.lang)));
 document.querySelectorAll('[data-screen]').forEach(b=>b.addEventListener('click',()=>setScreen(b.dataset.screen)));
-if(params.get('clean')==='1')document.body.classList.add('clean');
+if(params.get('previews')==='1'&&params.get('clean')!=='1')document.body.classList.remove('clean');
 setView(currentView);setLanguage(language);
 fetch('/api/release').then(async response=>{const data=await response.json();if(typeof data.available!=='boolean'||!data.url?.startsWith('https://github.com/VitorCesarinoMarchese/TS4ModManager/releases'))throw new Error('Invalid release');release=data;renderRelease();}).catch(()=>{release={available:false,error:true,url:'https://github.com/VitorCesarinoMarchese/TS4ModManager/releases'};renderRelease()});

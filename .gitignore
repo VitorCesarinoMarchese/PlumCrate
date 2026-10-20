@@ -14,3 +14,6 @@ src-tauri/target/
 .impeccable/review/
 __pycache__/
 *.pyc
+
+# Local Vercel project link
+.vercel/

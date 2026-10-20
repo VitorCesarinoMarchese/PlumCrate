@@ -59,7 +59,7 @@ components:
 
 Plumbob remains the visual authority. This is a website-specific extension of [the native design system](../DESIGN.md), expressed through CSS and self-hosted Manrope. The original plumbob, blue navigation, pale blue surfaces, green selection and navy counterpart connect the marketing pages to the Linux app.
 
-Gallery, Home, Night, Guide and Studio are working alternatives awaiting the owner's selection. Gallery is the current preview default, not an approved final direction. Their composition rules below describe implemented options. They do not replace native tokens or establish a new brand. `public/style.css`, `public/index.html` and `public/app.js` are the implementation sources; web dimensions use CSS pixels.
+The owner selected Gallery for production. Home, Night, Guide and Studio remain accessible as optional alternatives through `?previews=1`. Their composition rules below describe implemented options. They do not replace native tokens or establish a new brand. `public/style.css`, `public/index.html` and `public/app.js` are the implementation sources; web dimensions use CSS pixels.
 
 ## Colors
 
@@ -83,7 +83,7 @@ The shared page sequence is introduction and real app screenshot, capabilities, 
 - Guide adds a sticky 225px blue index, reducing it to 185px below 1000px. At 720px it becomes ordinary top navigation.
 - Studio places large typography and the screenshot on the blue opening field. Wide-screen padding keeps content centered; mobile stacks the two.
 
-These are alternatives for the same content and identity. Selection must precede deployment. Follow [README.md](README.md) for the release configuration after selection.
+These are alternatives for the same content and identity. Gallery is selected for deployment. Follow [README.md](README.md) for the release configuration after selection.
 
 ## Elevation & Depth
 
@@ -97,7 +97,7 @@ Rounded controls, action buttons and screenshot frames use the frontmatter radii
 
 Primary release actions have at least 48px height. The current-release status distinguishes lookup, an available AppImage, no published AppImage, and lookup failure. Available downloads must come from the actual repository's published release assets. Fallback links open GitHub releases. Release eligibility and verification commands live in README.md.
 
-The preview selector changes composition and resets the screenshot to Light, or Dark for Night, while retaining the selected language. The URL stores preview and language. Open clean preview hides the selector without making a final choice. Selected buttons expose `aria-pressed`.
+The preview selector changes composition and resets the screenshot to Light, or Dark for Night, while retaining the selected language. The URL stores preview and language. The production page hides the selector by default; `?previews=1` exposes it for comparison. Open clean preview hides it again. Selected buttons expose `aria-pressed`.
 
 Light, Dark and Settings controls swap the genuine screenshot and its linked full-size image. Alt text follows the screenshot and language. The reveal lasts 0.35s with `cubic-bezier(.16, 1, .3, 1)`; reduced motion disables it and smooth scrolling. Captions disclose the demonstration library and link the original artwork credits.
 
@@ -109,7 +109,6 @@ EN and PT-BR update visitor copy, screenshot descriptions, accessible navigation
 - Do keep English and Brazilian Portuguese useful at desktop and mobile widths.
 - Do use actual native captures with their demo disclosure, creator credits and provenance sidecars.
 - Do retain truthful release availability and the Linux platform scope.
-- Don't interpret the preview default or clean-preview link as the owner's final selection.
-- Don't deploy before the owner chooses a composition.
+- Do keep Gallery as the selected production composition.
 - Don't invent product UI, mod artwork, metrics, releases or generated visuals.
 - Don't move website layout or CSS tokens into the native design authority.
