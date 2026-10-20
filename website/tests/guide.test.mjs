@@ -16,3 +16,9 @@ test('the user guide has valid task navigation and official CurseForge sources',
   assert.match(guide,/9000207405-curse-forge-3rd-party-api-terms-and-conditions/);
   assert.doesNotMatch(guide,/<input\b/i,'The website must never collect an API key');
 });
+
+test('the guide retains its own destination in the top navigation',async()=>{
+  const guide=await readFile(new URL('guide.html',publicDir),'utf8');
+  const header=guide.match(/<header>[\s\S]*?<\/header>/)[0];
+  assert.match(header,/<a[^>]*data-guide-page-link[^>]*aria-current="page"[^>]*>User guide<\/a>/);
+});

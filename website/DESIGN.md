@@ -118,3 +118,11 @@ The reading grid has a 205px sticky contents column, a 64px gap and an article u
 - Do keep Gallery as the selected production composition.
 - Don't invent product UI, mod artwork, metrics, releases or generated visuals.
 - Don't move website layout or CSS tokens into the native design authority.
+
+## Reading position and persistent navigation
+
+The site header stays at the top while scrolling. User guide remains a labeled navigation link on the landing page and guide, including small screens. The guide marks its page link with `aria-current="page"`.
+
+Guide contents follow the section crossing the reading line below the sticky header. The current item uses the existing pale ground and muted text, a default cursor, `aria-current="location"` and `aria-disabled="true"`. Its click is ignored while current; the other links retain normal anchor navigation and visible keyboard focus. The final section is current at the document end. Selection updates after scrolling, resizing, image/layout changes and language changes without rewriting the URL hash.
+
+The contents column sits 24px below the measured header height and scrolls internally in short desktop windows. Anchor and skip-link offsets account for the sticky header. Mobile contents stay in the existing inline grid.

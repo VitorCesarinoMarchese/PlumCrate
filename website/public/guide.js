@@ -1,5 +1,7 @@
+import {currentSectionIndex} from './guide-navigation.js';
+
 const pt={
-  skip:'Pular para o conteúdo',home:'O aplicativo',downloads:'Downloads',support:'Ajuda ↗',contents:'Neste guia',
+  guide:'Guia de uso',skip:'Pular para o conteúdo',home:'O aplicativo',downloads:'Downloads',support:'Ajuda ↗',contents:'Neste guia',
   navInstall:'Baixar o aplicativo',navFolder:'Escolher a pasta do jogo',navImport:'Importar seus mods',navLibrary:'Usar sua biblioteca',navCurseforge:'CurseForge e acesso à API',navUpdates:'Verificar atualizações',navTrash:'Remover e restaurar',navSettings:'Salvar configurações',navHelp:'Resolver problemas',
   title:'Seus mods,<br>passo a passo.',
   intro:'Um guia para usar o Sims 4 Mod Manager no Linux. Comece com os mods que você já tem. Você não precisa de uma chave de API para gerenciar mods locais.',
@@ -34,12 +36,47 @@ function setLanguage(lang){
   document.querySelectorAll('[data-guide-i18n]').forEach(el=>{el.innerHTML=copy[el.dataset.guideI18n]});
   document.querySelectorAll('[data-lang]').forEach(button=>button.setAttribute('aria-pressed',button.dataset.lang===lang));
   document.querySelectorAll('[data-home-link]').forEach(link=>{link.href=`./?lang=${lang}`});
+  document.querySelector('[data-guide-page-link]').href=`guide.html?lang=${lang}`;
   document.querySelector('header nav').setAttribute('aria-label',lang==='pt-BR'?'Navegação principal':'Main navigation');
   document.querySelector('.guide-contents nav').setAttribute('aria-label',lang==='pt-BR'?'Conteúdo do guia':'Guide contents');
   document.querySelector('.languages').setAttribute('aria-label',lang==='pt-BR'?'Idioma':'Language');
   document.querySelector('.guide-article img').alt=lang==='pt-BR'?'Biblioteca real do aplicativo com cartões de mods, busca, filtros e interruptores':'Actual app library with mod cards, search, filters, and on/off switches';
   params.set('lang',lang);
   history.replaceState({},'',`${location.pathname}?${params}${location.hash}`);
+  scheduleCurrentSection();
 }
+const sectionLinks = [...document.querySelectorAll('.guide-contents a')];
+const sections = sectionLinks.map(link => document.getElementById(link.hash.slice(1)));
+let scrollFrame = 0;
+function updateCurrentSection() {
+  scrollFrame = 0;
+  const headerBottom = document.querySelector('header').getBoundingClientRect().bottom;
+  const readingLine = headerBottom + Math.min(96, innerHeight * 0.15);
+  const atEnd = scrollY + innerHeight >= document.documentElement.scrollHeight - 2;
+  const current = currentSectionIndex(sections.map(section => section.getBoundingClientRect().top), readingLine, atEnd);
+  sectionLinks.forEach((link, index) => {
+    if (index === current) {
+      link.setAttribute('aria-current', 'location');
+      link.setAttribute('aria-disabled', 'true');
+    } else {
+      link.removeAttribute('aria-current');
+      link.removeAttribute('aria-disabled');
+    }
+  });
+}
+function scheduleCurrentSection() {
+  if (!scrollFrame) scrollFrame = requestAnimationFrame(updateCurrentSection);
+}
+sectionLinks.forEach(link => link.addEventListener('click', event => {
+  if (link.getAttribute('aria-disabled') === 'true') event.preventDefault();
+}));
+addEventListener('scroll', scheduleCurrentSection, {passive: true});
+addEventListener('resize', scheduleCurrentSection);
+new ResizeObserver(scheduleCurrentSection).observe(document.querySelector('.guide-article'));
+new ResizeObserver(([entry]) => {
+  document.documentElement.style.setProperty('--guide-header-height', `${entry.target.getBoundingClientRect().height}px`);
+  scheduleCurrentSection();
+}).observe(document.querySelector('header'));
+
 document.querySelectorAll('[data-lang]').forEach(button=>button.addEventListener('click',()=>setLanguage(button.dataset.lang)));
 setLanguage(params.get('lang')==='pt-BR'?'pt-BR':'en');

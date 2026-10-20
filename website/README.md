@@ -11,7 +11,7 @@ Open <http://localhost:4173> for the selected Gallery website. Open <http://loca
 
 ## User guide
 
-The [player guide](https://ts4-mod-manager.vercel.app/guide) lives at `/guide` in production and `guide.html` locally, in English and Brazilian Portuguese. Landing-page guide links preserve the selected language. It covers installation, game-folder selection, imports, library controls, optional CurseForge access, manual update checks, trash and settings. Desktop control labels remain English to match the current app.
+The [player guide](https://ts4-mod-manager.vercel.app/guide) lives at `/guide` in production and `guide.html` locally, in English and Brazilian Portuguese. Landing-page guide links preserve the selected language. It covers installation, game-folder selection, imports, library controls, optional CurseForge access, manual update checks, trash and settings. Desktop control labels remain English to match the current app. The top navigation stays visible while scrolling. The contents menu follows the reading position and shows the current section as a subdued, disabled link; other sections remain clickable.
 
 CurseForge sources were checked on 2026-10-20. The official support article describes a developer application reviewed by Overwolf; section 2.2 of the API terms restricts sharing or transferring keys. The guide links to that process without promising a general personal-key entitlement, and describes local configuration only for authorized access. It never collects keys. Local mod management remains usable without a key.
 
@@ -47,7 +47,7 @@ node --check public/app.js
 node --check api/release.js
 ```
 
-Guide tests check the visitor destination, section anchors, task coverage, official API sources, and absence of key-collection inputs. The release selection tests cover empty releases, prereleases, draft exclusion, incompatible files, allowed download URLs, and publication ordering. Run the desktop app's checks from AGENTS.md before reporting repository work complete.
+Navigation tests cover long sections, reverse scrolling, the initial section and the document end. Guide tests check the visitor destination, section anchors, task coverage, official API sources, and absence of key-collection inputs. The release selection tests cover empty releases, prereleases, draft exclusion, incompatible files, allowed download URLs, and publication ordering. Run the desktop app's checks from AGENTS.md before reporting repository work complete.
 
 ## Assets
 
