@@ -1,7 +1,8 @@
 import {currentSectionIndex} from './guide-navigation.js';
+import {renderSiteNavigation} from './site-navigation.js';
 
 const pt={
-  guide:'Guia de uso',skip:'Pular para o conteúdo',home:'O aplicativo',downloads:'Downloads',support:'Ajuda ↗',contents:'Neste guia',
+  skip:'Pular para o conteúdo',contents:'Neste guia',
   navInstall:'Baixar o aplicativo',navFolder:'Escolher a pasta do jogo',navImport:'Importar seus mods',navLibrary:'Usar sua biblioteca',navCurseforge:'CurseForge e acesso à API',navUpdates:'Verificar atualizações',navTrash:'Remover e restaurar',navSettings:'Salvar configurações',navHelp:'Resolver problemas',
   title:'Seus mods,<br>passo a passo.',
   intro:'Um guia para usar o Sims 4 Mod Manager no Linux. Comece com os mods que você já tem. Você não precisa de uma chave de API para gerenciar mods locais.',
@@ -36,8 +37,7 @@ function setLanguage(lang){
   document.querySelectorAll('[data-guide-i18n]').forEach(el=>{el.innerHTML=copy[el.dataset.guideI18n]});
   document.querySelectorAll('[data-lang]').forEach(button=>button.setAttribute('aria-pressed',button.dataset.lang===lang));
   document.querySelectorAll('[data-home-link]').forEach(link=>{link.href=`./?lang=${lang}`});
-  document.querySelector('[data-guide-page-link]').href=`guide.html?lang=${lang}`;
-  document.querySelector('header nav').setAttribute('aria-label',lang==='pt-BR'?'Navegação principal':'Main navigation');
+  renderSiteNavigation(lang);
   document.querySelector('.guide-contents nav').setAttribute('aria-label',lang==='pt-BR'?'Conteúdo do guia':'Guide contents');
   document.querySelector('.languages').setAttribute('aria-label',lang==='pt-BR'?'Idioma':'Language');
   document.querySelector('.guide-article img').alt=lang==='pt-BR'?'Biblioteca real do aplicativo com cartões de mods, busca, filtros e interruptores':'Actual app library with mod cards, search, filters, and on/off switches';
