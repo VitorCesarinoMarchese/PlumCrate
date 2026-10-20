@@ -11,10 +11,17 @@ Open <http://localhost:4173> for the selected Gallery website. Open <http://loca
 
 ## Deploy the chosen preview to Vercel
 
-The owner selected Gallery. Its production default hides the preview selector. Deployment is pending.
+Gallery is live at <https://ts4-mod-manager.vercel.app>. Its production default hides the preview selector. The Vercel project is `ts4-mod-manager` in `vitorcesarinomarcheses-projects`.
 
-1. Import the GitHub repository into Vercel. Set the Root Directory to `website` and Framework Preset to Other. The checked-in `vercel.json` uses `public` as the output directory and disables the build command. The root `api/release.js` becomes a Node.js function.
-2. Deploy, then verify the selected layout, both languages, all screenshot tabs, and `/api/release` on the deployed URL.
+From the `website` directory, deploy with your authenticated Vercel account:
+
+```sh
+npx vercel deploy --prod --yes --project ts4-mod-manager --scope vitorcesarinomarcheses-projects
+```
+
+The checked-in `vercel.json` uses `public` as the output directory and disables the build command. The root `api/release.js` becomes a Node.js function. This deployment uses the CLI; automatic Git deployments are not connected. If importing this repository through Vercel later, set Root Directory to `website` and Framework Preset to Other.
+
+After deploying, verify both languages, all screenshot tabs, and `/api/release` on the production URL.
 
 Vercel references: [project configuration](https://vercel.com/docs/project-configuration), [monorepos](https://vercel.com/docs/monorepos), and [functions](https://vercel.com/docs/functions/quickstart).
 

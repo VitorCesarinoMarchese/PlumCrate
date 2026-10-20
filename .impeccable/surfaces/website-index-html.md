@@ -18,7 +18,7 @@ FORM: Grounded list: centered library, split library, navy gallery, guided rail,
 FINISH: unreviewed and undocumented is unfinished; this build ends with the finish review, the verdict, DESIGN.md, and every shipping raster carrying its provenance
 
 Signature interaction: switching Light / Dark / Settings swaps genuine screenshots with a short reveal; reduced-motion skips animation. Preview switching changes composition without discarding language.
-Unresolved: Vercel account connection and deployment. Gallery selection is approved.
+Gallery selection is approved and deployed at https://ts4-mod-manager.vercel.app.
 
 ## Implementation and evidence
 
@@ -30,4 +30,4 @@ All eight AGENTS.md validation commands passed, as did the five release-selectio
 
 The context loader's pre-existing warning treats PRODUCT.md's Linux native Platform value as web. Leave that product description intact; this website extension does not redefine the native platform.
 
-Remaining: connect Vercel and deploy Gallery. The production defaults are applied; optional comparisons remain available at ?previews=1. Verify both languages, screenshot controls and the release endpoint on the eventual deployed URL.
+Gallery deployed successfully through Vercel CLI on 2026-10-19 at https://ts4-mod-manager.vercel.app, deployment dpl_DCxqn98dbr5MkvhukenakUBgnZ7U. Production defaults hide the selector; optional comparisons remain available at ?previews=1. Live verification passed for both languages, all screenshot tabs, 390px mobile overflow, desktop layout, and the public release endpoint. All eight repository checks passed again before deployment. Automatic Git deployments are not connected. No remaining implementation or deployment work.
