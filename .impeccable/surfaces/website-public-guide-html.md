@@ -1,0 +1,22 @@
+---
+version: 1
+slug: "website-public-guide-html"
+primary_target: "website/public/guide.html"
+related_targets: ["website/public/guide.css","website/public/guide.js"]
+---
+
+# User guide
+
+Read mode. Extend the Gallery website's established Plumbob identity. English and Brazilian Portuguese, with app control labels kept as displayed in the English desktop UI.
+
+## Direction contract
+THESIS: A task-based player guide, without build commands, architecture, or developer verification instructions.
+OWN-WORLD: Inherit website/DESIGN.md colors, Manrope, spacing, links and focus. Restrained reading layout with a sticky contents column and a single prose column.
+STORY: Download the Linux app, choose the actual game-data folder, import and enable mods, recover removed mods, and understand optional CurseForge access and manual updates.
+FIRST VIEWPORT: Existing brand and language selector, User guide title, short introduction, contents links and installation instructions. Collapse contents into an inline list on phones. Real library screenshot beside the library instructions, never generated app UI.
+FORM: Conventional task documentation requested explicitly by the owner. Fixed established world, no new identity or concept selection. Seed not applicable to this bounded documentation addition.
+FINISH: Verify both languages, anchors and home-to-guide navigation on desktop/mobile; document source evidence and deploy with the already-authorized Vercel workflow.
+
+CurseForge research checked 2026-10-20: official support describes developer application and review. Terms section 2.2 restrict key transfer/sharing. No confirmed general personal-key permission. Link the official process; do not publish a console self-service workaround or claim blanket permission. Explain desktop key setup only for authorized access. No website input for keys.
+
+Finish evidence: [the user-guide review](../review/user-guide/review.md) returned ship with no material findings. Desktop English and mobile Portuguese captures support the reading layout; language switching preserves section anchors and carries the selected language back to the home page. Seven website tests and all eight AGENTS.md validation checks passed, as reported by the implementer. Official CurseForge application, terms and support sources were checked on 2026-10-20. The guide reuses the genuine library screenshot and its existing credits and provenance. Deployment remains pending.

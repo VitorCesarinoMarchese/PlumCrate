@@ -103,6 +103,12 @@ Light, Dark and Settings controls swap the genuine screenshot and its linked ful
 
 EN and PT-BR update visitor copy, screenshot descriptions, accessible navigation labels, release text and the document language. Semantic question disclosures work without a custom accordion. A skip link and visible keyboard focus support navigation. Focus uses a 3px outline with 5px offset; the light green focus token applies against blue and dark backgrounds. Hover slightly reduces brightness.
 
+### User guide
+
+`public/guide.html`, `guide.css` and `guide.js` implement the Read layout on the existing white surface, with the established palette and self-hosted Manrope. The article is 16px with a base line height of 1.8; paragraphs retain the shared 1.75 rule. Introductory text is 18px, dropping to 17px on mobile. Heading sizes are 48px, 30px and 20px; the first two become 40px and 27px on mobile. Contents links and source disclosures use 13px, and screenshot captions use 12px.
+
+The reading grid has a 205px sticky contents column, a 64px gap and an article up to 74ch wide within a 1200px container. Below 900px, the contents column narrows to 180px and the gap to 35px. Below 720px, contents and article stack, with the contents links arranged in two columns. Prose links remain underlined. The library illustration reuses the genuine app screenshot with its demonstration-library caption, creator credits and existing provenance.
+
 ## Do's and Don'ts
 
 - Do inherit the native Plumbob identity while keeping website typography and layout scoped here.
