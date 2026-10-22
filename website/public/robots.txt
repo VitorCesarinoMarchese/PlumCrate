@@ -1,0 +1,4 @@
+User-agent: *
+Allow: /
+
+Sitemap: https://ts4-mod-manager.vercel.app/sitemap.xml

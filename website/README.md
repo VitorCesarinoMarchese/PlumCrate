@@ -54,3 +54,11 @@ Navigation tests cover long sections, reverse scrolling, the initial section and
 The three WebP screenshots come from `docs/images/library-light.png`, `library-dark.png`, and `settings.png`. They are actual app captures using an isolated demonstration library and real creator cover artwork. They do not represent a user's installed collection. The site discloses this beside the screenshots. [Original capture procedure and creator credits](../docs/images/README.md).
 
 Each screenshot has an Impeccable provenance sidecar. The plumbob is the existing `native/assets/plumbob.svg`. Manrope is self-hosted from Google Fonts under the included `public/assets/Manrope-LICENSE.txt` license. No visitor data or keys are stored by the site.
+
+## Search discovery
+
+Both pages include static descriptions, canonical URLs, social previews, and JSON-LD. The homepage identifies TS4 Mod Manager as a free Linux application. `public/robots.txt` allows crawling and advertises `public/sitemap.xml`, which lists the production homepage and guide. Preview and language query parameters share those canonical pages; Portuguese is currently a client-side translation, not a separately indexed page.
+
+After deploying, verify ownership of `https://ts4-mod-manager.vercel.app` in [Bing Webmaster Tools](https://www.bing.com/webmasters/) and submit `https://ts4-mod-manager.vercel.app/sitemap.xml`. Inspect the homepage and guide there for crawl or indexing errors. Ownership verification requires the owner's account; do not invent a verification token. DuckDuckGo [largely sources traditional results from Bing](https://duckduckgo.com/duckduckgo-help-pages/results/sources). A sitemap helps discovery but does not guarantee indexing or ranking. Keep a public link to the site on the GitHub repository.
+
+Run `npm test` to check canonical URLs, structured data, crawl discovery, and the visible product heading alongside existing website tests.
