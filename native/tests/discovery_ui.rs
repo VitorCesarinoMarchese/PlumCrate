@@ -47,6 +47,12 @@ fn text(output: &egui::FullOutput, value: &str) -> bool {
     )
 }
 
+fn provider_image(ctx: &egui::Context, url: &'static str, bytes: Vec<u8>) {
+    let loader = std::sync::Arc::new(egui::load::DefaultBytesLoader::default());
+    loader.insert(url, bytes);
+    ctx.add_bytes_loader(loader);
+}
+
 #[test]
 fn pending_search_reserves_cards_without_exposing_download_actions() {
     for size in [[1200.0, 800.0], [640.0, 480.0]] {
@@ -63,7 +69,7 @@ fn pending_search_reserves_cards_without_exposing_download_actions() {
         assert!(view.discovery.stats.browser_import.is_none());
         assert!(view.discovery.selected.is_none());
         let cards=output.shapes.iter().filter_map(|shape|match &shape.shape {
-            egui::epaint::Shape::Rect(rect) if rect.rect.height()>250.0 && rect.rect.height()<300.0 && rect.stroke.width>0.0 && rect.fill==ctx.style_of(ctx.theme()).visuals.extreme_bg_color=>Some(rect.rect),
+            egui::epaint::Shape::Rect(rect) if rect.rect.height()>400.0 && rect.rect.height()<420.0 && rect.stroke.width>0.0 && rect.fill==ctx.style_of(ctx.theme()).visuals.extreme_bg_color=>Some(rect.rect),
             _=>None,
         }).collect::<Vec<_>>();
         assert!(!cards.is_empty());
@@ -455,6 +461,111 @@ fn browse_cards_fit_columns_without_overflow_or_squeezed_text() {
             "cards must fit {columns} columns at {size:?}: actual {:?}, expected {width}", view.discovery.stats.first_card.unwrap()
         );
     }
+}
+
+#[test]
+fn discover_photos_fill_the_card_top_like_library_photos() {
+    for source in [[320, 200], [100, 300], [400, 100]] {
+        for size in [[1200.0, 800.0], [680.0, 760.0], [640.0, 480.0]] {
+            let ctx = egui::Context::default();
+            ui::setup(&ctx);
+            let url = "https://fixture.invalid/discover-card.png";
+            let mut png = std::io::Cursor::new(Vec::new());
+            image::RgbaImage::from_pixel(source[0], source[1], image::Rgba([30, 120, 95, 255]))
+                .write_to(&mut png, image::ImageFormat::Png)
+                .unwrap();
+            provider_image(&ctx, url, png.into_inner());
+            let deadline = std::time::Instant::now() + std::time::Duration::from_secs(5);
+            let texture = loop {
+                if let egui::load::TexturePoll::Ready { texture } = ctx
+                    .try_load_texture(url, Default::default(), Default::default())
+                    .unwrap()
+                {
+                    break texture;
+                }
+                assert!(
+                    std::time::Instant::now() < deadline,
+                    "fixture image did not load"
+                );
+                std::thread::sleep(std::time::Duration::from_millis(5));
+            };
+            let mut view = View::default();
+            view.browse_page = true;
+            let generation = view.discovery.browser.begin(BrowseQuery::default());
+            view.discovery.browser.accept(generation, Ok(parse_browse_response(
+                &serde_json::json!({"data":[{"id":1,"gameId":78062,"name":"Synthetic photo project","summary":"Summary","logo":{"url":url}}],
+                    "pagination":{"index":0,"pageSize":24,"resultCount":1,"totalCount":1}}).to_string()
+            ).unwrap()));
+            let mut catalog = Catalog::default();
+            for _ in 0..3 {
+                frame(&ctx, &mut view, &mut catalog, size, vec![]);
+            }
+            let output = frame(&ctx, &mut view, &mut catalog, size, vec![]);
+            let card = view.discovery.stats.first_card.unwrap();
+            let photo = output
+                .shapes
+                .iter()
+                .find(|shape| shape.shape.texture_id() == texture.id)
+                .expect("provider photo must be painted");
+            let bounds = photo.shape.visual_bounding_rect();
+            assert!(
+                (bounds.width() - card.width()).abs() <= 3.0,
+                "photo must span the card at {size:?}: photo {bounds:?}, card {card:?}"
+            );
+            assert!(
+                (bounds.height() - 140.0).abs() < 0.1,
+                "use the library's 140-point photo height"
+            );
+            assert!((bounds.top() - card.top()).abs() <= 1.0);
+            let egui::epaint::Shape::Rect(photo) = &photo.shape else {
+                panic!("rounded photo")
+            };
+            let uv = photo.brush.as_ref().unwrap().uv;
+            let aspect = source[0] as f32 * uv.width() / (source[1] as f32 * uv.height());
+            assert!(
+                (aspect - bounds.width() / bounds.height()).abs() < 0.01,
+                "cover crop must preserve the provider image's proportions"
+            );
+            frame(&ctx, &mut view, &mut catalog, size, click(bounds.intersect(card)));
+            assert_eq!(view.discovery.selected.as_ref().unwrap().id, 1);
+        }
+    }
+}
+
+#[test]
+fn missing_discover_photos_reserve_the_same_space_and_keep_actions_aligned() {
+    let ctx = egui::Context::default();
+    ui::setup(&ctx);
+    let mut view = View::default();
+    view.browse_page = true;
+    let generation = view.discovery.browser.begin(BrowseQuery::default());
+    view.discovery.browser.accept(generation, Ok(parse_browse_response(
+        r#"{"data":[{"id":1,"gameId":78062,"name":"Missing photo","summary":"Summary"},{"id":2,"gameId":78062,"name":"Broken photo with a longer title that wraps","summary":"Summary","logo":{"url":"https://fixture.invalid/broken.png"}}],"pagination":{"index":0,"pageSize":24,"resultCount":2,"totalCount":2}}"#
+    ).unwrap()));
+    provider_image(
+        &ctx,
+        "https://fixture.invalid/broken.png",
+        b"invalid image".to_vec(),
+    );
+    let mut catalog = Catalog::default();
+    for _ in 0..3 {
+        frame(&ctx, &mut view, &mut catalog, [1200.0, 800.0], vec![]);
+    }
+    let output = frame(&ctx, &mut view, &mut catalog, [1200.0, 800.0], vec![]);
+    let missing = output
+        .shapes
+        .iter()
+        .filter(|shape| {
+            matches!(&shape.shape,
+        egui::epaint::Shape::Text(text) if text.galley.text() == "No Preview")
+        })
+        .count();
+    assert_eq!(
+        missing, 2,
+        "missing and failed images need the library's fallback"
+    );
+    let actions = &view.discovery.stats.card_actions;
+    assert!((actions[0].top() - actions[1].top()).abs() < 1.0);
 }
 
 #[test]

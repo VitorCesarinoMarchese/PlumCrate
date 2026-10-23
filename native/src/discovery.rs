@@ -628,7 +628,7 @@ impl DiscoverView {
         if self.browser.loading {
             ui.label("Searching CurseForge...");
             ui.add_space(12.0);
-            self.stats.skeleton_cards = crate::skeleton::cards(ui);
+            self.stats.skeleton_cards = loading_cards(ui);
             return false;
         }
         if let Some(error) = &self.category_error {
@@ -896,23 +896,25 @@ impl DiscoverView {
                         let frame = egui::Frame::new()
                             .fill(ui.visuals().extreme_bg_color)
                             .stroke(ui.visuals().widgets.noninteractive.bg_stroke)
-                            .corner_radius(8)
-                            .inner_margin(14);
+                            .corner_radius(12);
                         let content_width = width - frame.total_margin().sum().x;
                         let response = frame
                             .show(ui, |ui| {
                                 crate::ui::text_on_fill(ui, ui.visuals().extreme_bg_color);
                                 ui.vertical(|ui| {
                                     ui.set_width(content_width);
-                                    ui.set_min_height(238.0);
-                                    ui.allocate_ui(vec2(ui.available_width(), 64.0), |ui| {
-                                        ui.set_min_height(64.0);
-                                        ui.horizontal_top(|ui| {
-                                            self.photo(
-                                                ui,
-                                                project.preview_url.as_deref(),
-                                                vec2(60.0, 60.0),
-                                            );
+                                    ui.spacing_mut().item_spacing.y = 0.0;
+                                    self.card_photo(
+                                        ui,
+                                        project.preview_url.as_deref(),
+                                        vec2(content_width, 140.0),
+                                    );
+                                    egui::Frame::new().inner_margin(14).show(ui, |ui| {
+                                        ui.set_width(content_width - 28.0);
+                                        ui.spacing_mut().item_spacing.y = 8.0;
+                                        ui.set_min_height(238.0);
+                                        ui.allocate_ui(vec2(ui.available_width(), 64.0), |ui| {
+                                            ui.set_min_height(64.0);
                                             ui.vertical(|ui| {
                                                 bounded_label(ui, &project.name, 16.0, 2);
                                                 ui.add(
@@ -925,43 +927,43 @@ impl DiscoverView {
                                                 );
                                             });
                                         });
+                                        ui.add_space(10.0);
+                                        ui.allocate_ui(vec2(ui.available_width(), 54.0), |ui| {
+                                            ui.set_min_height(54.0);
+                                            bounded_label(ui, &project.summary, 14.0, 3);
+                                        });
+                                        ui.add_space(8.0);
+                                        let category = project
+                                            .categories
+                                            .first()
+                                            .map(|category| category.name.as_str())
+                                            .unwrap_or("Uncategorized");
+                                        ui.add(
+                                            egui::Label::new(
+                                                RichText::new(category)
+                                                    .size(12.0)
+                                                    .color(ui.visuals().weak_text_color()),
+                                            )
+                                            .truncate(),
+                                        );
+                                        ui.label(
+                                            RichText::new(format!(
+                                                "{} downloads · {}",
+                                                downloads(project.downloads),
+                                                updated(project)
+                                            ))
+                                            .size(12.0)
+                                            .color(ui.visuals().weak_text_color()),
+                                        );
+                                        let action = ui.add_sized(
+                                            [ui.available_width(), 34.0],
+                                            egui::Button::new("View details"),
+                                        );
+                                        self.stats.card_actions.push(action.rect);
+                                        if action.clicked() {
+                                            self.selected = Some(project.clone());
+                                        }
                                     });
-                                    ui.add_space(10.0);
-                                    ui.allocate_ui(vec2(ui.available_width(), 54.0), |ui| {
-                                        ui.set_min_height(54.0);
-                                        bounded_label(ui, &project.summary, 14.0, 3);
-                                    });
-                                    ui.add_space(8.0);
-                                    let category = project
-                                        .categories
-                                        .first()
-                                        .map(|category| category.name.as_str())
-                                        .unwrap_or("Uncategorized");
-                                    ui.add(
-                                        egui::Label::new(
-                                            RichText::new(category)
-                                                .size(12.0)
-                                                .color(ui.visuals().weak_text_color()),
-                                        )
-                                        .truncate(),
-                                    );
-                                    ui.label(
-                                        RichText::new(format!(
-                                            "{} downloads · {}",
-                                            downloads(project.downloads),
-                                            updated(project)
-                                        ))
-                                        .size(12.0)
-                                        .color(ui.visuals().weak_text_color()),
-                                    );
-                                    let action = ui.add_sized(
-                                        [ui.available_width(), 34.0],
-                                        egui::Button::new("View details"),
-                                    );
-                                    self.stats.card_actions.push(action.rect);
-                                    if action.clicked() {
-                                        self.selected = Some(project.clone());
-                                    }
                                 });
                             })
                             .response;
@@ -986,7 +988,7 @@ impl DiscoverView {
                         if click.hovered() || click.has_focus() {
                             ui.painter().rect_stroke(
                                 response.rect,
-                                8,
+                                12,
                                 ui.visuals().selection.stroke,
                                 egui::StrokeKind::Inside,
                             );
@@ -999,9 +1001,33 @@ impl DiscoverView {
             egui::ScrollArea::vertical()
                 .id_salt(("curseforge-results", generation))
                 .auto_shrink([false, false])
-                .show_rows(ui, 268.0, rows, draw);
+                .show_rows(ui, 408.0, rows, draw);
         } else {
             draw(ui, 0..rows);
+        }
+    }
+    fn card_photo(&mut self, ui: &mut egui::Ui, url: Option<&str>, size: egui::Vec2) {
+        let url = url.filter(|url| safe_url(url));
+        let (rect, _) = ui.allocate_exact_size(size, egui::Sense::hover());
+        ui.painter()
+            .rect_filled(rect, 6, ui.visuals().widgets.inactive.weak_bg_fill);
+        match self.previews.load(ui.ctx(), url, None) {
+            crate::preview::State::Ready(texture) => {
+                egui::Image::from_texture(texture)
+                    .uv(crate::ui::cover_uv(texture.size, rect.size()))
+                    .corner_radius(6)
+                    .paint_at(ui, rect);
+            }
+            crate::preview::State::Pending => {}
+            crate::preview::State::Missing => {
+                ui.painter().text(
+                    rect.center(),
+                    egui::Align2::CENTER_CENTER,
+                    "No Preview",
+                    egui::FontId::proportional(13.0),
+                    ui.visuals().weak_text_color(),
+                );
+            }
         }
     }
     fn photo(&mut self, ui: &mut egui::Ui, url: Option<&str>, size: egui::Vec2) {
@@ -1292,6 +1318,54 @@ fn downloads(count: f64) -> String {
     } else {
         format!("{count:.0}")
     }
+}
+
+fn loading_cards(ui: &mut egui::Ui) -> usize {
+    let columns = ((ui.available_width() + 16.0) / 280.0).floor().max(1.0) as usize;
+    let width = (ui.available_width() - (columns - 1) as f32 * 16.0) / columns as f32;
+    egui::ScrollArea::vertical()
+        .id_salt("pending-discovery-cards")
+        .auto_shrink([false, false])
+        .show(ui, |ui| {
+            for _ in 0..2 {
+                ui.horizontal_top(|ui| {
+                    ui.spacing_mut().item_spacing.x = 16.0;
+                    for _ in 0..columns {
+                        let frame = egui::Frame::new()
+                            .fill(ui.visuals().extreme_bg_color)
+                            .stroke(ui.visuals().widgets.noninteractive.bg_stroke)
+                            .corner_radius(12);
+                        let inner_width = width - frame.total_margin().sum().x;
+                        frame.show(ui, |ui| {
+                            ui.vertical(|ui| {
+                                ui.set_width(inner_width);
+                                ui.spacing_mut().item_spacing.y = 0.0;
+                                crate::skeleton::block(ui, vec2(inner_width, 140.0));
+                                egui::Frame::new().inner_margin(14).show(ui, |ui| {
+                                    ui.set_width(inner_width - 28.0);
+                                    ui.set_min_height(238.0);
+                                    ui.spacing_mut().item_spacing.y = 8.0;
+                                    for (fraction, height) in [
+                                        (0.9, 16.0),
+                                        (0.7, 16.0),
+                                        (0.55, 11.0),
+                                        (1.0, 13.0),
+                                        (0.94, 13.0),
+                                        (0.7, 13.0),
+                                        (0.45, 11.0),
+                                        (0.8, 11.0),
+                                        (1.0, 34.0),
+                                    ] {
+                                        crate::skeleton::block(ui, vec2(ui.available_width() * fraction, height));
+                                    }
+                                });
+                            });
+                        });
+                    }
+                });
+            }
+        });
+    columns * 2
 }
 
 fn bounded_label(ui: &mut egui::Ui, text: &str, size: f32, rows: usize) {

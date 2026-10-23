@@ -271,7 +271,7 @@ pub(crate) fn choice_value<Value: PartialEq>(ui: &mut egui::Ui, current: &mut Va
     response
 }
 
-fn cover_uv(source: egui::Vec2, destination: egui::Vec2) -> egui::Rect {
+pub(crate) fn cover_uv(source: egui::Vec2, destination: egui::Vec2) -> egui::Rect {
     let source_aspect = source.x / source.y;
     let destination_aspect = destination.x / destination.y;
     let crop = if source_aspect > destination_aspect {
