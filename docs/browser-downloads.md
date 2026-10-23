@@ -2,7 +2,7 @@
 
 A user approves one CurseForge release, Downloads folder, and Sims 4 game folder. The initial review authorizes saving its source, copying the verified download into the managed library, and enabling it in that game. The app opens the official release page; the website or browser may still require a Download or save click. The app detects the completed file and finishes installation without another import or enable click. A saved local API key is required for provider metadata.
 
-The [app guide](native-app.md#install-from-a-browser-download) describes **Browse mods**, **Download via website…**, and **Start browser download**. This path supports website downloads when API downloading is unavailable. It installs mods; it does not automatically replace older releases. [Update checks](mod-updates.md) retain their manual replacement workflow.
+The [app guide](native-app.md#install-from-a-browser-download) describes **Downloads** on each Discover card, **Download via website…** in project details, and the shared **Start browser download** confirmation. The card action skips the details page and opens the same review with the latest eligible release, current game, and Downloads folder selected. This path supports website downloads when API downloading is unavailable. It installs mods; it does not automatically replace older releases. [Update checks](mod-updates.md) retain their manual replacement workflow.
 
 ## File identity and installation
 

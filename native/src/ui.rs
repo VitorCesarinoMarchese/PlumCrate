@@ -25,6 +25,7 @@ fastframe_icons::icons! {
         Settings => lucide "settings",
         Trash => lucide "trash-2",
         Plus => lucide "plus",
+        Download => "download",
 
     }
 }
@@ -708,7 +709,7 @@ impl View {
                     for (title, body) in [
                         ("Add mods", "Choose your Sims 4 game folder, then Import folder or Import ZIP. New mods start enabled. Use the library switch to turn a mod on or off. Originals stay in place."),
                         ("Inspect and organize", "Click a card or list row for details. Use Previous/Next to browse. Right-click a mod for rename, source and trash actions. Trash remains recoverable."),
-                        ("Browse CurseForge", "Browse mods searches The Sims 4 mods and custom content on CurseForge. Save your API key in Settings, then search, filter by category or sort. Open a project to read its summary and view screenshots. Download via website lets you review a release, source and game folder. After you start, the app watches your Downloads folder and installs the verified file automatically."),
+                        ("Browse CurseForge", "Browse mods searches The Sims 4 mods and custom content on CurseForge. Save your API key in Settings, then search, filter by category or sort. Click a card for details or choose Downloads to review a release, source and game folder. After you start, the app watches your Downloads folder and installs the verified file automatically."),
                         ("Save a source", "Find source uses your locally saved CurseForge key. No match? Attach a known URL manually. Review every attachment before saving."),
                         ("Check updates", "Attach a CurseForge source, then choose Check updates. Record the release you installed to compare versions. Update notices link to the mod page; download there, replace your local files, and record the new release."),
                         ("Change appearance", "Settings shows a preview. Save changes applies your choices; Discard changes restores saved values."),

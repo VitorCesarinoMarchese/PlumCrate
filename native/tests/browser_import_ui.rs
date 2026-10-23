@@ -50,6 +50,60 @@ fn browsing_offers_browser_import_and_requires_a_selected_game() {
     assert!(!controls.browser_import.running());
 }
 
+#[test]
+fn card_downloads_use_the_existing_selected_game_requirement() {
+    use ts4_mod_manager_core::curseforge_browse::{BrowseQuery, parse_browse_response};
+    let temp = tempfile::tempdir().unwrap();
+    let mut controls = Controls::new(
+        temp.path().join("managed"),
+        temp.path().into(),
+        Settings::default(),
+        || {},
+    )
+    .unwrap();
+    let mut catalog = Catalog::default();
+    let mut view = View::default();
+    view.browse_page = true;
+    let generation = view.discovery.browser.begin(BrowseQuery::default());
+    view.discovery.browser.accept(generation, Ok(parse_browse_response(
+        r#"{"data":[{"id":42,"gameId":78062,"name":"Synthetic card project","summary":"Summary"}],"pagination":{"index":0,"pageSize":24,"resultCount":1,"totalCount":1}}"#
+    ).unwrap()));
+    let ctx = egui::Context::default();
+    ts4_mod_manager_native::ui::setup(&ctx);
+    let mut render = |events| {
+        let mut output = ctx.run_ui(
+            egui::RawInput {
+                screen_rect: Some(egui::Rect::from_min_size(
+                    egui::Pos2::ZERO,
+                    egui::vec2(1200.0, 1000.0),
+                )),
+                events,
+                ..Default::default()
+            },
+            |ui| {
+                view.show_with_controls(ui, &mut catalog, &mut controls);
+            },
+        );
+        output.textures_delta.clear();
+        (output, view.discovery.stats.card_actions.first().copied())
+    };
+    for _ in 0..3 {
+        render(vec![]);
+    }
+    let (_, action) = render(vec![]);
+    render(click(action.unwrap()));
+    for _ in 0..3 {
+        render(vec![]);
+    }
+    let (output, _) = render(vec![]);
+    assert!(output.shapes.iter().any(
+        |shape| matches!(&shape.shape, egui::epaint::Shape::Text(text)
+        if text.galley.text().contains("Choose a Sims 4 game folder before downloading a mod"))
+    ));
+    assert!(!controls.browser_import.running());
+    assert!(!temp.path().join("managed/mods").exists());
+}
+
 #[path = "support/browser_import.rs"]
 mod support;
 #[allow(dead_code)]

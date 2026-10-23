@@ -28,7 +28,7 @@ Submitting a search or changing a filter or sort restarts at the first page. **P
 
 The browser preloads the next results page while you browse the current page. **Next** displays a cached page immediately. If that page is still loading, navigation waits for the existing request. Recent pages also remain available for **Previous**. A new search, a filter change, or a saved API key change clears the page cache. Failed background requests leave the current results visible; choosing **Next** retries the request.
 
-Project cards show full-width photos with the same height and centered crop as Your mods, followed by provider names, authors, summaries, categories, download counts, and modification dates. **View details** opens the author description, release dependencies, and provider screenshots inside the app. **Back to results** or Escape restores the current results. **Open on CurseForge** and **Copy link** appear only when the API supplies a usable HTTPS project URL. Missing or broken card images show No Preview; broken detail images hide. Preview requests omit Referer.
+Project cards show full-width photos with the same height and centered crop as Your mods, followed by provider names, authors, summaries, categories, download counts, and modification dates. Each card has a filled **Downloads** button that opens the existing release review directly. Clicking the photo or card body opens the author description, release dependencies, and provider screenshots inside the app. **Back to results** or Escape restores the current results. **Open on CurseForge** and **Copy link** appear only when the API supplies a usable HTTPS project URL. Missing or broken card images show No Preview; broken detail images hide. Preview requests omit Referer.
 
 Switching to **Your mods** preserves local search and selection. Search and project inspection leave files and source metadata unchanged. Project details offer the explicitly reviewed [browser-assisted installation](#install-from-a-browser-download) below. Existing import controls remain available for other local files.
 
@@ -46,7 +46,7 @@ Live searches need a valid locally saved key. Capture examples use fixtures and 
 
 ## Read a project and review its dependencies
 
-Open **View details** from a CurseForge result. **Description** and **Dependencies** above the scrolling page jump to their sections. Wide windows show the author description beside the release selector and dependency rows. Narrow windows stack the description first.
+Click the photo or body of a CurseForge result card. **Description** and **Dependencies** above the scrolling page jump to their sections. Wide windows show the author description beside the release selector and dependency rows. Narrow windows stack the description first.
 
 The description retains author text, headings, lists, table rows, images, credits, and support links as native content. Safe HTTPS links open in your browser. Website scripts and styles do not run. Empty descriptions have their own message; failed requests offer **Retry description** independently of **Retry releases**.
 
@@ -76,7 +76,7 @@ The captures cover both themes, the 1871-by-1006 user window, narrow and 640-by-
 
 Choose your Sims 4 folder and save your CurseForge API key in local Settings first. Browser-assisted installation supports website downloads when API downloading is unavailable.
 
-1. Open **Discover**, select a project, and choose **Download via website…**.
+1. Open **Discover** and choose **Downloads** on a mod card. You can also open the card and choose **Download via website…**.
 2. Review the source and select the public release you want. Check the **Browser Downloads folder** and use **Change Downloads folder** if your browser saves elsewhere.
 3. Check **Install in this Sims 4 folder**. **Start browser download** approves saving that source and release, copying the verified file into your library, and enabling it in this game.
 4. The app opens the official release page. Complete any Download or save action the website or browser requires, using the reviewed Downloads folder.

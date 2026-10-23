@@ -898,6 +898,7 @@ impl DiscoverView {
                             .stroke(ui.visuals().widgets.noninteractive.bg_stroke)
                             .corner_radius(12);
                         let content_width = width - frame.total_margin().sum().x;
+                        let mut download_rect = egui::Rect::NOTHING;
                         let response = frame
                             .show(ui, |ui| {
                                 crate::ui::text_on_fill(ui, ui.visuals().extreme_bg_color);
@@ -955,13 +956,24 @@ impl DiscoverView {
                                             .size(12.0)
                                             .color(ui.visuals().weak_text_color()),
                                         );
+                                        let colors = crate::ui::chrome_colors(ui);
                                         let action = ui.add_sized(
                                             [ui.available_width(), 34.0],
-                                            egui::Button::new("View details"),
-                                        );
+                                            egui::Button::image_and_text(
+                                                crate::ui::Icon::Download.image(colors.primary_text, 16.0),
+                                                RichText::new("Downloads").color(colors.primary_text),
+                                            ).fill(colors.primary).stroke(egui::Stroke::NONE),
+                                        ).on_hover_text("Download in your browser, then install automatically.");
+                                        action.widget_info(|| egui::WidgetInfo::labeled(
+                                            egui::WidgetType::Button, ui.is_enabled(), format!("Downloads for {}", project.name)));
+                                        if action.hovered() || action.has_focus() {
+                                            ui.painter().rect_stroke(action.rect.shrink(2.0), 7,
+                                                egui::Stroke::new(1.5, colors.primary_text), egui::StrokeKind::Inside);
+                                        }
+                                        download_rect = action.rect;
                                         self.stats.card_actions.push(action.rect);
                                         if action.clicked() {
-                                            self.selected = Some(project.clone());
+                                            self.import_request = Some(ReviewRequest::ProjectId(project.id));
                                         }
                                     });
                                 });
@@ -972,7 +984,8 @@ impl DiscoverView {
                             self.stats.first_card = Some(response.rect.intersect(ui.clip_rect()));
                         }
                         let click = ui.interact(
-                            response.rect,
+                            egui::Rect::from_min_max(response.rect.min,
+                                egui::pos2(response.rect.right(), download_rect.top())),
                             ui.id().with(project.id),
                             egui::Sense::click(),
                         );
@@ -981,7 +994,10 @@ impl DiscoverView {
                         }
                         click
                             .clone()
-                            .on_hover_text(format!("View {}", project.name));
+                            .on_hover_text(format!("View details for {}", project.name))
+                            .on_hover_cursor(egui::CursorIcon::PointingHand);
+                        click.widget_info(|| egui::WidgetInfo::labeled(
+                            egui::WidgetType::Button, ui.is_enabled(), format!("View details for {}", project.name)));
                         if click.clicked() {
                             self.selected = Some(project.clone());
                         }

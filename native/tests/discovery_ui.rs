@@ -675,6 +675,109 @@ fn long_and_short_project_headers_keep_actions_aligned() {
 }
 
 #[test]
+fn card_downloads_are_filled_buttons_that_request_the_clicked_project() {
+    use ts4_mod_manager_native::project_details::ReviewRequest;
+    for theme in [egui::Theme::Light, egui::Theme::Dark] {
+        let ctx = egui::Context::default();
+        ui::setup(&ctx);
+        ctx.set_theme(theme);
+        let mut view = View::default();
+        view.browse_page = true;
+        let generation = view.discovery.browser.begin(BrowseQuery::default());
+        view.discovery.browser.accept(generation, Ok(parse_browse_response(
+            r#"{"data":[{"id":1,"gameId":78062,"name":"First project","summary":"Summary"},{"id":42,"gameId":78062,"name":"Second project","summary":"Summary"}],"pagination":{"index":0,"pageSize":24,"resultCount":2,"totalCount":2}}"#
+        ).unwrap()));
+        let mut catalog = Catalog::default();
+        let size = [1200.0, 1000.0];
+        for _ in 0..3 {
+            frame(&ctx, &mut view, &mut catalog, size, vec![]);
+        }
+        let output = frame(&ctx, &mut view, &mut catalog, size, vec![]);
+        assert!(
+            text(&output, "Downloads"),
+            "cards must offer a download directly"
+        );
+        assert!(
+            !text(&output, "View details"),
+            "the card itself opens details"
+        );
+        let action = view.discovery.stats.card_actions[1];
+        let surface = ctx.style_of(theme).visuals.extreme_bg_color;
+        assert!(output.shapes.iter().any(|shape| matches!(&shape.shape,
+            egui::epaint::Shape::Rect(rect) if rect.rect.contains(action.center()) && rect.rect.width() <= action.width() + 2.0 && rect.fill != surface && rect.fill != egui::Color32::TRANSPARENT)),
+            "Downloads must have a visible button fill");
+        let output = frame(&ctx, &mut view, &mut catalog, size, click(action));
+        assert!(matches!(
+            view.discovery.take_import_request(),
+            Some(ReviewRequest::ProjectId(42))
+        ));
+        assert!(
+            view.discovery.take_import_request().is_none(),
+            "deliver the click only once"
+        );
+        assert!(
+            view.discovery.selected.is_none(),
+            "download clicks must not also open details"
+        );
+        assert!(
+            !output
+                .platform_output
+                .commands
+                .iter()
+                .any(|command| matches!(command, egui::OutputCommand::OpenUrl(_))),
+            "the existing confirmation must precede browser navigation"
+        );
+    }
+}
+
+#[test]
+fn card_downloads_remain_reachable_in_a_small_window() {
+    use ts4_mod_manager_native::project_details::ReviewRequest;
+    let ctx = egui::Context::default();
+    ui::setup(&ctx);
+    let mut view = View::default();
+    view.browse_page = true;
+    let generation = view.discovery.browser.begin(BrowseQuery::default());
+    view.discovery.browser.accept(generation, Ok(parse_browse_response(
+        r#"{"data":[{"id":42,"gameId":78062,"name":"Small window project","summary":"Summary"}],"pagination":{"index":0,"pageSize":24,"resultCount":1,"totalCount":1}}"#
+    ).unwrap()));
+    let mut catalog = Catalog::default();
+    let size = [640.0, 480.0];
+    for _ in 0..3 {
+        frame(&ctx, &mut view, &mut catalog, size, vec![]);
+    }
+    frame(
+        &ctx,
+        &mut view,
+        &mut catalog,
+        size,
+        vec![
+            egui::Event::PointerMoved(egui::pos2(320.0, 330.0)),
+            egui::Event::MouseWheel {
+                unit: egui::MouseWheelUnit::Point,
+                delta: egui::vec2(0.0, -600.0),
+                modifiers: Default::default(),
+                phase: egui::TouchPhase::Move,
+            },
+        ],
+    );
+    for _ in 0..5 {
+        frame(&ctx, &mut view, &mut catalog, size, vec![]);
+    }
+    let action = view.discovery.stats.card_actions[0];
+    assert!(
+        action.top() >= 105.0 && action.bottom() <= 409.0,
+        "download action must scroll fully into view: {action:?}"
+    );
+    frame(&ctx, &mut view, &mut catalog, size, click(action));
+    assert!(matches!(
+        view.discovery.take_import_request(),
+        Some(ReviewRequest::ProjectId(42))
+    ));
+    assert!(view.discovery.selected.is_none());
+}
+
+#[test]
 fn tab_focus_paints_card_outline_and_enter_opens_project() {
     let ctx = egui::Context::default();
     ui::setup(&ctx);
