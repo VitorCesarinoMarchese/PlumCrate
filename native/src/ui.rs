@@ -324,6 +324,7 @@ pub struct RenderStats {
     pub detail_close: Option<egui::Rect>,
     pub copy: Option<egui::Rect>,
     pub photos: usize,
+    pub pending_photos: usize,
     pub missing_photos: usize,
     pub list_switch: Option<egui::Rect>,
 }
@@ -1389,6 +1390,7 @@ impl View {
                 self.stats.photos += 1;
             }
             crate::preview::State::Pending => {
+                self.stats.pending_photos += 1;
                 egui::Spinner::new().size(18.0).paint_at(
                     ui,
                     egui::Rect::from_center_size(rect.center(), egui::Vec2::splat(18.0)),

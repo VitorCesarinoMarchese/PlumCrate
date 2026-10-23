@@ -11,12 +11,18 @@ pub enum State {
     Missing,
 }
 
+enum RemotePhoto {
+    Pending(mpsc::Receiver<Result<egui::ColorImage, String>>),
+    Ready(egui::TextureHandle),
+    Missing,
+}
+
 #[derive(Default)]
 pub struct Previews {
     recent: VecDeque<String>,
     generation: Option<u64>,
     cache: Option<PathBuf>,
-    remote: HashMap<String, Result<String, mpsc::Receiver<Result<PathBuf, String>>>>,
+    remote: HashMap<String, RemotePhoto>,
 }
 
 impl Previews {
@@ -27,35 +33,42 @@ impl Previews {
         }
     }
 
-    fn cached_uri(&mut self, ctx: &egui::Context, uri: &str) -> Result<String, State> {
-        let Some(directory) = self.cache.clone() else {
-            return Ok(uri.into());
-        };
+    fn cached_photo(&mut self, ctx: &egui::Context, uri: &str) -> Option<State> {
+        let directory = self.cache.clone()?;
         if !uri.starts_with("http://") && !uri.starts_with("https://") {
-            return Ok(uri.into());
+            return None;
         }
-        for state in self.remote.values_mut() {
-            let Err(receiver) = state else { continue };
+        for (url, state) in &mut self.remote {
+            let RemotePhoto::Pending(receiver) = state else {
+                continue;
+            };
             match receiver.try_recv() {
-                Ok(result) => {
-                    *state = Ok(result
-                        .ok()
-                        .and_then(|path| resolve_uri(path.to_str(), None))
-                        .unwrap_or_default());
+                Ok(Ok(image)) => {
+                    *state = RemotePhoto::Ready(ctx.load_texture(
+                        url,
+                        image,
+                        egui::TextureOptions::LINEAR,
+                    ))
                 }
-                Err(mpsc::TryRecvError::Disconnected) => *state = Ok(String::new()),
+                Ok(Err(_)) | Err(mpsc::TryRecvError::Disconnected) => *state = RemotePhoto::Missing,
                 Err(mpsc::TryRecvError::Empty) => {}
             }
         }
         if let Some(state) = self.remote.get(uri) {
-            return match state {
-                Ok(path) if path.is_empty() => Err(State::Missing),
-                Ok(path) => Ok(path.clone()),
-                Err(_) => Err(State::Pending),
-            };
+            return Some(match state {
+                RemotePhoto::Ready(texture) => State::Ready(texture.into()),
+                RemotePhoto::Missing => State::Missing,
+                RemotePhoto::Pending(_) => State::Pending,
+            });
         }
-        if self.remote.values().filter(|state| state.is_err()).count() >= 4 {
-            return Err(State::Pending);
+        if self
+            .remote
+            .values()
+            .filter(|state| matches!(state, RemotePhoto::Pending(_)))
+            .count()
+            >= 4
+        {
+            return Some(State::Pending);
         }
         let (sender, receiver) = mpsc::channel();
         let url = uri.to_owned();
@@ -63,17 +76,37 @@ impl Previews {
         if std::thread::Builder::new()
             .name("photo-cache".into())
             .spawn(move || {
-                let result = crate::photo_cache::fetch(&directory, &url);
+                let result = crate::photo_cache::fetch(&directory, &url).map(|image| {
+                    let rgba = image.into_rgba8();
+                    egui::ColorImage::from_rgba_unmultiplied(
+                        [rgba.width() as usize, rgba.height() as usize],
+                        rgba.as_raw(),
+                    )
+                });
                 let _ = sender.send(result);
                 wake.request_repaint();
             })
             .is_err()
         {
-            return Err(State::Missing);
+            return Some(State::Missing);
         }
-        self.remote.insert(uri.into(), Err(receiver));
-        Err(State::Pending)
+        self.remote
+            .insert(uri.into(), RemotePhoto::Pending(receiver));
+        Some(State::Pending)
     }
+
+    fn remember(&mut self, ctx: &egui::Context, uri: &str) {
+        if let Some(index) = self.recent.iter().position(|cached| cached == uri) {
+            self.recent.remove(index);
+        }
+        self.recent.push_back(uri.to_owned());
+        while self.recent.len() > 32 {
+            let oldest = self.recent.pop_front().expect("cached preview");
+            self.remote.remove(&oldest);
+            ctx.forget_image(&oldest);
+        }
+    }
+
     pub fn begin_frame(&mut self, ctx: &egui::Context, generation: u64) {
         if self.generation != Some(generation) {
             for uri in self.recent.drain(..) {
@@ -93,17 +126,13 @@ impl Previews {
         let Some(uri) = resolve_uri(preview, root) else {
             return State::Missing;
         };
-        let uri = match self.cached_uri(ctx, &uri) {
-            Ok(uri) => uri,
-            Err(state) => return state,
-        };
-        if let Some(index) = self.recent.iter().position(|cached| *cached == uri) {
-            self.recent.remove(index);
+        if let Some(state) = self.cached_photo(ctx, &uri) {
+            if matches!(state, State::Ready(_)) {
+                self.remember(ctx, &uri);
+            }
+            return state;
         }
-        self.recent.push_back(uri.clone());
-        while self.recent.len() > 32 {
-            ctx.forget_image(&self.recent.pop_front().expect("cached preview"));
-        }
+        self.remember(ctx, &uri);
         match ctx.try_load_texture(
             &uri,
             egui::TextureOptions::LINEAR,
@@ -160,6 +189,30 @@ pub fn resolve_uri(preview: Option<&str>, root: Option<&Path>) -> Option<String>
 mod tests {
     use super::*;
 
+    #[test]
+    fn cached_photo_reuses_validated_pixels_without_another_image_decode() {
+        use sha2::{Digest, Sha256};
+        let temp = tempfile::tempdir().unwrap();
+        let server = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
+        let url = format!("http://{}/photo.jpg", server.local_addr().unwrap());
+        drop(server);
+        let path = temp
+            .path()
+            .join(format!("ts4-photo-{:x}", Sha256::digest(url.as_bytes())));
+        image::RgbImage::from_pixel(200, 200, image::Rgb([10, 100, 80]))
+            .save_with_format(path, image::ImageFormat::Jpeg)
+            .unwrap();
+        let ctx = egui::Context::default();
+        // The cache has already decoded and validated the image. Display it directly.
+        let mut previews = Previews::with_cache(temp.path().to_owned());
+        match wait_for_preview(&ctx, &mut previews, &url) {
+            State::Ready(texture) => assert_eq!(texture.size, egui::vec2(200.0, 200.0)),
+            state => panic!(
+                "validated cached pixels should be ready without egui image loaders: {state:?}"
+            ),
+        }
+    }
+
     fn wait_for_preview(ctx: &egui::Context, previews: &mut Previews, uri: &str) -> State {
         let deadline = std::time::Instant::now() + std::time::Duration::from_secs(5);
         loop {
@@ -178,10 +231,6 @@ mod tests {
     #[test]
     fn completed_offscreen_downloads_release_slots() {
         let temp = tempfile::tempdir().unwrap();
-        let photo = temp.path().join("photo.png");
-        image::RgbaImage::from_pixel(20, 30, image::Rgba([10, 100, 80, 255]))
-            .save(&photo)
-            .unwrap();
         let ctx = egui::Context::default();
         crate::ui::setup(&ctx);
         let mut previews = Previews::with_cache(temp.path().join("cache"));
@@ -192,7 +241,7 @@ mod tests {
             senders.push(sender);
             previews.remote.insert(
                 format!("https://fixture.invalid/{index}.png"),
-                Err(receiver),
+                RemotePhoto::Pending(receiver),
             );
         }
         let server = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
@@ -203,7 +252,9 @@ mod tests {
             !previews.remote.contains_key(&next),
             "active downloads stay bounded"
         );
-        senders[0].send(Ok(photo.clone())).unwrap();
+        senders[0]
+            .send(Ok(egui::ColorImage::filled([20, 30], egui::Color32::GREEN)))
+            .unwrap();
         senders[1].send(Err("broken image".into())).unwrap();
         drop(senders);
 

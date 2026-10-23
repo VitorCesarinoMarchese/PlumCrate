@@ -2,7 +2,7 @@ use sha2::{Digest, Sha256};
 use std::{
     fs,
     io::{Read, Write},
-    path::{Path, PathBuf},
+    path::Path,
     time::{Duration, SystemTime},
 };
 
@@ -14,40 +14,46 @@ fn key(url: &str) -> String {
     format!("ts4-photo-{:x}", Sha256::digest(url.as_bytes()))
 }
 
-fn valid_image(bytes: &[u8]) -> bool {
-    let Ok(mut reader) = image::ImageReader::new(std::io::Cursor::new(bytes)).with_guessed_format()
-    else {
-        return false;
-    };
+fn decode_image(bytes: &[u8]) -> Option<image::DynamicImage> {
+    use image::ImageDecoder as _;
+    let mut reader = image::ImageReader::new(std::io::Cursor::new(bytes))
+        .with_guessed_format()
+        .ok()?;
     let mut limits = image::Limits::default();
     limits.max_alloc = Some(64 * 1024 * 1024);
     limits.max_image_width = Some(8192);
     limits.max_image_height = Some(8192);
-    reader.limits(limits);
-    reader.decode().is_ok()
+    reader.limits(limits.clone());
+    let mut decoder = reader.into_decoder().ok()?;
+    limits.reserve(decoder.total_bytes()).ok()?;
+    decoder.set_limits(limits).ok()?;
+    let orientation = decoder.orientation().ok()?;
+    let mut image = image::DynamicImage::from_decoder(decoder).ok()?;
+    image.apply_orientation(orientation);
+    Some(image)
 }
 
-fn read_cached(path: &Path) -> Option<fs::Metadata> {
+fn read_cached(path: &Path) -> Option<(fs::Metadata, image::DynamicImage)> {
     let metadata = fs::symlink_metadata(path).ok()?;
     if !metadata.is_file() || metadata.len() > MAX_IMAGE_BYTES {
         return None;
     }
-    let bytes = fs::read(path).ok()?;
-    valid_image(&bytes).then_some(metadata)
+    let image = decode_image(&fs::read(path).ok()?)?;
+    Some((metadata, image))
 }
 
-pub fn fetch(directory: &Path, url: &str) -> Result<PathBuf, String> {
+pub fn fetch(directory: &Path, url: &str) -> Result<image::DynamicImage, String> {
     let path = directory.join(key(url));
     let cached = read_cached(&path);
     if cached
         .as_ref()
-        .and_then(|m| m.modified().ok())
+        .and_then(|(metadata, _)| metadata.modified().ok())
         .and_then(|t| SystemTime::now().duration_since(t).ok())
         .is_some_and(|age| age < FRESH_FOR)
     {
-        return Ok(path);
+        return Ok(cached.expect("fresh cached image").1);
     }
-    let download = || -> Result<Vec<u8>, String> {
+    let download = || -> Result<(Vec<u8>, image::DynamicImage), String> {
         let agent = ureq::builder()
             .timeout(Duration::from_secs(8))
             .timeout_connect(Duration::from_secs(5))
@@ -63,15 +69,15 @@ pub fn fetch(directory: &Path, url: &str) -> Result<PathBuf, String> {
             .take(MAX_IMAGE_BYTES + 1)
             .read_to_end(&mut bytes)
             .map_err(|_| "Preview response failed")?;
-        if bytes.len() as u64 > MAX_IMAGE_BYTES || !valid_image(&bytes) {
+        if bytes.len() as u64 > MAX_IMAGE_BYTES {
             return Err("Unsupported or oversized preview".into());
         }
-        Ok(bytes)
+        let image = decode_image(&bytes).ok_or("Unsupported or oversized preview")?;
+        Ok((bytes, image))
     };
-    let bytes = match download() {
-        Ok(bytes) => bytes,
-        Err(_) if cached.is_some() => return Ok(path),
-        Err(error) => return Err(error),
+    let (bytes, image) = match download() {
+        Ok(result) => result,
+        Err(error) => return cached.map(|(_, image)| image).ok_or(error),
     };
     fs::create_dir_all(directory).map_err(|_| "Cannot create photo cache")?;
     let mut temporary =
@@ -83,7 +89,7 @@ pub fn fetch(directory: &Path, url: &str) -> Result<PathBuf, String> {
         .persist(&path)
         .map_err(|_| "Cannot save photo cache")?;
     prune(directory, &path);
-    Ok(path)
+    Ok(image)
 }
 
 fn prune(directory: &Path, keep: &Path) {
@@ -142,7 +148,14 @@ mod tests {
             .unwrap()
             .set_times(fs::FileTimes::new().set_modified(SystemTime::UNIX_EPOCH))
             .unwrap();
-        assert_eq!(fetch(dir.path(), &url).unwrap(), path);
+        assert_eq!(
+            fetch(dir.path(), &url)
+                .unwrap()
+                .to_rgba8()
+                .get_pixel(0, 0)
+                .0,
+            [10, 100, 80, 255]
+        );
         fs::write(&path, b"broken cache").unwrap();
         assert!(fetch(dir.path(), &url).is_err());
     }
@@ -152,7 +165,7 @@ mod tests {
             key("https://example/a?size=1"),
             key("https://example/a?size=2")
         );
-        assert!(!valid_image(b"not an image"));
+        assert!(decode_image(b"not an image").is_none());
     }
     #[test]
     fn pruning_retains_unrelated_files_and_current_photo() {
