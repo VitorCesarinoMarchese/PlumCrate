@@ -101,8 +101,7 @@ fn run() -> Result<(), String> {
             if !capture_required {
                 controls.app_updates.activate();
             }
-            let mut view = View::default();
-            view.discovery = ts4_mod_manager_native::discovery::DiscoverView::with_cache(options.home.join(".cache/ts4-mod-manager/photos"));
+            let view = View::with_cache(options.home.join(".cache/ts4-mod-manager/photos"));
             jobs.submit(Request::Detect {
                 generation: 0,
                 home: options.home,

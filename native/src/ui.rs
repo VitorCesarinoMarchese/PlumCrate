@@ -329,6 +329,14 @@ pub struct RenderStats {
 }
 
 impl View {
+    pub fn with_cache(directory: PathBuf) -> Self {
+        Self {
+            previews: crate::preview::Previews::with_cache(directory.clone()),
+            discovery: crate::discovery::DiscoverView::with_cache(directory),
+            ..Self::default()
+        }
+    }
+
     pub fn show(&mut self, ui: &mut egui::Ui, catalog: &mut Catalog) -> Option<PathBuf> {
         self.show_inner(ui, catalog, None)
     }
@@ -1410,6 +1418,42 @@ impl View {
 
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn library_reuses_cached_remote_photo_after_rescan_and_restart_offline() {
+        use sha2::{Digest, Sha256};
+        let temp = tempfile::tempdir().unwrap();
+        let server = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
+        let url = format!("http://{}/photo.png", server.local_addr().unwrap());
+        drop(server);
+        let cache = temp.path().join("photos");
+        std::fs::create_dir(&cache).unwrap();
+        let path = cache.join(format!("ts4-photo-{:x}", Sha256::digest(url.as_bytes())));
+        image::RgbaImage::from_pixel(20, 30, image::Rgba([10, 100, 80, 255]))
+            .save_with_format(&path, image::ImageFormat::Png).unwrap();
+
+        for _ in 0..2 {
+            let ctx = egui::Context::default();
+            setup(&ctx);
+            let mut view = View::with_cache(cache.clone());
+            for generation in [1, 2] {
+                view.previews.begin_frame(&ctx, generation);
+                let started = std::time::Instant::now();
+                loop {
+                    match view.previews.load(&ctx, Some(&url), None) {
+                        crate::preview::State::Ready(texture) => {
+                            assert_eq!(texture.size, egui::vec2(20.0, 30.0));
+                            break;
+                        }
+                        crate::preview::State::Missing => panic!("library must reuse cached photos offline"),
+                        crate::preview::State::Pending => {}
+                    }
+                    assert!(started.elapsed() < std::time::Duration::from_secs(3), "cached library photo did not load");
+                    std::thread::sleep(std::time::Duration::from_millis(5));
+                }
+            }
+        }
+    }
+
     use super::*;
     #[test]
     fn unreadable_custom_text_is_adjusted_without_replacing_the_palette() {
