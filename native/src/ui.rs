@@ -602,8 +602,16 @@ impl View {
                 }
                 if self.browse_page {
                     let key = controls.as_ref().and_then(|c| c.source_api_key());
-                    let settings_requested = self.discovery.show(ui, key, search_requested);
+                    let settings_requested = self.discovery.show(ui, key, search_requested, catalog);
                     if let Some(c) = controls.as_deref_mut() && let Some(request) = self.discovery.take_import_request() { c.prepare_browser_import(ui.ctx(), catalog, request); }
+                    if let Some(identity) = self.discovery.take_library_request()
+                        && let Some(index) = catalog.mods.iter().position(|entry| EntryId::of(entry) == identity) {
+                        catalog.search(String::new());
+                        catalog.set_filter(ModFilter::All);
+                        catalog.select(index);
+                        self.detail_open = catalog.selected.clone();
+                        self.browse_page = false;
+                    }
                     if settings_requested && let Some(c) = controls.as_deref_mut() { c.settings_page = true; }
                     return;
                 }

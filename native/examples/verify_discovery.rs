@@ -76,6 +76,18 @@ impl Capture {
         }
         self.view = View::default();
         self.view.browse_page = true;
+        let generation = self.catalog.begin_scan("/synthetic/discovery-game".into());
+        let owned = (1..=2).map(|id| serde_json::from_value(serde_json::json!({
+            "key":format!("owned-{id}"), "id":format!("owned-{id}"), "name":format!("Downloaded fixture {id}"),
+            "files":[format!("owned-{id}.package")], "mod_files":[format!("owned-{id}.package")],
+            "preview":null, "source":"managed", "enabled":id==1, "group_path":[format!("owned-{id}")],
+            "sourceUrl":format!("https://www.curseforge.com/sims4/mods/synthetic-owned-{id}"),
+            "sourceAttachment":{"providerId":"curseforge", "projectId":id,
+                "sourceUrl":format!("https://www.curseforge.com/sims4/mods/synthetic-owned-{id}"),
+                "title":format!("Downloaded fixture {id}"), "confidence":100,
+                "attachedBy":"user", "attachedAt":"2026-10-23T00:00:00Z"}
+        })).unwrap()).collect();
+        self.catalog.accept_scan(generation, Ok(owned));
         let projects=(0..24).map(|index|serde_json::json!({
             "id":index+1,"gameId":78062,
             "name":if index==0 {"Synthetic hair collection with a long descriptive project title".into()} else {format!("Synthetic collection {}",index+1)},

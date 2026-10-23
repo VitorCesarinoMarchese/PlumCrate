@@ -326,6 +326,7 @@ pub struct DiscoverView {
     detail_jump: Option<DetailSection>,
     pub stats: Stats,
     import_request: Option<ReviewRequest>,
+    library_request: Option<crate::catalog::EntryId>,
     jobs: Option<Jobs>,
     key: Option<String>,
     category_error: Option<SourceLookupError>,
@@ -368,6 +369,7 @@ pub struct Stats {
 }
 impl DiscoverView {
     pub fn take_import_request(&mut self) -> Option<ReviewRequest> { self.import_request.take() }
+    pub fn take_library_request(&mut self) -> Option<crate::catalog::EntryId> { self.library_request.take() }
     pub fn with_cache(directory: std::path::PathBuf) -> Self {
         Self {
             previews: crate::preview::Previews::with_cache(directory),
@@ -460,7 +462,7 @@ impl DiscoverView {
                 .accept_prefetch(epoch, query, Err(SourceLookupError::Network));
         }
     }
-    pub fn show(&mut self, ui: &mut egui::Ui, key: Option<&str>, focus_search: bool) -> bool {
+    pub fn show(&mut self, ui: &mut egui::Ui, key: Option<&str>, focus_search: bool, catalog: &crate::catalog::Catalog) -> bool {
         self.stats = Stats::default();
         let key = key
             .map(str::trim)
@@ -523,7 +525,7 @@ impl DiscoverView {
                 self.selected = None;
                 self.details.clear();
             } else {
-                self.details(ui);
+                self.details(ui, catalog);
                 return false;
             }
         }
@@ -538,13 +540,13 @@ impl DiscoverView {
             egui::ScrollArea::vertical()
                 .id_salt("curseforge-short-window")
                 .auto_shrink([false, false])
-                .show(ui, |ui| self.content(ui, focus_search, false))
+                .show(ui, |ui| self.content(ui, focus_search, false, catalog))
                 .inner
         } else {
-            self.content(ui, focus_search, true)
+            self.content(ui, focus_search, true, catalog)
         }
     }
-    fn content(&mut self, ui: &mut egui::Ui, focus_search: bool, scroll_cards: bool) -> bool {
+    fn content(&mut self, ui: &mut egui::Ui, focus_search: bool, scroll_cards: bool, catalog: &crate::catalog::Catalog) -> bool {
         ui.add_space(16.0);
         let mut search = false;
         egui::Frame::new()
@@ -692,7 +694,7 @@ impl DiscoverView {
             ui.label("Try another name or clear the filters.");
             return false;
         }
-        self.cards(ui, &page.projects, scroll_cards);
+        self.cards(ui, &page.projects, scroll_cards, catalog);
         false
     }
 
@@ -883,7 +885,7 @@ impl DiscoverView {
             self.game_version.clone(),
         )
     }
-    fn cards(&mut self, ui: &mut egui::Ui, projects: &[BrowseProject], scroll: bool) {
+    fn cards(&mut self, ui: &mut egui::Ui, projects: &[BrowseProject], scroll: bool, catalog: &crate::catalog::Catalog) {
         let columns = ((ui.available_width() + 16.0) / 280.0).floor().max(1.0) as usize;
         let width = (ui.available_width() - (columns - 1) as f32 * 16.0) / columns as f32;
         let rows = projects.len().div_ceil(columns);
@@ -893,6 +895,7 @@ impl DiscoverView {
                 ui.horizontal_top(|ui| {
                     ui.spacing_mut().item_spacing.x = 16.0;
                     for project in projects.iter().skip(row * columns).take(columns) {
+                        let local = catalog.curseforge_entry(project.id);
                         let frame = egui::Frame::new()
                             .fill(ui.visuals().extreme_bg_color)
                             .stroke(ui.visuals().widgets.noninteractive.bg_stroke)
@@ -957,23 +960,36 @@ impl DiscoverView {
                                             .color(ui.visuals().weak_text_color()),
                                         );
                                         let colors = crate::ui::chrome_colors(ui);
+                                        let (label, icon, fill, ink, hint) = if local.is_some() {
+                                            let fill = ui.visuals().selection.bg_fill;
+                                            ("View in library", crate::ui::Icon::Check, fill,
+                                                crate::ui::readable_text(ui.visuals().text_color(), &[fill]),
+                                                "Already in your library. Open the local mod.")
+                                        } else {
+                                            ("Downloads", crate::ui::Icon::Download, colors.primary, colors.primary_text,
+                                                "Download in your browser, then install automatically.")
+                                        };
                                         let action = ui.add_sized(
                                             [ui.available_width(), 34.0],
                                             egui::Button::image_and_text(
-                                                crate::ui::Icon::Download.image(colors.primary_text, 16.0),
-                                                RichText::new("Downloads").color(colors.primary_text),
-                                            ).fill(colors.primary).stroke(egui::Stroke::NONE),
-                                        ).on_hover_text("Download in your browser, then install automatically.");
+                                                icon.image(ink, 16.0),
+                                                RichText::new(label).color(ink),
+                                            ).fill(fill).stroke(egui::Stroke::NONE),
+                                        ).on_hover_text(hint);
                                         action.widget_info(|| egui::WidgetInfo::labeled(
-                                            egui::WidgetType::Button, ui.is_enabled(), format!("Downloads for {}", project.name)));
+                                            egui::WidgetType::Button, ui.is_enabled(), format!("{label}: {}", project.name)));
                                         if action.hovered() || action.has_focus() {
                                             ui.painter().rect_stroke(action.rect.shrink(2.0), 7,
-                                                egui::Stroke::new(1.5, colors.primary_text), egui::StrokeKind::Inside);
+                                                egui::Stroke::new(1.5, ink), egui::StrokeKind::Inside);
                                         }
                                         download_rect = action.rect;
                                         self.stats.card_actions.push(action.rect);
                                         if action.clicked() {
-                                            self.import_request = Some(ReviewRequest::ProjectId(project.id));
+                                            if let Some(identity) = local {
+                                                self.library_request = Some(identity.clone());
+                                            } else {
+                                                self.import_request = Some(ReviewRequest::ProjectId(project.id));
+                                            }
                                         }
                                     });
                                 });
@@ -1062,7 +1078,7 @@ impl DiscoverView {
             crate::preview::State::Missing => {}
         }
     }
-    fn details(&mut self, ui: &mut egui::Ui) {
+    fn details(&mut self, ui: &mut egui::Ui, catalog: &crate::catalog::Catalog) {
         let project = self.selected.as_ref().unwrap().clone();
         let back = ui.horizontal_wrapped(|ui| {
             let back=ui.add(egui::Button::image_and_text(crate::ui::Icon::Back.image(ui.visuals().text_color(),16.0),"Back to results"));
@@ -1093,6 +1109,9 @@ impl DiscoverView {
                         ui.label(
                             RichText::new(author(&project)).color(ui.visuals().weak_text_color()),
                         );
+                        if catalog.curseforge_entry(project.id).is_some() {
+                            ui.label(RichText::new("In your library").color(ui.visuals().weak_text_color()));
+                        }
                         ui.label(
                             RichText::new(format!(
                                 "{} downloads · Updated {}",
@@ -1502,7 +1521,7 @@ mod preload_tests {
                 ..Default::default()
             },
             |ui| {
-                view.show(ui, Some("synthetic"), false);
+                view.show(ui, Some("synthetic"), false, &crate::catalog::Catalog::default());
             },
         );
         output.textures_delta.clear();

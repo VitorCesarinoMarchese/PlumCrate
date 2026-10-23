@@ -4,6 +4,8 @@ A user approves one CurseForge release, Downloads folder, and Sims 4 game folder
 
 The [app guide](native-app.md#install-from-a-browser-download) describes **Downloads** on each Discover card, **Download via website…** in project details, and the shared **Start browser download** confirmation. The card action skips the details page and opens the same review with the latest eligible release, current game, and Downloads folder selected. This path supports website downloads when API downloading is unavailable. It installs mods; it does not automatically replace older releases. [Update checks](mod-updates.md) retain their manual replacement workflow.
 
+Cards whose CurseForge project ID is already saved in a user-confirmed library attachment show **View in library** instead of Downloads. Both enabled and disabled mods count. This avoids starting another download for a known project; it does not assert that the installed release is current. Project details retain the browser download action for an intentional release choice.
+
 ## File identity and installation
 
 Project details show dependencies declared for the selected release file. The parent's selected file carries into its download review; switching the file in the review updates the displayed dependency relations. Required, optional, and tool relations offer a separate review after resolving the real provider project. Incompatible, embedded, included, and unknown relations offer inspection without a download action. Missing or partially readable data shows a warning rather than claiming there are no dependencies.

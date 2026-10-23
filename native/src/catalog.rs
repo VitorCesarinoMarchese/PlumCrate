@@ -1,4 +1,4 @@
-use std::path::PathBuf;
+use std::{collections::BTreeMap, path::PathBuf};
 use ts4_mod_manager_core::mod_scan::ScannedMod;
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
@@ -53,6 +53,7 @@ pub struct Catalog {
     pub installation_filter: ModFilter,
     generation: u64,
     search_keys: Vec<String>,
+    curseforge_projects: BTreeMap<u64, EntryId>,
 }
 
 impl Catalog {
@@ -64,6 +65,7 @@ impl Catalog {
         self.generation += 1;
         if self.root.as_ref() != Some(&root) {
             self.mods.clear();
+            self.curseforge_projects.clear();
             self.search_keys.clear();
             self.visible.clear();
             self.selected = None;
@@ -97,6 +99,21 @@ impl Catalog {
                     })
                     .collect();
                 self.mods = mods;
+                self.curseforge_projects.clear();
+                for entry in &self.mods {
+                    let Some(source) = entry.source_attachment.as_ref().filter(|source| {
+                        source.provider_id == "curseforge"
+                            && source.attached_by == "user"
+                            && entry.source_url.as_deref() == Some(source.source_url.as_str())
+                    }) else {
+                        continue;
+                    };
+                    if let Some(project_id) = source.project_id.filter(|id| *id > 0) {
+                        self.curseforge_projects
+                            .entry(project_id)
+                            .or_insert_with(|| EntryId::of(entry));
+                    }
+                }
                 if self.selected_mod().is_none() {
                     self.selected = None;
                 }
@@ -151,6 +168,10 @@ impl Catalog {
         self.mods
             .iter()
             .find(|entry| EntryId::of(entry) == *selected)
+    }
+
+    pub fn curseforge_entry(&self, project_id: u64) -> Option<&EntryId> {
+        self.curseforge_projects.get(&project_id)
     }
 }
 

@@ -53,6 +53,150 @@ fn provider_image(ctx: &egui::Context, url: &'static str, bytes: Vec<u8>) {
     ctx.add_bytes_loader(loader);
 }
 
+fn saved_curseforge_mod(
+    project_id: u64,
+    enabled: bool,
+) -> ts4_mod_manager_core::mod_scan::ScannedMod {
+    serde_json::from_value(serde_json::json!({
+        "key":"owned", "id":"owned", "name":"Saved local mod", "files":["owned.package"],
+        "mod_files":["owned.package"], "preview":null, "source":"managed", "enabled":enabled, "group_path":["owned"],
+        "sourceUrl":"https://www.curseforge.com/sims4/mods/synthetic-owned",
+        "sourceAttachment":{"providerId":"curseforge", "projectId":project_id,
+            "sourceUrl":"https://www.curseforge.com/sims4/mods/synthetic-owned", "title":"Saved local mod",
+            "confidence":100, "attachedBy":"user", "attachedAt":"2026-10-23T00:00:00Z"}
+    })).unwrap()
+}
+
+fn seed_owned_project(view: &mut View) {
+    view.browse_page = true;
+    let generation = view.discovery.browser.begin(BrowseQuery::default());
+    view.discovery.browser.accept(generation, Ok(parse_browse_response(
+        r#"{"data":[{"id":42,"gameId":78062,"name":"Saved local mod","summary":"Summary"}],"pagination":{"index":0,"pageSize":24,"resultCount":1,"totalCount":1}}"#
+    ).unwrap()));
+}
+
+#[test]
+fn discover_recognizes_enabled_and_disabled_library_mods_and_opens_the_local_entry() {
+    use ts4_mod_manager_native::catalog::{EntryId, ModFilter};
+    for enabled in [true, false] {
+        let ctx = egui::Context::default();
+        ui::setup(&ctx);
+        ctx.set_theme(if enabled {
+            egui::Theme::Light
+        } else {
+            egui::Theme::Dark
+        });
+        let mut view = View::default();
+        seed_owned_project(&mut view);
+        let mut catalog = Catalog::default();
+        let generation = catalog.begin_scan("/synthetic/game".into());
+        let entry = saved_curseforge_mod(42, enabled);
+        catalog.accept_scan(generation, Ok(vec![entry.clone()]));
+        catalog.search("a search that hides the mod".into());
+        catalog.set_filter(if enabled {
+            ModFilter::Stored
+        } else {
+            ModFilter::Installed
+        });
+        let size = [1200.0, 1000.0];
+        for _ in 0..3 {
+            frame(&ctx, &mut view, &mut catalog, size, vec![]);
+        }
+        let output = frame(&ctx, &mut view, &mut catalog, size, vec![]);
+        assert!(
+            text(&output, "View in library"),
+            "downloaded projects must be recognized even outside local filters"
+        );
+        assert!(!text(&output, "Downloads"));
+        let action = view.discovery.stats.card_actions[0];
+        let output = frame(&ctx, &mut view, &mut catalog, size, click(action));
+        assert!(!view.browse_page);
+        assert!(view.discovery.take_import_request().is_none());
+        assert_eq!(catalog.selected, Some(EntryId::Managed("owned".into())));
+        assert_eq!(catalog.visible, vec![0]);
+        assert!(catalog.query.is_empty());
+        assert_eq!(
+            catalog.mods[0], entry,
+            "viewing a local mod must not change metadata or enabled state"
+        );
+        assert!(
+            !output
+                .platform_output
+                .commands
+                .iter()
+                .any(|command| matches!(command, egui::OutputCommand::OpenUrl(_)))
+        );
+    }
+}
+
+#[test]
+fn discover_does_not_guess_library_matches_from_names_or_other_providers() {
+    let mut wrong_provider = saved_curseforge_mod(42, true);
+    wrong_provider
+        .source_attachment
+        .as_mut()
+        .unwrap()
+        .provider_id = "other".into();
+    let mut name_only = saved_curseforge_mod(42, true);
+    name_only.source_attachment = None;
+    let mut unconfirmed = saved_curseforge_mod(42, true);
+    unconfirmed.source_attachment.as_mut().unwrap().attached_by = "automatic".into();
+    let mut stale_source = saved_curseforge_mod(42, true);
+    stale_source.source_url =
+        Some("https://www.curseforge.com/sims4/mods/different-synthetic-source".into());
+    for entry in [
+        saved_curseforge_mod(43, true),
+        wrong_provider,
+        name_only,
+        unconfirmed,
+        stale_source,
+    ] {
+        let ctx = egui::Context::default();
+        ui::setup(&ctx);
+        let mut view = View::default();
+        seed_owned_project(&mut view);
+        let mut catalog = Catalog::default();
+        let generation = catalog.begin_scan("/synthetic/game".into());
+        catalog.accept_scan(generation, Ok(vec![entry]));
+        let output = frame(&ctx, &mut view, &mut catalog, [1200.0, 1000.0], vec![]);
+        assert!(text(&output, "Downloads"));
+        assert!(!text(&output, "View in library"));
+    }
+}
+
+#[test]
+fn discover_updates_library_state_after_import_removal_and_game_changes() {
+    let ctx = egui::Context::default();
+    ui::setup(&ctx);
+    let mut view = View::default();
+    seed_owned_project(&mut view);
+    let mut catalog = Catalog::default();
+    let size = [1200.0, 1000.0];
+    assert!(text(
+        &frame(&ctx, &mut view, &mut catalog, size, vec![]),
+        "Downloads"
+    ));
+    let generation = catalog.begin_scan("/synthetic/game".into());
+    catalog.accept_scan(generation, Ok(vec![saved_curseforge_mod(42, true)]));
+    assert!(text(
+        &frame(&ctx, &mut view, &mut catalog, size, vec![]),
+        "View in library"
+    ));
+    let generation = catalog.begin_scan("/synthetic/game".into());
+    catalog.accept_scan(generation, Ok(vec![]));
+    assert!(text(
+        &frame(&ctx, &mut view, &mut catalog, size, vec![]),
+        "Downloads"
+    ));
+    let generation = catalog.begin_scan("/synthetic/game".into());
+    catalog.accept_scan(generation, Ok(vec![saved_curseforge_mod(42, true)]));
+    catalog.begin_scan("/synthetic/other-game".into());
+    assert!(text(
+        &frame(&ctx, &mut view, &mut catalog, size, vec![]),
+        "Downloads"
+    ));
+}
+
 #[test]
 fn pending_search_reserves_cards_without_exposing_download_actions() {
     for size in [[1200.0, 800.0], [640.0, 480.0]] {
