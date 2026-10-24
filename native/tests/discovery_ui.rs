@@ -1088,7 +1088,7 @@ fn discover_toolbar_hides_down_and_returns_up_at_end_and_for_search() {
         for _ in 0..25 { frame(&ctx,&mut view,&mut catalog,size,vec![]); }
         assert!(view.discovery.stats.search.is_some(), "end restores toolbar");
         assert!(view.discovery.stats.next.is_some(), "pagination available at end");
-        frame(&ctx,&mut view,&mut catalog,size,wheel(400.0));
+        frame(&ctx,&mut view,&mut catalog,size,wheel(700.0));
         for _ in 0..15 { frame(&ctx,&mut view,&mut catalog,size,vec![]); }
         frame(&ctx,&mut view,&mut catalog,size,wheel(-120.0));
         for _ in 0..15 { frame(&ctx,&mut view,&mut catalog,size,vec![]); }
@@ -1123,3 +1123,61 @@ fn discover_toolbar_collapse_animates_and_search_can_skip_the_transition() {
     frame(&ctx,&mut view,&mut catalog,size,vec![egui::Event::Key {key:egui::Key::F,physical_key:None,pressed:true,repeat:false,modifiers:egui::Modifiers::CTRL}]);
     assert_eq!(view.discovery.stats.toolbar_height, full, "keyboard search skips animation");
 }
+
+#[test]
+fn reaching_bottom_anchors_results_through_the_entire_toolbar_reveal() {
+    for size in [[1200.0,800.0], [1870.0,1006.0], [640.0,480.0]] {
+    let ctx = egui::Context::default();
+    ui::setup(&ctx);
+    ctx.all_styles_mut(|s| s.animation_time = 0.15);
+    let mut view = View::default();
+    view.browse_page = true;
+    let generation = view.discovery.browser.begin(BrowseQuery::default());
+    let projects: Vec<_> = (1..=24).map(|id| serde_json::json!({"id":id,"gameId":78062,"name":format!("Project {id}"),"summary":"Fixture"})).collect();
+    view.discovery.browser.accept(generation, Ok(parse_browse_response(&serde_json::json!({"data":projects,"pagination":{"index":0,"pageSize":24,"resultCount":24,"totalCount":48}}).to_string()).unwrap()));
+    let mut catalog = Catalog::default();
+    for _ in 0..3 { frame(&ctx,&mut view,&mut catalog,size,vec![]); }
+
+    let wheel = |amount| vec![egui::Event::PointerMoved(egui::pos2(size[0]-100.0,size[1]-40.0)),egui::Event::MouseWheel {unit:egui::MouseWheelUnit::Point,delta:egui::vec2(0.0,amount),modifiers:Default::default(),phase:egui::TouchPhase::Move}];
+    frame(&ctx,&mut view,&mut catalog,size,wheel(-240.0));
+    for _ in 0..20 { frame(&ctx,&mut view,&mut catalog,size,vec![]); }
+    assert_eq!(view.discovery.stats.toolbar_height,0.0);
+    let id = view.discovery.stats.results_scroll_id.unwrap();
+    let (_, max) = view.discovery.stats.results_scroll.unwrap();
+    let mut scroll = egui::scroll_area::State::load(&ctx,id).unwrap();
+    scroll.offset.y = max;
+    scroll.store(&ctx,id);
+    let mut reached_end = false;
+    let mut previous_card_bottom: Option<f32> = None;
+    for _ in 0..70 {
+        frame(&ctx,&mut view,&mut catalog,size,vec![]);
+        let (offset,max) = view.discovery.stats.results_scroll.unwrap();
+        if reached_end { assert!((max-offset).abs() <= 1.0, "redrawing toolbar detached the bottom: offset={offset}, max={max}"); }
+        if reached_end {
+            let bottom = view.discovery.stats.card_actions.last().unwrap().bottom();
+            if let Some(previous) = previous_card_bottom { assert!((bottom-previous).abs() <= 1.0, "last card jumped during bottom reveal: {previous} -> {bottom}"); }
+            previous_card_bottom = Some(bottom);
+        }
+        reached_end |= max-offset <= 1.0;
+    }
+    assert!(reached_end);
+    assert!(view.discovery.stats.toolbar_height > 100.0);
+    frame(&ctx,&mut view,&mut catalog,size,wheel(60.0));
+    for _ in 0..20 { frame(&ctx,&mut view,&mut catalog,size,vec![]); }
+    let shown_height = view.discovery.stats.toolbar_height;
+    frame(&ctx,&mut view,&mut catalog,size,wheel(-20.0));
+    for _ in 0..20 {
+        frame(&ctx,&mut view,&mut catalog,size,vec![]);
+        assert_eq!(view.discovery.stats.toolbar_height, shown_height,"small downward motion inside bottom buffer must not start hiding search");
+    }
+    frame(&ctx,&mut view,&mut catalog,size,wheel(500.0));
+    for _ in 0..20 { frame(&ctx,&mut view,&mut catalog,size,vec![]); }
+    frame(&ctx,&mut view,&mut catalog,size,wheel(-20.0));
+    for _ in 0..20 { frame(&ctx,&mut view,&mut catalog,size,vec![]); }
+    assert_eq!(view.discovery.stats.toolbar_height,0.0,"downward motion outside the bottom buffer hides search");
+    frame(&ctx,&mut view,&mut catalog,size,wheel(120.0));
+    for _ in 0..20 { frame(&ctx,&mut view,&mut catalog,size,vec![]); }
+    let (offset,max) = view.discovery.stats.results_scroll.unwrap();
+    assert!(max-offset > 50.0,"upward input releases the bottom anchor");
+}
+    }

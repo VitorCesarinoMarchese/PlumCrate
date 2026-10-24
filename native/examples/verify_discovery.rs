@@ -12,7 +12,7 @@ use ts4_mod_manager_native::{
     ui::{self, View},
 };
 
-const CASES: [(&str, bool, [f32; 2], u8); 22] = [
+const CASES: [(&str, bool, [f32; 2], u8); 24] = [
     ("browse-dark", true, [1200.0, 800.0], 0),
     ("browse-search-focus", true, [1200.0, 800.0], 7),
     ("browse-search-query", true, [1200.0, 800.0], 8),
@@ -35,6 +35,8 @@ const CASES: [(&str, bool, [f32; 2], u8); 22] = [
     ("browse-scroll-hidden-small", true, [640.0, 480.0], 10),
     ("browse-scroll-end-small", true, [640.0, 480.0], 12),
     ("browse-scroll-motion", true, [1200.0, 800.0], 13),
+    ("browse-bottom-anchor", true, [1870.0, 1006.0], 14),
+    ("browse-bottom-buffer", true, [1870.0, 1006.0], 15),
 ];
 struct FixtureBytes(egui::load::Bytes);
 impl egui::load::BytesLoader for FixtureBytes {
@@ -70,6 +72,7 @@ struct Capture {
     typed: bool,
     scrolled: bool,
     returned: bool,
+    buffer_tested: bool,
 }
 impl Capture {
     fn stage(&mut self, ctx: &egui::Context) {
@@ -174,6 +177,7 @@ impl Capture {
         self.typed = false;
         self.scrolled = false;
         self.returned = false;
+        self.buffer_tested = false;
         self.staged = Instant::now();
     }
 }
@@ -182,12 +186,18 @@ impl eframe::App for Capture {
         if self.case >= CASES.len() { return; }
         let (_, _, size, state) = CASES[self.case];
         let elapsed = self.staged.elapsed();
-        let delta = if matches!(state, 10..=13) && !self.scrolled && elapsed > Duration::from_millis(200) {
+        let delta = if matches!(state, 10..=15) && !self.scrolled && elapsed > Duration::from_millis(200) {
             self.scrolled = true;
             Some(if state == 12 { -50000.0 } else { -240.0 })
         } else if state == 11 && !self.returned && elapsed > Duration::from_millis(650) {
             self.returned = true;
             Some(80.0)
+        } else if state == 15 && self.returned && !self.typed && elapsed > Duration::from_millis(650) {
+            self.typed = true;
+            Some(60.0)
+        } else if state == 15 && self.typed && !self.buffer_tested && elapsed > Duration::from_millis(850) {
+            self.buffer_tested = true;
+            Some(-20.0)
         } else if state == 6 && !self.returned && elapsed > Duration::from_millis(350) {
             self.returned = true;
             Some(-180.0)
@@ -214,6 +224,14 @@ impl eframe::App for Capture {
         }
         self.view.show(ui, &mut self.catalog);
         let state = CASES[self.case].3;
+        if matches!(state,14|15) && self.scrolled && !self.returned && self.view.discovery.stats.toolbar_height == 0.0 {
+            let id = self.view.discovery.stats.results_scroll_id.unwrap();
+            let (_, max) = self.view.discovery.stats.results_scroll.unwrap();
+            let mut scroll = egui::scroll_area::State::load(&ctx,id).unwrap();
+            scroll.offset.y = max;
+            scroll.store(&ctx,id);
+            self.returned = true;
+        }
         if !self.opened && self.staged.elapsed() > Duration::from_millis(200) {
             if matches!(state, 4 | 5) && self.view.discovery.stats.browse_by.is_none() {
                 let id = self.view.discovery.stats.filters_toggle_id.unwrap();
@@ -304,10 +322,18 @@ impl eframe::App for Capture {
         } else if !self.requested
             && (if state == 13 {
                 self.scrolled && self.view.discovery.stats.toolbar_height > 20.0 && self.view.discovery.stats.toolbar_height < 180.0
-            } else { self.staged.elapsed() > Duration::from_millis(if state >= 10 { 1000 } else { 500 }) })
+            } else { self.staged.elapsed() > Duration::from_millis(if state == 15 { 1300 } else if state >= 10 { 1000 } else { 500 }) })
             && ctx.content_rect().size() == CASES[self.case].2.into()
             && !ctx.has_pending_images()
         {
+            if state == 15 {
+                let (offset,max) = self.view.discovery.stats.results_scroll.unwrap();
+                assert!(self.buffer_tested && self.view.discovery.stats.toolbar_height > 100.0 && max-offset < 96.0,"small reversals near bottom keep toolbar visible");
+            }
+            if state == 14 {
+                let (offset,max) = self.view.discovery.stats.results_scroll.unwrap();
+                assert!(self.returned && self.view.discovery.stats.toolbar_height > 100.0 && (max-offset).abs() <= 1.0, "bottom reveal must stay anchored");
+            }
             if state == 10 { assert!(self.view.discovery.stats.search.is_none(), "scroll-down capture must hide toolbar"); }
             if matches!(state, 11 | 12) { assert!(self.view.discovery.stats.search.is_some(), "scroll-return capture must show toolbar"); }
             ctx.send_viewport_cmd(egui::ViewportCommand::Screenshot(Default::default()));
@@ -360,6 +386,7 @@ fn main() -> eframe::Result {
                 typed: false,
                 scrolled: false,
                 returned: false,
+                buffer_tested: false,
             };
             app.stage(&cc.egui_ctx);
             Ok(Box::new(app))

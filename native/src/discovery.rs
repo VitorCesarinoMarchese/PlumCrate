@@ -336,14 +336,15 @@ pub struct DiscoverView {
     previews: crate::preview::Previews,
     toolbar_hidden: bool,
     toolbar_engaged: bool,
-    toolbar_animating: bool,
     results_offset: f32,
-    toolbar_layout_changed: bool,
-    end_revealed: bool,
+    results_viewport_height: f32,
+    bottom_distance_anchored: bool,
 }
 #[derive(Default)]
 pub struct Stats {
     pub toolbar_height: f32,
+    pub results_scroll: Option<(f32, f32)>,
+    pub results_scroll_id: Option<egui::Id>,
     pub search: Option<egui::Rect>,
     pub search_button: Option<egui::Rect>,
     pub first_card: Option<egui::Rect>,
@@ -388,7 +389,8 @@ impl DiscoverView {
         self.details.clear();
         self.toolbar_hidden = false;
         self.results_offset = 0.0;
-        self.end_revealed = false;
+        self.bottom_distance_anchored = false;
+        self.results_viewport_height = 0.0;
         let generation = match submission {
             Submission::Refresh => self.browser.begin(query.clone()),
             Submission::Navigate => self.browser.navigate(query.clone()),
@@ -552,8 +554,6 @@ impl DiscoverView {
             ui.style_mut().animation_time = ui.style().animation_time.min(0.15);
             let mut toolbar = egui::collapsing_header::CollapsingState::load_with_default_open(ui.ctx(), id, true);
             toolbar.set_open(!self.toolbar_hidden);
-            let openness = toolbar.openness(ui.ctx());
-            self.toolbar_animating = openness > 0.0 && openness < 1.0;
             let body = toolbar.show_body_unindented(ui, |ui| self.browse_toolbar(ui, focus_search, catalog));
             self.stats.toolbar_height = body.map_or(0.0, |body| body.response.rect.height());
         });
@@ -868,6 +868,33 @@ impl DiscoverView {
         let width = (ui.available_width() - (columns - 1) as f32 * 16.0) / columns as f32;
         let rows = projects.len().div_ceil(columns);
         let generation = self.browser.generation;
+        let viewport = ui.available_rect_before_wrap();
+        let intent = ui.input(|input| {
+            let over_results = input.pointer.hover_pos().is_some_and(|pos| viewport.contains(pos));
+            let wheel: f32 = if over_results {
+                input.events.iter().filter_map(|event| match event {
+                    egui::Event::MouseWheel { delta, .. } => Some(delta.y),
+                    _ => None,
+                }).sum()
+            } else { 0.0 };
+            let scrollbar = over_results && input.pointer.primary_down() && input.pointer.is_decidedly_dragging()
+                && input.pointer.hover_pos().is_some_and(|pos| pos.x >= viewport.right() - 20.0);
+            if wheel != 0.0 { wheel }
+            else if scrollbar { -input.pointer.delta().y }
+            else if input.key_pressed(egui::Key::PageUp) || input.key_pressed(egui::Key::Home) { 1.0 }
+            else if input.key_pressed(egui::Key::PageDown) || input.key_pressed(egui::Key::End) { -1.0 }
+            else { 0.0 }
+        });
+        if intent > 0.0 { self.bottom_distance_anchored = false; }
+        let available_height = ui.available_height();
+        let mut area = egui::ScrollArea::vertical()
+            .id_salt(("curseforge-results", generation))
+            .auto_shrink([false, false]);
+        if self.bottom_distance_anchored && self.results_viewport_height > 0.0 {
+            // Preserve the verified distance from the bottom before drawing the resized viewport.
+            let anchored_offset = self.results_offset + self.results_viewport_height - available_height;
+            area = area.vertical_scroll_offset(anchored_offset.max(0.0));
+        }
         let draw = |ui: &mut egui::Ui, visible: std::ops::Range<usize>| {
             for row in visible {
                 ui.horizontal_top(|ui| {
@@ -1007,29 +1034,25 @@ impl DiscoverView {
                 });
             }
         };
-        {
-            let output = egui::ScrollArea::vertical()
-                .id_salt(("curseforge-results", generation))
-                .auto_shrink([false, false])
-                .show_rows(ui, 408.0, rows, draw);
-            let offset = output.state.offset.y;
-            let max = (output.content_size.y - output.inner_rect.height()).max(0.0);
-            let delta = offset - self.results_offset;
-            let before = self.toolbar_hidden;
-            // Resizing the results viewport can clamp its offset without user scrolling.
-            // Keep the end reveal latched until the user moves back up the results.
-            if delta < -2.0 && !self.toolbar_layout_changed { self.end_revealed = false; }
-            if max <= 1.0 || offset >= max - 1.0 { self.end_revealed = true; }
-            if self.toolbar_engaged || self.end_revealed || offset <= 1.0 {
-                self.toolbar_hidden = false;
-            } else if !self.toolbar_layout_changed {
-                if delta > 2.0 { self.toolbar_hidden = true; }
-                else if delta < -2.0 { self.toolbar_hidden = false; }
-            }
-            self.results_offset = offset;
-            self.toolbar_layout_changed = before != self.toolbar_hidden || self.toolbar_animating;
-            if self.toolbar_layout_changed { ui.ctx().request_repaint(); }
+        let output = area.show_rows(ui, 408.0, rows, draw);
+        let offset = output.state.offset.y;
+        let max = (output.content_size.y - output.inner_rect.height()).max(0.0);
+        self.stats.results_scroll = Some((offset, max));
+        self.stats.results_scroll_id = Some(output.id);
+        // Reserve the toolbar's own height plus a quiet buffer, so collapsing
+        // it cannot manufacture a new bottom hit and reverse the animation.
+        let in_bottom_buffer = max - offset <= self.stats.toolbar_height + 96.0;
+        self.bottom_distance_anchored = in_bottom_buffer;
+        let before = self.toolbar_hidden;
+        if self.toolbar_engaged || in_bottom_buffer || offset <= 1.0 || intent > 0.0 {
+            self.toolbar_hidden = false;
+        } else if intent < 0.0 {
+            self.toolbar_hidden = true;
         }
+        self.results_offset = offset;
+        self.results_viewport_height = available_height;
+        if before != self.toolbar_hidden { ui.ctx().request_repaint(); }
+
     }
     fn card_photo(&mut self, ui: &mut egui::Ui, url: Option<&str>, size: egui::Vec2) {
         let url = url.filter(|url| safe_url(url));
