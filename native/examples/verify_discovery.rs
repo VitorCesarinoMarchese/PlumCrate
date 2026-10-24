@@ -192,6 +192,14 @@ impl eframe::App for Capture {
         self.view.show(ui, &mut self.catalog);
         let state = CASES[self.case].3;
         if !self.opened && self.staged.elapsed() > Duration::from_millis(200) {
+            if matches!(state, 4 | 5) && self.view.discovery.stats.browse_by.is_none() {
+                let id = self.view.discovery.stats.filters_toggle_id.unwrap();
+                let mut collapsing = egui::collapsing_header::CollapsingState::load_with_default_open(&ctx, id, false);
+                collapsing.set_open(true);
+                collapsing.store(&ctx);
+                ctx.request_repaint();
+                return;
+            }
             match state {
                 4 => egui::Popup::open_id(
                     &ctx,

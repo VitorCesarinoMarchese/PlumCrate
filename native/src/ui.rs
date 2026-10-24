@@ -463,11 +463,7 @@ impl View {
                     ui.visuals_mut().override_text_color = Some(colors.rail_text);
                     ui.visuals_mut().weak_text_color = Some(colors.rail_muted);
                     ui.horizontal(|ui| { self.brand(ui); });
-                    if ui.available_height() >= 600.0 {
-                        ui.add_space(34.0);
-                        ui.label(RichText::new("A little more\nyou.").size(30.0).strong().color(colors.rail_text));
-                        ui.add_space(24.0);
-                    } else { ui.add_space(20.0); }
+                    ui.add_space(28.0);
                     self.destinations(ui, &mut controls, true);
                     ui.add_space(20.0);
                     ui.with_layout(egui::Layout::bottom_up(egui::Align::Min), |ui| {

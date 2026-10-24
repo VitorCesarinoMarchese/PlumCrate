@@ -319,6 +319,10 @@ fn switching_content_type_clears_category_keeps_version_and_restarts_pagination(
     for _ in 0..3 {
         frame(&ctx, &mut view, &mut catalog, size, vec![]);
     }
+    let toggle = view.discovery.stats.filters_toggle.unwrap();
+    frame(&ctx, &mut view, &mut catalog, size, click(toggle));
+    for _ in 0..4 { frame(&ctx, &mut view, &mut catalog, size, vec![]); }
+
     let rect = view.discovery.stats.browse_by.unwrap();
     frame(&ctx, &mut view, &mut catalog, size, click(rect));
     frame(&ctx, &mut view, &mut catalog, size, vec![]);
@@ -354,6 +358,10 @@ fn clearing_filters_keeps_search_text_and_resets_all_filter_dimensions() {
     for _ in 0..3 {
         frame(&ctx, &mut view, &mut catalog, size, vec![]);
     }
+    let toggle = view.discovery.stats.filters_toggle.unwrap();
+    frame(&ctx, &mut view, &mut catalog, size, click(toggle));
+    for _ in 0..4 { frame(&ctx, &mut view, &mut catalog, size, vec![]); }
+
     let rect = view.discovery.stats.clear_filters.unwrap();
     frame(&ctx, &mut view, &mut catalog, size, click(rect));
     assert_eq!(view.discovery.class_id, None);
@@ -388,6 +396,10 @@ fn selecting_category_version_and_sort_submits_combined_filters() {
     for _ in 0..3 {
         frame(&ctx, &mut view, &mut catalog, size, vec![]);
     }
+    let toggle = view.discovery.stats.filters_toggle.unwrap();
+    frame(&ctx, &mut view, &mut catalog, size, click(toggle));
+    for _ in 0..4 { frame(&ctx, &mut view, &mut catalog, size, vec![]); }
+
     for (control, label) in [
         (0, "Clothing / Adult"),
         (1, "1.127.41"),
@@ -1022,7 +1034,29 @@ fn download_action_has_visible_inline_source_and_install_consent() {
         let output = frame(&ctx, &mut view, &mut catalog, size, vec![]);
         assert!(!view.discovery.stats.card_actions.is_empty(), "download actions remain available after reading consent");
         assert!(output.shapes.iter().any(|shape| matches!(&shape.shape, egui::Shape::Text(text)
-            if text.galley.text().contains("saves the selected CurseForge source")
+            if text.galley.text().contains("save their CurseForge source")
             && shape.clip_rect.contains_rect(egui::Rect::from_min_size(text.pos, text.galley.size())))), "consent must be visible before the download action");
+    }
+}
+
+#[test]
+fn discovery_filters_are_collapsed_at_every_size_and_navigation_is_right_aligned() {
+    for size in [[640.0, 480.0], [1200.0, 800.0], [1870.0, 1006.0]] {
+        let ctx = egui::Context::default();
+        ui::setup(&ctx);
+        ctx.all_styles_mut(|style| style.animation_time = 0.0);
+        let mut view = View::default();
+        seed_owned_project(&mut view);
+        let mut catalog = Catalog::default();
+        let output = frame(&ctx, &mut view, &mut catalog, size, vec![]);
+        assert!(!text(&output, "A little more"));
+        assert!(view.discovery.stats.filters_toggle.is_some());
+        assert!(view.discovery.stats.browse_by.is_none(), "filters start collapsed");
+        let next = view.discovery.stats.next.unwrap();
+        assert!(next.right() > size[0] - 50.0, "pagination aligns to the content edge");
+        let toggle = view.discovery.stats.filters_toggle.unwrap();
+        frame(&ctx, &mut view, &mut catalog, size, click(toggle));
+        frame(&ctx, &mut view, &mut catalog, size, vec![]);
+        assert!(view.discovery.stats.browse_by.is_some(), "filters open on demand");
     }
 }

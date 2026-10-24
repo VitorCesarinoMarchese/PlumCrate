@@ -555,34 +555,27 @@ impl DiscoverView {
         let search = (field.input.lost_focus() && ui.input(|input| input.key_pressed(egui::Key::Enter)))
             || field.submit.as_ref().is_some_and(|button| button.clicked());
         ui.add_space(12.0);
-        let filters_changed = if ui.ctx().content_rect().height() < 600.0 {
-            let count = [
-                self.class_id.is_some(),
-                self.category.is_some(),
-                self.game_version.is_some(),
-            ]
-            .into_iter()
-            .filter(|active| *active)
-            .count();
-            let response = egui::CollapsingHeader::new(format!("Filters ({count})"))
-                .id_salt("browse-filters")
-                .show(ui, |ui| self.filters(ui));
-            self.stats.filters_toggle = Some(response.header_response.rect);
-            self.stats.filters_toggle_id = Some(response.header_response.id);
-            response.body_returned.unwrap_or(false)
-        } else {
+        let count = [self.class_id.is_some(), self.category.is_some(), self.game_version.is_some()]
+            .into_iter().filter(|active| *active).count();
+        let id = ui.make_persistent_id("browse-filters");
+        let mut filters = egui::collapsing_header::CollapsingState::load_with_default_open(ui.ctx(), id, false);
+        ui.horizontal_wrapped(|ui| {
+            let toggle = ui.add(egui::Button::new(format!("Filters ({count}) · {}", self.sort.label())).selected(filters.is_open()));
+            self.stats.filters_toggle = Some(toggle.rect);
+            self.stats.filters_toggle_id = Some(id);
+            if toggle.clicked() { filters.toggle(ui); }
+            ui.label(RichText::new(if catalog.root.is_some() {
+                "Browser downloads install verified files and save their CurseForge source."
+            } else {
+                "Choose a game folder to install verified downloads and save their source."
+            }).size(12.0).color(ui.visuals().weak_text_color()));
+        });
+        let filters_changed = filters.show_body_unindented(ui, |ui| {
+            ui.add_space(8.0);
             self.filters(ui)
-        };
-        if search || filters_changed {
-            self.search(ui.ctx());
-        }
-        ui.add_space(8.0);
-        ui.label(RichText::new(if catalog.root.is_some() {
-            "Download in browser saves the selected CurseForge source and installs verified files in the selected game."
-        } else {
-            "Choose a game folder before downloading. Verified downloads install there and save the selected CurseForge source."
-        }).size(12.0).color(ui.visuals().weak_text_color()));
-        ui.add_space(16.0);
+        }).is_some_and(|body| body.inner);
+        if search || filters_changed { self.search(ui.ctx()); }
+        ui.add_space(12.0);
         if let Some(message) = self.browser.error_message() {
             ui.heading(
                 if self.browser.error == Some(SourceLookupError::MissingApiKey) {
@@ -630,35 +623,22 @@ impl DiscoverView {
         let Some(page) = self.browser.page.clone() else {
             return false;
         };
-        ui.horizontal_wrapped(|ui| {
+        ui.horizontal(|ui| {
             let total = page.pagination.total_count;
-            ui.label(
-                RichText::new(format!("{total} results")).color(ui.visuals().weak_text_color()),
-            );
+            ui.label(RichText::new(format!("{total} results")).strong());
             if total > 0 {
                 let start = page.pagination.index + 1;
                 let end = page.pagination.index + page.pagination.result_count;
-                ui.label(
-                    RichText::new(format!("Showing {start}–{end}"))
-                        .color(ui.visuals().weak_text_color()),
-                );
+                ui.label(RichText::new(format!("{start}–{end}")).color(ui.visuals().weak_text_color()));
             }
-            let previous = ui.add_enabled(
-                self.browser.previous_query().is_some(),
-                egui::Button::new("Previous"),
-            );
-            self.stats.previous = Some(previous.rect);
-            if previous.clicked() {
-                self.submit(ui.ctx(), self.browser.previous_query().unwrap(), Submission::Navigate);
-            }
-            let next = ui.add_enabled(
-                self.browser.next_query().is_some(),
-                egui::Button::new("Next"),
-            );
-            self.stats.next = Some(next.rect);
-            if next.clicked() {
-                self.submit(ui.ctx(), self.browser.next_query().unwrap(), Submission::Navigate);
-            }
+            ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                let next = ui.add_enabled(self.browser.next_query().is_some(), egui::Button::new("Next"));
+                self.stats.next = Some(next.rect);
+                if next.clicked() { self.submit(ui.ctx(), self.browser.next_query().unwrap(), Submission::Navigate); }
+                let previous = ui.add_enabled(self.browser.previous_query().is_some(), egui::Button::new("Previous"));
+                self.stats.previous = Some(previous.rect);
+                if previous.clicked() { self.submit(ui.ctx(), self.browser.previous_query().unwrap(), Submission::Navigate); }
+            });
         });
         if self.browser.loading {
             return false;

@@ -224,7 +224,9 @@
       "cardHeightWithoutPreviews": 186,
       "cardImageHeightWithoutPreviews": 88,
       "shortDetailPreviewHeight": 120,
-      "shortLibraryFallback": "Compact list below 220pt available content height; preserves saved view choice."
+      "shortLibraryFallback": "Compact list below 220pt available content height; preserves saved view choice.",
+      "brandNavigationGap": 28,
+      "railSlogan": false
     },
     "nativeStates": {
       "cardSelection": "Immediate 1.5-point selection-stroke outline.",
@@ -364,7 +366,7 @@
           780,
           420
         ],
-        "shortWindow": "Below 600 points of content height, Filters folds the selectors with an active type/category/version count. Expanded controls scroll with results; Clear filters remains reachable.",
+        "shortWindow": "Below 600 points of content height, expanded filters scroll with results; Clear filters remains reachable.",
         "projectScroll": "Back to results remains above the scroll region.",
         "filterGroups": {
           "widths": {
@@ -376,7 +378,11 @@
           },
           "height": 60,
           "labels": "Above selectors; groups wrap together without horizontal overflow."
-        }
+        },
+        "filtersToggle": "Filters button at every size, initially collapsed; shows active type/category/version count and current sort.",
+        "filterExpansion": "Unindented full-width controls with wrapping filter groups.",
+        "inlineDisclosure": "Concise verified-install and source-saving note beside Filters, wrapping naturally; asks for a game folder when none is selected.",
+        "resultsToolbar": "Result count and displayed range left; Previous/Next right."
       },
       "typography": {
         "cardName": 16,
@@ -437,6 +443,11 @@
         "independentDisposition": "ship with no material issues; all sixteen discovery/UI tests passed, including short-window scrolling to Clear filters",
         "liveProvider": "Passed core/tests/curseforge_browse.rs::live_browse_filters_respect_provider_taxonomy with a local ignored key: all nine content types, combined Mods / Gameplay / 1.128.90 filters, filtered pagination, real file-version evidence, Relevancy and Date released requests.",
         "nativeDetector": "Not applicable to the native egui UI."
+      },
+      "toolbarReconciliation": {
+        "captureDirectory": ".impeccable/review/discovery-toolbar",
+        "verification": "Independent review: ship, no material fixes, seven valid required captures. All eight AGENTS.md commands passed.",
+        "scope": "Filters button at every size and sidebar slogan removal; existing search and palette retained."
       }
     },
     "nativeUpdates": {
@@ -634,7 +645,7 @@
       "consent": "Inline source-saving and automatic verified-install disclosure; explicit click approves selected source, release and game.",
       "navigation": "Validated canonical provider project URL plus /download/{fileId}; canonical project URL stored in metadata.",
       "interaction": "No extra modal. One pending intent dispatches once after game/key synchronization. Activity provides progress, Cancel and scoped Retry.",
-      "folder": "Settings \u2192 Folders; session-only, locked during preparation or installation.",
+      "folder": "Settings → Folders; session-only, locked during preparation or installation.",
       "dependencies": "Each resolved dependency or linked mod requires a separate click.",
       "evidence": ".impeccable/review/direct-browser-download",
       "review": "ship; no material fixes",
