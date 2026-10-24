@@ -91,7 +91,7 @@ impl BrowserRelease {
     /// Derived release navigation only; saved source remains the exact API project page.
     pub fn navigation_url(&self, project: &BrowserProject) -> String {
         format!(
-            "{}/files/{}",
+            "{}/download/{}",
             project.source_url.trim_end_matches('/'),
             self.release.file_id
         )

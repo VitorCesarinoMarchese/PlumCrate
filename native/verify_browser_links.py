@@ -7,7 +7,7 @@ import tempfile
 import time
 
 ROOT = Path(__file__).resolve().parents[1]
-URL = "https://www.curseforge.com/sims4/mods/synthetic-fixture/files/100"
+URL = "https://www.curseforge.com/sims4/mods/synthetic-fixture/download/100"
 
 
 def main():

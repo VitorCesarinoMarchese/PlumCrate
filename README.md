@@ -34,7 +34,7 @@ Browse your collection by photo, find a file by name, and choose which mods are 
 | --- | --- |
 | Browse your collection | Switch between photo cards and a compact list. Search mod names and filenames, or filter installed and stored mods. |
 | Search CurseForge | Browse Sims 4 mods and custom content by name, content type, category, game version, and sort order. Read author descriptions, inspect release dependencies, and view screenshots inside the app. Requires your API key in local Settings. |
-| Install from CurseForge | Review a public release, Downloads folder, and selected game, then open its official page in your browser. The app verifies the completed download, imports it, and enables it automatically. |
+| Install from CurseForge | Choose Download in browser to open the selected release’s download page, with inline source-saving and installation consent. The app verifies the completed download, imports it, and enables it automatically. |
 | Bring your own mods | Import a local folder or ZIP archive, or review existing game mods before moving them into the managed library. |
 | Choose what loads | Turn mods on or off directly from their cards or list rows. New imports start enabled. |
 | Keep track of sources | Save a source link yourself, or review CurseForge suggestions and confirm a match. |
@@ -58,9 +58,9 @@ The app manages local mods and checks attached CurseForge projects for newer rel
 3. Use the switch on a mod card or list row to turn it on or off. New imports start enabled. Select the card to inspect its files.
 4. Right-click a mod for more actions. Use **Restore from trash** to recover a removed managed mod.
 
-To install a CurseForge mod, open **Discover**, view a project, and choose **Download via website…**. Review the release and folders, then select **Start browser download**. After you save the file in your browser, the app imports and enables the verified download without another click.
+To install a CurseForge mod, select your game, open **Discover**, and choose **Download in browser**. The inline note explains source saving and automatic installation; no extra popup appears. After you save the file in your browser, the app imports and enables the verified download without another click.
 
-Read the project's **Description** and **Dependencies** before downloading. Required, optional, and tool dependencies offer their own download review. Each download needs separate approval; the app does not install a dependency chain automatically.
+Read the project's **Description** and **Dependencies** before downloading. Required, optional, and tool dependencies offer their own **Download in browser** action. Each download needs a separate click; the app does not install a dependency chain automatically.
 
 See the [app guide](docs/native-app.md) for [browser-assisted installation](docs/native-app.md#install-from-a-browser-download), settings, themes, source lookup, [update checks](docs/native-app.md#check-for-mod-updates), and folder selection.
 

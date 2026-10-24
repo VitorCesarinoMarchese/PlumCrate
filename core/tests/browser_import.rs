@@ -97,7 +97,7 @@ fn provider_releases_require_matching_identity_public_status_supported_content_a
     );
     assert_eq!(
         p.releases[0].navigation_url(&p),
-        "https://www.curseforge.com/sims4/mods/fixture/files/100"
+        "https://www.curseforge.com/sims4/mods/fixture/download/100"
     );
 }
 #[test]

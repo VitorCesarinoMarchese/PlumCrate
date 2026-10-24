@@ -96,14 +96,12 @@ impl Controls {
             .any(|operation| matches!(operation.job.action, Action::ImportBrowser(_)));
         operations
             + usize::from(self.recovering)
-            + usize::from(self.browser_import.running() && !browser_owned)
+            + usize::from((self.browser_import.running() || self.browser_import.preparing()) && !browser_owned)
     }
     pub fn activity_header(&mut self, ui: &mut egui::Ui, scanning: bool, compact: bool) {
         self.sync_activity(ui.input(|input| input.time));
         self.activity_popup_rect = None;
-        if !self.browser_import.is_review_open() {
-            self.browser_cancel_rect = None;
-        }
+        self.browser_cancel_rect = None;
         let running = self.running_tasks() + usize::from(scanning);
         let issues = self.activity.issues();
         let count = if issues > 0 {

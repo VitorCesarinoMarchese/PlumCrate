@@ -18,7 +18,7 @@ use ts4_mod_manager_core::{
 pub enum Phase {
     Idle,
     Loading,
-    Review,
+    Ready,
     Waiting,
     Queued,
     Installing,
@@ -145,7 +145,7 @@ impl BrowserImport {
     fn loaded_project(&mut self, project: BrowserProject) {
         self.chosen = project.releases.first().map(|file| file.release.file_id);
         self.project = Some(project);
-        self.phase = Phase::Review;
+        self.phase = Phase::Ready;
         self.error = None;
     }
 
@@ -170,7 +170,7 @@ impl BrowserImport {
         };
         if !valid {
             self.scope_valid = false;
-            if matches!(self.phase, Phase::Loading | Phase::Review) || self.running() {
+            if matches!(self.phase, Phase::Loading | Phase::Ready) || self.running() {
                 self.cancel();
             }
         }
@@ -234,11 +234,17 @@ impl BrowserImport {
     }
 
     pub fn start(&mut self, ctx: &Context) -> Result<String, String> {
-        if self.phase != Phase::Review || !self.scope_valid {
-            return Err("Review and confirm a release before starting a browser download.".into());
+        if self.phase != Phase::Ready || !self.scope_valid {
+            return Err("Choose a verified release before starting a browser download.".into());
         }
+        let result = self.start_chosen_release(ctx);
+        if let Err(error) = &result { self.fail(error.clone()); }
+        result
+    }
+
+    fn start_chosen_release(&mut self, ctx: &Context) -> Result<String, String> {
         let project = self.project.as_ref().ok_or("No project selected.")?;
-        let chosen = self.chosen.ok_or("Choose a release first.")?;
+        let chosen = self.chosen.ok_or("No verified release is available. Open the project on CurseForge and import its download manually.")?;
         let release = project
             .releases
             .iter()
@@ -309,8 +315,18 @@ impl BrowserImport {
         self.token
     }
 
-    pub fn is_review_open(&self) -> bool {
-        matches!(self.phase, Phase::Loading | Phase::Review)
+    pub fn preparing(&self) -> bool {
+        matches!(self.phase, Phase::Loading | Phase::Ready)
+    }
+
+    pub fn set_download_directory(&mut self, directory: PathBuf) -> Result<(), String> {
+        if self.running() || self.preparing() {
+            return Err("Finish or cancel the current download before changing its folder.".into());
+        }
+        if !directory.is_absolute() { return Err("Choose an absolute Downloads folder.".into()); }
+        self.download_dir = directory.clone();
+        if let Some(approved) = &mut self.approved { approved.download_dir = directory; }
+        Ok(())
     }
 
     pub fn cancel(&mut self) -> bool {
@@ -321,7 +337,7 @@ impl BrowserImport {
         if let Some(wake) = self.wake.take() {
             wake.unpark();
         }
-        if matches!(self.phase, Phase::Loading | Phase::Review) || self.running() {
+        if matches!(self.phase, Phase::Loading | Phase::Ready) || self.running() {
             self.token = self.token.wrapping_add(1);
             self.phase = Phase::Cancelled;
             self.error = None;
@@ -475,7 +491,7 @@ mod tests {
             .send(Event::Project(token, Ok(project)))
             .unwrap();
         assert!(import.poll().is_none());
-        assert_eq!(import.phase, Phase::Review);
+        assert_eq!(import.phase, Phase::Ready);
         import
     }
 
@@ -488,6 +504,34 @@ mod tests {
             assert!(Instant::now() < deadline, "watch did not find the fixture");
             thread::sleep(Duration::from_millis(10));
         }
+    }
+
+    #[test]
+    fn a_ready_download_without_a_verified_file_fails_without_starting_a_watch() {
+        let home = tempfile::tempdir().unwrap();
+        let mut import = review(home.path());
+        import.chosen = None;
+        assert!(import.start(&Context::default()).is_err());
+        assert_eq!(import.phase, Phase::Failed);
+        assert!(import.error.is_some());
+        assert!(import.permit.is_none());
+    }
+
+    #[test]
+    fn explicit_download_folder_change_keeps_the_approved_game_and_release() {
+        let home = tempfile::tempdir().unwrap();
+        let mut import = review(home.path());
+        import.start(&Context::default()).unwrap();
+        assert!(import.cancel());
+        let directory = home.path().join("other-downloads");
+        std::fs::create_dir(&directory).unwrap();
+        import.set_download_directory(directory.clone()).unwrap();
+        std::fs::write(directory.join("mod.package"), b"package").unwrap();
+        let url = import.retry(&Context::default()).unwrap();
+        assert!(url.ends_with("/download/100"));
+        let request = ready(&mut import);
+        assert_eq!(request.root, home.path().join("game"));
+        assert_eq!(request.release.release.file_id, 100);
     }
 
     #[test]
@@ -527,7 +571,7 @@ mod tests {
         let mut import = review(home.path());
         let game = home.path().join("game");
         import.sync(Some(&game), Some("fixture"));
-        assert_eq!(import.phase, Phase::Review);
+        assert_eq!(import.phase, Phase::Ready);
         let previous = import.token();
         import.sync(Some(&game), Some("new-saved-key"));
         assert_eq!(import.phase, Phase::Cancelled);
@@ -549,7 +593,7 @@ mod tests {
         cached.title = "Cached replacement".into();
         import.prepare_loaded(home.path().join("other-game"), "fixture", cached);
         assert!(old.permit.is_cancelled());
-        assert_eq!(import.phase, Phase::Review);
+        assert_eq!(import.phase, Phase::Ready);
         assert_eq!(import.chosen, Some(100));
         assert_ne!(import.token(), old.token);
         import
@@ -558,7 +602,7 @@ mod tests {
             .unwrap();
         assert!(import.poll().is_none());
         assert_eq!(import.project.as_ref().unwrap().title, "Cached replacement");
-        assert_eq!(import.phase, Phase::Review);
+        assert_eq!(import.phase, Phase::Ready);
         assert!(!import.running());
         assert!(import.permit.is_none());
         assert!(import.retry(&Context::default()).is_err());
@@ -593,7 +637,7 @@ mod tests {
         let navigation = import.start(&Context::default()).unwrap();
         assert_eq!(
             navigation,
-            "https://www.curseforge.com/sims4/mods/fixture/files/100"
+            "https://www.curseforge.com/sims4/mods/fixture/download/100"
         );
         let ready = ready(&mut import);
         assert_eq!(ready.root, home.path().join("game"));
@@ -729,6 +773,7 @@ mod tests {
         std::os::unix::fs::symlink(&import.download_dir, &linked).unwrap();
         import.download_dir = linked;
         assert!(import.start(&Context::default()).is_err());
-        assert_eq!(import.phase, Phase::Review);
+        assert_eq!(import.phase, Phase::Failed);
+        assert!(import.permit.is_none());
     }
 }

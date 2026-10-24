@@ -14,7 +14,7 @@ The response limit is 2 MiB, and the HTML string limit is 1 MiB. Traversal rejec
 
 `core/src/browser_import.rs` stores `FileDependencies` on each eligible `BrowserRelease`. The release selector therefore changes the displayed requirements. Eligible files retain the browser-installation restrictions on public stable status, supported extension, length, and published checksum. The selector is not a complete list of every provider release.
 
-| Provider relation | Label | Separate download review |
+| Provider relation | Label | Separate download action |
 | --- | --- | --- |
 | 1 | Embedded library | No |
 | 2 | Optional | Yes, after project lookup |
@@ -30,17 +30,17 @@ Dependency rows resolve provider project IDs through the API and validate the re
 
 ## Author-linked mods
 
-Supported CurseForge Sims 4 project URLs in the description appear separately as author-linked mods. They remain links rather than declared dependencies. **Inspect linked mod** searches the exact slug, requires one exact project-path match, and validates the returned project identity through a second API lookup. Ambiguous, missing, or mismatched evidence cannot offer a download review. The app never constructs guessed project URLs or uses name-only matches.
+Supported CurseForge Sims 4 project URLs in the description appear separately as author-linked mods. They remain links rather than declared dependencies. **Inspect linked mod** searches the exact slug, requires one exact project-path match, and validates the returned project identity through a second API lookup. Ambiguous, missing, or mismatched evidence cannot offer a download action. The app never constructs guessed project URLs or uses name-only matches.
 
 ## Native ownership and consent
 
 `native/src/project_details.rs` owns independent description, release, dependency-reference, and author-link lookup state. Separate workers perform bounded provider reads. Selection and saved-key identity scope results; late responses from another project, key, or selected file cannot replace the current information. Description and release failures have separate retries.
 
-`native/src/discovery.rs` renders the document, release-specific rows, section navigation, and review actions. A parent download request carries both the loaded provider project and selected file ID into `native/src/controls.rs`. The review verifies that the file belongs to that project and shows dependencies for its current selection. Dependency and author-linked actions instead request their own provider project and release review.
+`native/src/discovery.rs` renders the document, release-specific rows, section navigation, and download actions. A parent download request carries both the loaded provider project and selected file ID into `native/src/controls.rs`. The controller verifies that the selected file belongs to that project. Dependency and author-linked actions instead request their own provider project and latest eligible release.
 
-Every install requires **Start browser download**. The approval covers only the reviewed source, file, Downloads folder, and game. Dependencies share the existing verified import, enabling, collision, cancellation, and ownership checks. One browser installation can run at a time. There is no recursive graph, automatic dependency download queue, direct API file download, or automatic replacement of older managed releases. Reading descriptions and inspecting relations save no source metadata.
+Every install requires an explicit **Download in browser** click, with inline disclosure of source saving and automatic verified installation. Approval covers only that source, file, watched folder and selected game. No extra popup appears. Dependencies share the existing verified import, enabling, collision, cancellation, and ownership checks. One browser installation can run at a time. There is no recursive graph, automatic dependency download queue, direct API file download, or automatic replacement of older managed releases. Reading descriptions and inspecting relations save no source metadata.
 
-`native/src/skeleton.rs` supplies static placeholders using existing theme fills. They cover browse cards, an initial library scan without entries, independently pending detail sections, provider images, and pending release reviews. Local mod images retain their existing preview behavior.
+`native/src/skeleton.rs` supplies static placeholders using existing theme fills. They cover browse cards, an initial library scan without entries, independently pending detail sections, and provider images. Local mod images retain their existing preview behavior.
 
 ## Evidence
 

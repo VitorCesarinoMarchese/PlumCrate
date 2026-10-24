@@ -7,7 +7,7 @@ fn browser_visit_does_not_authorize_an_import() {
     let mut import = BrowserImport::new(home.path());
     assert_eq!(import.phase, Phase::Idle);
     assert!(!import.running());
-    assert!(!import.is_review_open());
+    assert!(!import.preparing());
     assert!(import.start(&egui::Context::default()).is_err());
     assert!(!import.running());
 }

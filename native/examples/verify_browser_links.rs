@@ -4,7 +4,7 @@ use std::{
     time::{Duration, Instant},
 };
 
-const URL: &str = "https://www.curseforge.com/sims4/mods/synthetic-fixture/files/100";
+const URL: &str = "https://www.curseforge.com/sims4/mods/synthetic-fixture/download/100";
 struct Probe {
     receipt: PathBuf,
     started: Instant,

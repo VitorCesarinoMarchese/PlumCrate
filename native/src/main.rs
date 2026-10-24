@@ -247,7 +247,7 @@ impl eframe::App for NativeApp {
         }
         self.controls.show_dialogs(ui.ctx(), &self.catalog);
         let restart_blocked = self.controls.busy() || self.controls.review_open()
-            || self.controls.browser_import.running() || self.controls.settings_dirty();
+            || self.controls.browser_import.running() || self.controls.browser_import.preparing() || self.controls.settings_dirty();
         self.controls.app_updates.show_dialog(ui.ctx(), restart_blocked);
         if self.window_rendered && let Some(receipt) = self.app_update_receipt.take() {
             let ctx = ui.ctx().clone();

@@ -546,6 +546,14 @@ impl Controls {
         } else {
             ui.label("Open a game folder from the library to add it here.");
         }
+        ui.add_space(24.0);
+        ui.heading("Browser download folder");
+        ui.add(egui::Label::new(self.browser_import.download_dir.display().to_string()).wrap());
+        ui.label("Used for verified browser downloads during this session.");
+        if ui.add_enabled(self.picker.is_none() && !self.browser_import.running() && !self.browser_import.preparing(),
+            egui::Button::new("Change download folder")).clicked() {
+            self.start_picker(PickPurpose::DownloadsFolder, ui.ctx(), Some(self.browser_import.download_dir.clone()));
+        }
     }
     fn connection_preferences(&mut self, ui: &mut egui::Ui) {
         ui.heading("CurseForge");

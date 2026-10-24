@@ -4,7 +4,7 @@ Run commands in this guide from the repository root. See the [development guide]
 
 The Fastframe/egui UI uses the existing Rust core to detect game folders, scan mods, search names and filenames, and manage local mods. Photo cards are the default library view; the card/list switch offers compact rows. Cards, catalog rows and file lists render only visible rows. A replaceable reader handles scans. A separate FIFO worker retains approved management operations and reports their queued, running, and finished states.
 
-Your mods, Discover and Updates are the main destinations. Add mods in the library title row opens Import folder and Import ZIP. Trash and Settings sit in the blue rail, or in the compact header below 900 logical points. Check updates stays manual. The library result summary's Review opens Updates; Review beside a linked mod's report opens its existing details popup. Use the On/Off switch on a managed mod card or list row to enable or disable it in one click. The switch opens no review or details popup. Enable/Disable in details and context menus uses the same direct action; failures appear in the bottom status. More actions contains rename, source lookup/attachment/removal and trash. Right-click a photo card or list row to select that mod and open the same menu. External mods retain a file review before migration. The compact bottom status shows local-library information, notices and errors; Activity expands operation history when present.
+Your mods, Discover and Updates are the main destinations. Add mods in the library title row opens Import folder and Import ZIP. Trash and Settings sit in the blue rail, or in the compact header below 900 logical points. Check updates stays manual. The library result summary's Review opens Updates; Review beside a linked mod's report opens its existing details popup. Use the On/Off switch on a managed mod card or list row to enable or disable it in one click. The switch opens no review or details popup. Enable/Disable in details and context menus uses the same direct action; failures appear in header Activity. More actions contains rename, source lookup/attachment/removal and trash. Right-click a photo card or list row to select that mod and open the same menu. External mods retain a file review before migration. Header Activity shows tasks, notices, errors and operation history; its X closes the panel without cancelling work.
 
 Import folder and Import ZIP open your desktop's file picker. ZIP selection filters for ZIP archives. After selection, review the chosen path and edit the suggested mod name before selecting Import. Canceling the picker does not import anything. A changed game folder or selection invalidates a pending import selection. After import, the app enables the new mod in the selected game by default. If enabling is blocked, the imported content stays in the library, unrelated game files remain unchanged, and the app shows a warning. Resolve the conflict and enable the existing library entry rather than importing it again.
 
@@ -28,9 +28,9 @@ Submitting a search or changing a filter or sort restarts at the first page. **P
 
 The browser preloads the next results page while you browse the current page. **Next** displays a cached page immediately. If that page is still loading, navigation waits for the existing request. Recent pages also remain available for **Previous**. A new search, a filter change, or a saved API key change clears the page cache. Failed background requests leave the current results visible; choosing **Next** retries the request.
 
-Project cards show full-width photos with the same height and centered crop as Your mods, followed by provider names, authors, summaries, categories, download counts, and modification dates. Each card has a filled **Downloads** button that opens the existing release review directly. Clicking the photo or card body opens the author description, release dependencies, and provider screenshots inside the app. **Back to results** or Escape restores the current results. **Open on CurseForge** and **Copy link** appear only when the API supplies a usable HTTPS project URL. Missing or broken card images show No Preview; broken detail images hide. Preview requests omit Referer.
+Project cards show full-width photos with the same height and centered crop as Your mods, followed by provider names, authors, summaries, categories, download counts, and modification dates. Each card has a filled **Download in browser** button with inline source-saving and automatic-install disclosure. Clicking the photo or card body opens the author description, release dependencies, and provider screenshots inside the app. **Back to results** or Escape restores the current results. **Open on CurseForge** and **Copy link** appear only when the API supplies a usable HTTPS project URL. Missing or broken card images show No Preview; broken detail images hide. Preview requests omit Referer.
 
-Projects already linked to a local mod show a checkmarked **View in library** button instead of Downloads. This includes disabled mods and mods hidden by local search or On/Off filters. The button opens the saved mod in Your mods, clearing local search and filters so it is visible. Project details also show **In your library**. Recognition uses a consistent, user-confirmed CurseForge source attachment and its project ID; names alone never count. Imports, removal, source changes, and game-folder scans refresh this state. The marker does not claim that the saved release is current; project details still allow an intentional browser download of another release.
+Projects already linked to a local mod show a checkmarked **View in library** button instead of Download in browser. This includes disabled mods and mods hidden by local search or On/Off filters. The button opens the saved mod in Your mods, clearing local search and filters so it is visible. Project details also show **In your library**. Recognition uses a consistent, user-confirmed CurseForge source attachment and its project ID; names alone never count. Imports, removal, source changes, and game-folder scans refresh this state. The marker does not claim that the saved release is current; project details still allow an intentional browser download of another release.
 
 Switching to **Your mods** preserves local search and selection. Search and project inspection leave files and source metadata unchanged. Project details offer the explicitly reviewed [browser-assisted installation](#install-from-a-browser-download) below. Existing import controls remain available for other local files.
 
@@ -54,17 +54,17 @@ The description retains author text, headings, lists, table rows, images, credit
 
 1. Read the author's instructions, including requirements mentioned in the description.
 2. Under **Dependencies for this release**, select the release you want. The rows describe that file, rather than every release in the project.
-3. For a required, optional, or tool dependency, select **Review download…**. Choose its release and review the source, Downloads folder, and game destination.
-4. Select **Start browser download** to approve that dependency's installation. Complete any Download or save action in the browser.
-5. After the installation finishes, review any other desired dependency separately. Use **Download via website…** for the parent mod when ready.
+3. For a required, optional, or tool dependency, choose **Download in browser**. The inline note discloses source saving and verified automatic installation.
+4. Complete any browser save action and follow progress in **Activity**.
+5. Repeat for each desired dependency, then use **Download in browser** for the parent mod when ready.
 
-The parent mod's selected release carries into its download review. Changing a release in that review also changes the dependency information shown there. CurseForge identifies dependency projects but does not guarantee a compatible version. Incompatible, embedded, included, and unknown relations remain visible without a download action. Read their warnings and the author's instructions.
+The parent mod's selected release carries into its download action. Changing the details release selector updates the dependency information. CurseForge identifies dependency projects but does not guarantee a compatible version. Incompatible, embedded, included, and unknown relations remain visible without a download action. Read their warnings and the author's instructions.
 
-**Author-linked mods** lists supported CurseForge project links found in the description. These links are not declared dependencies. **Inspect linked mod** checks for an exact provider project match before offering **Review linked mod…**. A missing or ambiguous match cannot start a download review.
+**Author-linked mods** lists supported CurseForge project links found in the description. These links are not declared dependencies. **Inspect linked mod** checks for an exact provider project match before offering **Download in browser**. A missing or ambiguous match cannot offer a download action.
 
 An empty declared list does not prove that the mod has no requirements. Missing and partial dependency information show warnings, and failed project lookups offer **Retry dependency lookups**. The app does not infer dependencies from names, mark similarly named installed mods as satisfied, or download a dependency chain. Reading or inspecting projects saves no source attachment and approves no installation.
 
-Static skeletons reserve space during browse loading, an initial library scan without entries, description and release lookups, pending provider images, and download-review loading. The sections load independently. Existing library entries remain visible during a rescan.
+Static skeletons reserve space during browse loading, an initial library scan without entries, description and release lookups, and pending provider images. The sections load independently. Existing library entries remain visible during a rescan.
 
 The capture example writes twelve synthetic production-widget captures to `.impeccable/review/details-*.png`:
 
@@ -78,27 +78,26 @@ The captures cover both themes, the 1871-by-1006 user window, narrow and 640-by-
 
 Choose your Sims 4 folder and save your CurseForge API key in local Settings first. Browser-assisted installation supports website downloads when API downloading is unavailable.
 
-1. Open **Discover** and choose **Downloads** on a mod card. You can also open the card and choose **Download via website…**.
-2. Review the source and select the public release you want. Check the **Browser Downloads folder** and use **Change Downloads folder** if your browser saves elsewhere.
-3. Check **Install in this Sims 4 folder**. **Start browser download** approves saving that source and release, copying the verified file into your library, and enabling it in this game.
-4. The app opens the official release page. Complete any Download or save action the website or browser requires, using the reviewed Downloads folder.
-5. The app watches for up to ten minutes, verifies the completed file, imports it, and enables it automatically. No second import or enable confirmation is needed.
+1. Select your game folder. In **Settings → Folders**, check **Browser download folder** if your browser saves outside Downloads. This choice lasts for the session.
+2. Open **Discover** and choose **Download in browser** on a card, or select a release in project details before choosing that action.
+3. The inline note explains that this click approves saving the selected source and installing verified files in the selected game. The app opens the official `/download/{fileId}` page without another popup.
+4. Complete any browser Download or save action. The app watches for up to ten minutes, verifies the file, imports it and enables it automatically.
 
 The default watched folder comes from your XDG Downloads setting, or `~/Downloads` when none is configured. Watching accepts stable regular ZIP, `.package`, and `.ts4script` files up to 2 GiB. The release must be a stable public release with an API-supplied length and SHA1 or MD5 checksum. Matching uses file bytes, not the filename. A renamed file with a supported extension or an already-completed matching download can be used after approval. Temporary browser files, symbolic links, and mismatched downloads do not qualify. If no suitable release exists, use **Open on CurseForge** and the local import controls.
 
 Your original download stays untouched. The app saves the source and verified installed-release baseline in the mod's `meta.json` with your initial consent. An intact managed copy of the same project and release is reused rather than duplicated. Occupied game paths cause a safe error; the app does not overwrite unmanaged files.
 
-Waiting and queued status appear at the bottom with the watched folder and **Cancel download import**. Canceling, changing the game folder or saved key, or closing the app revokes work before publication starts. Once publication starts, installation finishes or rolls back in the originally approved game. A ten-minute timeout reports a failure and offers retry. Selection changes and normal rescans preserve the session.
+Preparation, waiting and queued status appear in header **Activity** with the watched folder and **Cancel download import**. Canceling, changing the game folder or saved key, or closing the app revokes work before publication starts. Once publication starts, installation finishes or rolls back in the originally approved game. A ten-minute timeout reports a failure and offers retry. Selection changes and normal rescans preserve the session.
 
 This installs mods; it does not replace an older release automatically. The [update-check workflow](#check-for-mod-updates) still opens the mod page for manual replacement. See [browser-download contracts](browser-downloads.md) for file verification and transaction details.
 
-The synthetic production-widget capture example writes six review and waiting captures, without downloading or installing mod files:
+The synthetic production-widget capture example writes six preparation and waiting captures, without downloading or installing mod files:
 
 ```sh
 cargo run --manifest-path native/Cargo.toml --locked --example verify_browser_import -- .impeccable/review
 ```
 
-The checked captures cover dark and light 1200-by-800 windows, a 1871-by-1006 user window, and 640-by-480 review and waiting states. The small review keeps the game destination and actions visible while release details and Downloads-folder controls scroll. Independent finish review returned ship with no material fixes. Input tests cover one approval followed by automatic import and enabling, and the pinned destination in the small review.
+Current captures in `.impeccable/review/direct-browser-download/flow` cover both themes, desktop and 640×480 preparation and waiting states. Discovery captures cover the action labels and inline note. The independent reviewer returned ship with no material fixes. Controller tests cover one explicit action, one browser dispatch and automatic verified import and enabling.
 
 Desktop page links retain eframe browser support and dispatch browser lookup and launching on a separate thread. Linux default-browser lookup can wait for a desktop command; it must not block the window event thread. Run `python3 native/verify_browser_links.py` to verify the exact synthetic release URL and a deliberately stalled default-browser lookup. The check confirms that the desktop event thread is not waiting on that lookup. It opens no website and downloads no mod files. The Python regression suite also checks that the shipping backend retains browser support.
 

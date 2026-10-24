@@ -576,6 +576,12 @@ impl DiscoverView {
         if search || filters_changed {
             self.search(ui.ctx());
         }
+        ui.add_space(8.0);
+        ui.label(RichText::new(if catalog.root.is_some() {
+            "Download in browser saves the selected CurseForge source and installs verified files in the selected game."
+        } else {
+            "Choose a game folder before downloading. Verified downloads install there and save the selected CurseForge source."
+        }).size(12.0).color(ui.visuals().weak_text_color()));
         ui.add_space(16.0);
         if let Some(message) = self.browser.error_message() {
             ui.heading(
@@ -939,7 +945,7 @@ impl DiscoverView {
                                                 crate::ui::readable_text(ui.visuals().text_color(), &[fill]),
                                                 "Already in your library. Open the local mod.")
                                         } else {
-                                            ("Downloads", crate::ui::Icon::Download, colors.primary, colors.primary_text,
+                                            ("Download in browser", crate::ui::Icon::Download, colors.primary, colors.primary_text,
                                                 "Download in your browser, then install automatically.")
                                         };
                                         let action = ui.add_sized(
@@ -1114,7 +1120,7 @@ impl DiscoverView {
                         if ui.button("Copy link").clicked() {
                             ui.ctx().copy_text(url.into());
                         }
-                        let download = ui.add_enabled(!matches!(self.details.project,Load::Loading),egui::Button::new("Download via website…"));
+                        let download = ui.add_enabled(!matches!(self.details.project,Load::Loading),egui::Button::new("Download in browser"));
                         self.stats.browser_import = Some(download.rect);
                         if download.clicked() {
                             self.import_request = Some(match &self.details.project {
@@ -1125,6 +1131,8 @@ impl DiscoverView {
 
                     });
                 }
+                ui.add_space(8.0);
+                ui.label(RichText::new("Download in browser saves this CurseForge source and automatically installs the verified file in your selected game.").size(12.0).color(ui.visuals().weak_text_color()));
                 ui.add_space(24.0);
                 if ui.available_width() >= 920.0 {
                     ui.horizontal_top(|ui| {
@@ -1246,11 +1254,12 @@ impl DiscoverView {
                                 ui.horizontal_wrapped(|ui| {
                                     ui.hyperlink_to("Open project",reference.source_url.as_str());
                                     if relation.kind.can_install() {
-                                        let review=ui.button("Review download…");
+                                        let review=ui.button("Download in browser");
                                         self.stats.dependency_reviews.push((relation.project_id,review.rect));
                                         if review.clicked() { self.import_request=Some(ReviewRequest::ProjectId(reference.project_id)); }
                                     }
                                 });
+                                if relation.kind.can_install() { ui.label(RichText::new("Installs verified files and saves this CurseForge source.").size(12.0).color(ui.visuals().weak_text_color())); }
                             },
                             Some(Load::Failed(error)) => { ui.label(format!("CurseForge project #{}",relation.project_id)); ui.label(error); },
                             _ => { ui.label(format!("CurseForge project #{}",relation.project_id)); crate::skeleton::block(ui,vec2(ui.available_width()*0.8,14.0)); },
@@ -1265,7 +1274,7 @@ impl DiscoverView {
                         ui.add_space(8.0);
                     }
                     if !file.dependencies.relations.is_empty() {
-                        ui.label(RichText::new("Review each dependency separately. CurseForge identifies projects, but does not guarantee a compatible version.").size(12.0).color(ui.visuals().weak_text_color()));
+                        ui.label(RichText::new("Download each dependency separately. CurseForge identifies projects, but does not guarantee a compatible version.").size(12.0).color(ui.visuals().weak_text_color()));
                     }
                     retry_references=self.details.references.values().any(|r|matches!(r,Load::Failed(_))) && ui.button("Retry dependency lookups").clicked();
                 } else { ui.label("No public release supports verified automatic installation. Check the description and project page."); }
@@ -1284,7 +1293,8 @@ impl DiscoverView {
                 match self.details.author_projects.get(&link.url) {
                     Some(Load::Ready(reference)) => {
                         ui.label(&reference.title);
-                        if ui.button("Review linked mod…").clicked() {self.import_request=Some(ReviewRequest::ProjectId(reference.project_id));}
+                        if ui.button("Download in browser").clicked() {self.import_request=Some(ReviewRequest::ProjectId(reference.project_id));}
+                        ui.label(RichText::new("Installs verified files and saves this CurseForge source.").size(12.0).color(ui.visuals().weak_text_color()));
                     },
                     Some(Load::Loading) => {ui.label("Checking the exact CurseForge project...");crate::skeleton::block(ui,vec2(ui.available_width()*0.8,14.0));},
                     state => {

@@ -135,7 +135,7 @@ fn frame(
 }
 
 #[test]
-fn a_dependency_review_confirms_only_that_project_then_imports_and_enables_it() {
+fn a_dependency_download_starts_only_that_project_then_imports_and_enables_it() {
     use ts4_mod_manager_core::{browser_import::load_browser_project,curseforge_client::CurseForgeClient};
     use ts4_mod_manager_native::{browser_import::Phase,project_details::ReviewRequest};
     let mut fixture=support::fixture();
@@ -146,13 +146,12 @@ fn a_dependency_review_confirms_only_that_project_then_imports_and_enables_it() 
     let original=fixture.directory.path().join("Downloads/core-library.package");
     std::fs::write(&original,support::BYTES).unwrap();
     fixture.controls.prepare_browser_import(&ctx,&fixture.catalog,ReviewRequest::Loaded {project:dependency,file_id:200});
-    assert_eq!(fixture.controls.browser_import.phase,Phase::Review);
+    assert_eq!(fixture.controls.browser_import.phase,Phase::Ready);
     assert_eq!(fixture.controls.browser_import.chosen,Some(200));
-    for _ in 0..3 {frame(&ctx,&mut fixture,vec![]);}
     assert!(!fixture.directory.path().join("game/Mods/core-library.package").exists());
-    let start=fixture.controls.browser_start_rect.unwrap();
-    let output=frame(&ctx,&mut fixture,click(start));
-    assert!(output.platform_output.commands.iter().any(|c|matches!(c,egui::OutputCommand::OpenUrl(url) if url.url.ends_with("/synthetic-core/files/200"))));
+    let output=frame(&ctx,&mut fixture,vec![]);
+    assert!(!fixture.controls.review_open());
+    assert!(output.platform_output.commands.iter().any(|c|matches!(c,egui::OutputCommand::OpenUrl(url) if url.url.ends_with("/synthetic-core/download/200"))));
     let deadline=std::time::Instant::now()+std::time::Duration::from_secs(5);
     while fixture.controls.browser_import.phase!=Phase::Complete {
         fixture.controls.poll(&mut fixture.catalog);
@@ -181,7 +180,7 @@ fn sized_frame(ctx: &egui::Context, fixture: &mut support::Fixture, events: Vec<
     output
 }
 #[test]
-fn one_approval_opens_the_release_page_then_imports_and_enables_without_more_clicks() {
+fn one_download_action_opens_the_download_page_then_imports_and_enables_without_more_clicks() {
     let mut fixture = support::fixture();
     let ctx = egui::Context::default();
     ts4_mod_manager_native::ui::setup(&ctx);
@@ -200,8 +199,12 @@ fn one_approval_opens_the_release_page_then_imports_and_enables_without_more_cli
         0
     );
     assert!(!fixture.directory.path().join("managed/mods").exists());
-    let start = fixture.controls.browser_start_rect.unwrap();
-    let output = frame(&ctx, &mut fixture, click(start));
+    fixture.controls.browser_import.cancel();
+    fixture.controls.prepare_browser_import(&ctx, &fixture.catalog, ts4_mod_manager_native::project_details::ReviewRequest::Loaded {
+        project: fixture.project.clone(), file_id: 100,
+    });
+    let output = frame(&ctx, &mut fixture, vec![]);
+    assert!(!fixture.controls.review_open());
     assert!(output.platform_output.commands.iter().any(|command|matches!(command,egui::OutputCommand::OpenUrl(url) if url.url==fixture.project.releases[0].navigation_url(&fixture.project))));
     let deadline = std::time::Instant::now() + std::time::Duration::from_secs(5);
     while fixture.controls.browser_import.phase
@@ -238,7 +241,7 @@ fn one_approval_opens_the_release_page_then_imports_and_enables_without_more_cli
     assert_eq!(metadata["sourceUrl"], fixture.project.source_url);
 }
 #[test]
-fn cancelling_the_review_does_not_import_an_existing_matching_download() {
+fn cancelling_preparation_does_not_import_an_existing_matching_download() {
     let mut fixture = support::fixture();
     let ctx = egui::Context::default();
     ts4_mod_manager_native::ui::setup(&ctx);
@@ -250,6 +253,9 @@ fn cancelling_the_review_does_not_import_an_existing_matching_download() {
     for _ in 0..3 {
         frame(&ctx, &mut fixture, vec![]);
     }
+    let activity = fixture.controls.activity_button_rect.unwrap();
+    frame(&ctx, &mut fixture, click(activity));
+    frame(&ctx, &mut fixture, vec![]);
     let cancel = fixture.controls.browser_cancel_rect.unwrap();
     frame(&ctx, &mut fixture, click(cancel));
     fixture.controls.poll(&mut fixture.catalog);
@@ -267,17 +273,55 @@ fn cancelling_the_review_does_not_import_an_existing_matching_download() {
 }
 
 #[test]
-fn approval_keeps_the_game_destination_visible_in_a_small_window() {
+fn direct_download_keeps_activity_reachable_in_a_small_window() {
     let mut fixture = support::fixture();
+    fixture.controls.browser_import.cancel();
     let ctx = egui::Context::default();
     ts4_mod_manager_native::ui::setup(&ctx);
+    fixture.controls.prepare_browser_import(&ctx, &fixture.catalog, ts4_mod_manager_native::project_details::ReviewRequest::Loaded {
+        project: fixture.project.clone(), file_id: 100,
+    });
     let size = egui::vec2(640.0, 480.0);
-    let path = fixture.catalog.root.as_ref().unwrap().join("Mods").display().to_string();
-    let mut output = sized_frame(&ctx, &mut fixture, vec![], size);
-    for _ in 0..3 { output = sized_frame(&ctx, &mut fixture, vec![], size); }
-    assert!(output.shapes.iter().any(|clipped| match &clipped.shape {
-        egui::epaint::Shape::Text(text) => text.galley.text() == path && clipped.clip_rect.contains_rect(text.galley.rect.translate(text.pos.to_vec2())),
-        _ => false,
-    }), "approved game destination must be visible without scrolling");
-    assert!(egui::Rect::from_min_size(egui::Pos2::ZERO, size).contains_rect(fixture.controls.browser_start_rect.unwrap()));
+    sized_frame(&ctx, &mut fixture, vec![], size);
+    sized_frame(&ctx, &mut fixture, vec![], size);
+    assert!(!fixture.controls.review_open());
+    assert!(egui::Rect::from_min_size(egui::Pos2::ZERO, size).contains_rect(fixture.controls.activity_button_rect.unwrap()));
+}
+
+#[test]
+fn download_action_opens_the_browser_download_page_without_an_extra_popup() {
+    use ts4_mod_manager_native::{browser_import::Phase, project_details::ReviewRequest};
+    let mut fixture = support::fixture();
+    fixture.controls.browser_import.cancel();
+    let ctx = egui::Context::default();
+    ts4_mod_manager_native::ui::setup(&ctx);
+    fixture.controls.prepare_browser_import(&ctx, &fixture.catalog, ReviewRequest::Loaded {
+        project: fixture.project.clone(), file_id: 100,
+    });
+    let output = frame(&ctx, &mut fixture, vec![]);
+    assert!(!fixture.controls.review_open(), "the download action must not add a confirmation popup");
+    assert_eq!(fixture.controls.browser_import.phase, Phase::Waiting);
+    assert!(output.platform_output.commands.iter().any(|command| matches!(command,
+        egui::OutputCommand::OpenUrl(url) if url.url == "https://www.curseforge.com/sims4/mods/synthetic-fixture/download/100")));
+    assert!(!fixture.directory.path().join("managed/mods").exists(), "only a verified completed file may be imported");
+    let repeated = frame(&ctx, &mut fixture, vec![]);
+    assert!(!repeated.platform_output.commands.iter().any(|command| matches!(command, egui::OutputCommand::OpenUrl(_))), "one action must not open multiple browser tabs");
+}
+
+#[test]
+fn changing_game_before_dispatch_does_not_open_or_install_the_download() {
+    use ts4_mod_manager_native::{browser_import::Phase, project_details::ReviewRequest};
+    let mut fixture = support::fixture();
+    fixture.controls.browser_import.cancel();
+    let ctx = egui::Context::default();
+    ts4_mod_manager_native::ui::setup(&ctx);
+    fixture.controls.prepare_browser_import(&ctx, &fixture.catalog, ReviewRequest::Loaded { project: fixture.project.clone(), file_id: 100 });
+    let other = fixture.directory.path().join("other-game");
+    std::fs::create_dir_all(other.join("Mods")).unwrap();
+    let generation = fixture.catalog.begin_scan(other);
+    fixture.catalog.accept_scan(generation, Ok(vec![]));
+    let output = frame(&ctx, &mut fixture, vec![]);
+    assert_eq!(fixture.controls.browser_import.phase, Phase::Cancelled);
+    assert!(!output.platform_output.commands.iter().any(|command| matches!(command, egui::OutputCommand::OpenUrl(_))));
+    assert!(!fixture.directory.path().join("managed/mods").exists());
 }

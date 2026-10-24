@@ -4,6 +4,7 @@ use std::{
     time::{Duration, Instant},
 };
 use ts4_mod_manager_native::{app_update, catalog, discovery, management, preview, settings, updates, browser_import, project_details};
+#[allow(dead_code)]
 #[path="../src/skeleton.rs"]
 mod skeleton;
 

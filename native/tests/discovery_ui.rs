@@ -47,6 +47,10 @@ fn text(output: &egui::FullOutput, value: &str) -> bool {
     )
 }
 
+fn button_text(output: &egui::FullOutput, value: &str) -> bool {
+    output.shapes.iter().any(|shape| matches!(&shape.shape, egui::Shape::Text(text) if text.galley.text() == value))
+}
+
 fn provider_image(ctx: &egui::Context, url: &'static str, bytes: Vec<u8>) {
     let loader = std::sync::Arc::new(egui::load::DefaultBytesLoader::default());
     loader.insert(url, bytes);
@@ -107,7 +111,7 @@ fn discover_recognizes_enabled_and_disabled_library_mods_and_opens_the_local_ent
             text(&output, "View in library"),
             "downloaded projects must be recognized even outside local filters"
         );
-        assert!(!text(&output, "Downloads"));
+        assert!(!button_text(&output, "Download in browser"));
         let action = view.discovery.stats.card_actions[0];
         let output = frame(&ctx, &mut view, &mut catalog, size, click(action));
         assert!(!view.browse_page);
@@ -159,7 +163,7 @@ fn discover_does_not_guess_library_matches_from_names_or_other_providers() {
         let generation = catalog.begin_scan("/synthetic/game".into());
         catalog.accept_scan(generation, Ok(vec![entry]));
         let output = frame(&ctx, &mut view, &mut catalog, [1200.0, 1000.0], vec![]);
-        assert!(text(&output, "Downloads"));
+        assert!(button_text(&output, "Download in browser"));
         assert!(!text(&output, "View in library"));
     }
 }
@@ -172,28 +176,28 @@ fn discover_updates_library_state_after_import_removal_and_game_changes() {
     seed_owned_project(&mut view);
     let mut catalog = Catalog::default();
     let size = [1200.0, 1000.0];
-    assert!(text(
+    assert!(button_text(
         &frame(&ctx, &mut view, &mut catalog, size, vec![]),
-        "Downloads"
+        "Download in browser"
     ));
     let generation = catalog.begin_scan("/synthetic/game".into());
     catalog.accept_scan(generation, Ok(vec![saved_curseforge_mod(42, true)]));
-    assert!(text(
+    assert!(button_text(
         &frame(&ctx, &mut view, &mut catalog, size, vec![]),
         "View in library"
     ));
     let generation = catalog.begin_scan("/synthetic/game".into());
     catalog.accept_scan(generation, Ok(vec![]));
-    assert!(text(
+    assert!(button_text(
         &frame(&ctx, &mut view, &mut catalog, size, vec![]),
-        "Downloads"
+        "Download in browser"
     ));
     let generation = catalog.begin_scan("/synthetic/game".into());
     catalog.accept_scan(generation, Ok(vec![saved_curseforge_mod(42, true)]));
     catalog.begin_scan("/synthetic/other-game".into());
-    assert!(text(
+    assert!(button_text(
         &frame(&ctx, &mut view, &mut catalog, size, vec![]),
-        "Downloads"
+        "Download in browser"
     ));
 }
 
@@ -838,7 +842,7 @@ fn card_downloads_are_filled_buttons_that_request_the_clicked_project() {
         }
         let output = frame(&ctx, &mut view, &mut catalog, size, vec![]);
         assert!(
-            text(&output, "Downloads"),
+            button_text(&output, "Download in browser"),
             "cards must offer a download directly"
         );
         assert!(
@@ -869,7 +873,7 @@ fn card_downloads_are_filled_buttons_that_request_the_clicked_project() {
                 .commands
                 .iter()
                 .any(|command| matches!(command, egui::OutputCommand::OpenUrl(_))),
-            "the existing confirmation must precede browser navigation"
+            "the controller must resolve the release before browser navigation"
         );
     }
 }
@@ -1002,4 +1006,23 @@ fn escape_closes_help_before_leaving_a_browse_project() {
         "Help must receive Escape before project navigation"
     );
     assert!(!text(&output, "Using your mod library"));
+}
+
+#[test]
+fn download_action_has_visible_inline_source_and_install_consent() {
+    for size in [[640.0, 480.0], [1200.0, 800.0]] {
+        let ctx = egui::Context::default();
+        ui::setup(&ctx);
+        let mut view = View::default();
+        seed_owned_project(&mut view);
+        let mut catalog = Catalog::default();
+        let generation = catalog.begin_scan("/synthetic/game".into());
+        catalog.accept_scan(generation, Ok(vec![]));
+        for _ in 0..3 { frame(&ctx, &mut view, &mut catalog, size, vec![]); }
+        let output = frame(&ctx, &mut view, &mut catalog, size, vec![]);
+        assert!(!view.discovery.stats.card_actions.is_empty(), "download actions remain available after reading consent");
+        assert!(output.shapes.iter().any(|shape| matches!(&shape.shape, egui::Shape::Text(text)
+            if text.galley.text().contains("saves the selected CurseForge source")
+            && shape.clip_rect.contains_rect(egui::Rect::from_min_size(text.pos, text.galley.size())))), "consent must be visible before the download action");
+    }
 }

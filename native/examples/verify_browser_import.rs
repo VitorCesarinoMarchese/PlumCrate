@@ -1,4 +1,4 @@
-//! Capture browser-import review and waiting states with synthetic provider metadata.
+//! Capture direct browser-download and Activity states with synthetic provider metadata.
 #[allow(dead_code)]
 #[path = "../tests/support/browser_import.rs"]
 mod support;
@@ -12,10 +12,10 @@ use ts4_mod_manager_native::{
     ui,
 };
 const CASES: [(&str, bool, [f32; 2], bool); 6] = [
-    ("browser-import-review-dark", true, [1200.0, 800.0], false),
-    ("browser-import-review-light", false, [1200.0, 800.0], false),
-    ("browser-import-review-small", true, [640.0, 480.0], false),
-    ("browser-import-review-user", false, [1871.0, 1006.0], false),
+    ("browser-download-dark", true, [1200.0, 800.0], false),
+    ("browser-download-light", false, [1200.0, 800.0], false),
+    ("browser-download-small", true, [640.0, 480.0], false),
+    ("browser-download-user", false, [1871.0, 1006.0], false),
     ("browser-import-waiting-dark", true, [1200.0, 800.0], true),
     ("browser-import-waiting-small", false, [640.0, 480.0], true),
 ];
@@ -119,10 +119,8 @@ impl eframe::App for Capture {
                 if CASES[self.case].3 {
                     assert_eq!(self.fixture.controls.browser_import.phase, Phase::Waiting);
                 } else {
-                    assert!(
-                        ctx.content_rect()
-                            .contains_rect(self.fixture.controls.browser_start_rect.unwrap())
-                    );
+                    assert!(!self.fixture.controls.review_open());
+                    assert!(ctx.content_rect().contains_rect(self.fixture.controls.activity_button_rect.unwrap()));
                 }
                 ctx.send_viewport_cmd(egui::ViewportCommand::Screenshot(Default::default()));
                 self.requested = true;

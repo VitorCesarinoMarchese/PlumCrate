@@ -274,7 +274,7 @@
       {
         "name": "Discover",
         "source": "native/src/discovery.rs::DiscoverView::content",
-        "description": "Real provider search and inspection; separate reviewed browser installation."
+        "description": "Real provider search and inspection; explicit browser installation with inline consent."
       }
     ],
     "previewPolicy": {
@@ -628,6 +628,17 @@
         "modelTests": "expiration, deduplication, error priority and retention",
         "fullValidation": "Still running; no passing claim. Documentation pass ran no builds, tests or captures."
       }
+    },
+    "directBrowserDownload": {
+      "action": "Download in browser",
+      "consent": "Inline source-saving and automatic verified-install disclosure; explicit click approves selected source, release and game.",
+      "navigation": "Validated canonical provider project URL plus /download/{fileId}; canonical project URL stored in metadata.",
+      "interaction": "No extra modal. One pending intent dispatches once after game/key synchronization. Activity provides progress, Cancel and scoped Retry.",
+      "folder": "Settings \u2192 Folders; session-only, locked during preparation or installation.",
+      "dependencies": "Each resolved dependency or linked mod requires a separate click.",
+      "evidence": ".impeccable/review/direct-browser-download",
+      "review": "ship; no material fixes",
+      "validation": "All eight AGENTS.md commands and controlled browser-dispatch verification passed."
     }
   },
   "components": [],
