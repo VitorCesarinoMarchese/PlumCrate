@@ -548,39 +548,12 @@ impl DiscoverView {
     }
     fn content(&mut self, ui: &mut egui::Ui, focus_search: bool, scroll_cards: bool, catalog: &crate::catalog::Catalog) -> bool {
         ui.add_space(16.0);
-        let mut search = false;
-        egui::Frame::new()
-            .fill(ui.visuals().extreme_bg_color)
-            .stroke(ui.visuals().widgets.noninteractive.bg_stroke)
-            .corner_radius(8)
-            .inner_margin(egui::Margin::symmetric(12, 0))
-            .show(ui, |ui| {
-                crate::ui::text_on_fill(ui, ui.visuals().extreme_bg_color);
-                ui.horizontal(|ui| {
-                    ui.add(crate::ui::Icon::Search.image(ui.visuals().weak_text_color(), 18.0));
-                    let response = ui.add_sized(
-                        [(ui.available_width() - 106.0).max(80.0), 42.0],
-                        egui::TextEdit::singleline(&mut self.query).text_color(crate::ui::readable_text(ui.visuals().text_color(), &[ui.visuals().text_edit_bg_color()]))
-                            .hint_text(egui::RichText::new("Search CurseForge mods and custom content").color(crate::ui::readable_text(ui.visuals().weak_text_color(), &[ui.visuals().text_edit_bg_color()])))
-                            .frame(egui::Frame::NONE.inner_margin(egui::Margin::symmetric(0, 12))),
-                    );
-                    self.stats.search = Some(response.rect);
-                    response.clone().on_hover_text("Search CurseForge (Ctrl+F)");
-                    if focus_search {
-                        response.request_focus();
-                    }
-                    search = response.lost_focus()
-                        && ui.input(|input| input.key_pressed(egui::Key::Enter));
-                    let button = ui.add_sized(
-                        [88.0, 36.0],
-                        egui::Button::new("Search")
-                            .fill(ui.visuals().selection.bg_fill)
-                            .stroke(ui.visuals().selection.stroke),
-                    );
-                    self.stats.search_button = Some(button.rect);
-                    search |= button.clicked();
-                });
-            });
+        let field = crate::ui::search_field(ui, &mut self.query,
+            "Search CurseForge mods and custom content", "discover-search", focus_search, true);
+        self.stats.search = Some(field.input.rect);
+        self.stats.search_button = field.submit.as_ref().map(|button| button.rect);
+        let search = (field.input.lost_focus() && ui.input(|input| input.key_pressed(egui::Key::Enter)))
+            || field.submit.as_ref().is_some_and(|button| button.clicked());
         ui.add_space(12.0);
         let filters_changed = if ui.ctx().content_rect().height() < 600.0 {
             let count = [

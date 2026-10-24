@@ -25,7 +25,7 @@ impl ThemeColors {
     pub fn base(dark: bool) -> Self {
         let values = if dark {
             [
-                "#9BC7FF", "#122C49", "#1D3A57", "#F4F8FB", "#BED0DF", "#405C75",
+                "#89B4FF", "#17191E", "#22252C", "#EDF0F5", "#ACB4C0", "#3D444F",
             ]
         } else {
             [

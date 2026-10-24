@@ -9,6 +9,7 @@ fastframe_icons::icons! {
         prefix: "ts4-native-",
         directory: "../icons/",
         Search => lucide "search",
+        Clear => lucide "x",
         Refresh => lucide "refresh-cw",
         Moon => lucide "moon",
         Sun => lucide "sun",
@@ -51,18 +52,92 @@ pub(crate) fn chrome_colors(ui: &egui::Ui) -> ChromeColors {
     let custom = ui.ctx().data(|data| data.get_temp::<[Option<ChromeColors>; 2]>(egui::Id::new(CUSTOM_CHROME))).unwrap_or([None; 2]);
     if let Some(colors) = custom[usize::from(dark)] { colors } else {
         ChromeColors {
-            rail: Color32::from_rgb(8, 99, 185),
+            rail: if dark { Color32::from_rgb(28, 31, 38) } else { Color32::from_rgb(8, 99, 185) },
             rail_text: Color32::WHITE,
-            rail_muted: Color32::from_rgb(218, 235, 252),
-            rail_selected: Color32::WHITE,
-            rail_selected_text: Color32::from_rgb(9, 87, 162),
-            primary: Color32::from_rgb(18, 99, 202),
+            rail_muted: if dark { Color32::from_rgb(172, 180, 192) } else { Color32::from_rgb(218, 235, 252) },
+            rail_selected: if dark { Color32::from_rgb(44, 60, 85) } else { Color32::WHITE },
+            rail_selected_text: if dark { Color32::from_rgb(184, 210, 255) } else { Color32::from_rgb(9, 87, 162) },
+            primary: if dark { Color32::from_rgb(55, 116, 214) } else { Color32::from_rgb(18, 99, 202) },
             primary_text: Color32::WHITE,
-            switch_on: Color32::from_rgb(66, 126, 22),
-            switch_off: if dark { Color32::from_rgb(89, 112, 132) } else { Color32::from_rgb(166, 185, 199) },
+            switch_on: if dark { Color32::from_rgb(78, 132, 81) } else { Color32::from_rgb(66, 126, 22) },
+            switch_off: if dark { Color32::from_rgb(87, 96, 110) } else { Color32::from_rgb(166, 185, 199) },
             switch_knob: Color32::WHITE,
         }
     }
+}
+
+pub(crate) struct SearchField {
+    pub input: egui::Response,
+    pub submit: Option<egui::Response>,
+    pub clear: Option<egui::Rect>,
+}
+
+pub(crate) fn search_field(
+    ui: &mut egui::Ui,
+    query: &mut String,
+    hint: &str,
+    id: &str,
+    focus: bool,
+    with_submit: bool,
+) -> SearchField {
+    let fill = ui.visuals().extreme_bg_color;
+    let border = ui.visuals().widgets.noninteractive.bg_stroke;
+    let accent = ui.visuals().hyperlink_color;
+    let frame = egui::Frame::new()
+        .fill(fill)
+        .corner_radius(10)
+        .inner_margin(egui::Margin::symmetric(12, 6))
+        .show(ui, |ui| {
+            text_on_fill(ui, fill);
+            ui.horizontal(|ui| {
+                ui.spacing_mut().item_spacing.x = 10.0;
+                ui.add(Icon::Search.image(ui.visuals().weak_text_color(), 18.0));
+                let clear_visible = !query.is_empty();
+                let shortcut = !clear_visible && ui.available_width() > 500.0;
+                let trailing = if with_submit { 98.0 } else { 0.0 }
+                    + if clear_visible { 42.0 } else if shortcut { 52.0 } else { 0.0 };
+                let mut input = ui.add_sized(
+                    [(ui.available_width() - trailing).max(60.0), 36.0],
+                    egui::TextEdit::singleline(query)
+                        .id_salt(id)
+                        .text_color(readable_text(ui.visuals().text_color(), &[fill]))
+                        .hint_text(RichText::new(hint).color(readable_text(ui.visuals().weak_text_color(), &[fill])))
+                        .frame(egui::Frame::NONE.inner_margin(egui::Margin::symmetric(0, 9))),
+                );
+                if focus { input.request_focus(); }
+                let mut clear = None;
+                if clear_visible {
+                    let response = ui.add_sized([32.0, 32.0],
+                        egui::Button::image(Icon::Clear.image(ui.visuals().weak_text_color(), 16.0)).frame(false))
+                        .on_hover_text("Clear search");
+                    response.widget_info(|| egui::WidgetInfo::labeled(egui::WidgetType::Button, ui.is_enabled(), "Clear search"));
+                    clear = Some(response.rect);
+                    if response.clicked() {
+                        query.clear();
+                        input.mark_changed();
+                        input.request_focus();
+                    }
+                } else if shortcut {
+                    ui.add_sized([42.0, 32.0], egui::Label::new(RichText::new("Ctrl+F").size(11.0).color(ui.visuals().weak_text_color())));
+                }
+                let submit = with_submit.then(|| {
+                    let colors = chrome_colors(ui);
+                    let button = ui.add_sized([88.0, 36.0], egui::Button::new(RichText::new("Search").color(colors.primary_text))
+                        .fill(colors.primary).stroke(egui::Stroke::NONE));
+                    if button.hovered() || button.has_focus() {
+                        ui.painter().rect_stroke(button.rect, 9, egui::Stroke::new(1.5, accent), egui::StrokeKind::Inside);
+                    }
+                    button
+                });
+                SearchField { input, submit, clear }
+            }).inner
+        });
+    let focused = frame.inner.input.has_focus() || focus;
+    let stroke = if focused { egui::Stroke::new(1.5, accent) }
+        else if frame.response.hovered() { egui::Stroke::new(1.0, blend(border.color, accent, 0.35)) }
+        else { border };
+    ui.painter().rect_stroke(frame.response.rect, 10, stroke, egui::StrokeKind::Inside);
+    frame.inner
 }
 
 fn rail_button(ui: &mut egui::Ui, icon: Icon, label: &str, active: bool) -> egui::Response {
@@ -114,16 +189,17 @@ fn base_style(ctx: &egui::Context) {
         v.faint_bg_color = v.extreme_bg_color;
         v.override_text_color = Some(hex_color(&colors.text).unwrap());
         v.weak_text_color = Some(hex_color(&colors.muted_text).unwrap());
-        v.selection.bg_fill = if v.dark_mode { Color32::from_rgb(47, 78, 42) } else { Color32::from_rgb(223, 236, 203) };
-        v.selection.stroke.color = if v.dark_mode { Color32::from_rgb(204, 235, 162) } else { Color32::from_rgb(46, 87, 16) };
+        v.selection.bg_fill = if v.dark_mode { Color32::from_rgb(41, 62, 50) } else { Color32::from_rgb(223, 236, 203) };
+        v.selection.stroke.color = if v.dark_mode { Color32::from_rgb(163, 214, 172) } else { Color32::from_rgb(46, 87, 16) };
         v.hyperlink_color = hex_color(&colors.accent).unwrap();
         v.window_stroke.color = hex_color(&colors.border).unwrap();
         v.widgets.noninteractive.bg_stroke.color = v.window_stroke.color;
         v.widgets.noninteractive.fg_stroke.color = v.weak_text_color();
         for (widget, fill) in [
-            (&mut v.widgets.inactive, if v.dark_mode { Color32::from_rgb(29, 58, 87) } else { Color32::WHITE }),
-            (&mut v.widgets.hovered, if v.dark_mode { Color32::from_rgb(45, 77, 108) } else { Color32::from_rgb(225, 237, 245) }),
-            (&mut v.widgets.active, v.selection.bg_fill),
+            (&mut v.widgets.inactive, if v.dark_mode { hex_color(&colors.surface).unwrap() } else { Color32::WHITE }),
+            (&mut v.widgets.hovered, if v.dark_mode { Color32::from_rgb(45, 50, 60) } else { Color32::from_rgb(225, 237, 245) }),
+            (&mut v.widgets.active, if v.dark_mode { Color32::from_rgb(52, 59, 71) } else { v.selection.bg_fill }),
+            (&mut v.widgets.open, if v.dark_mode { Color32::from_rgb(45, 50, 60) } else { Color32::from_rgb(225, 237, 245) }),
         ] {
             widget.corner_radius = egui::CornerRadius::same(9);
             widget.bg_fill = fill;
@@ -320,6 +396,7 @@ pub struct RenderStats {
     pub skeleton_cards: usize,
     pub files: usize,
     pub search: Option<egui::Rect>,
+    pub search_clear: Option<egui::Rect>,
     pub first_row: Option<egui::Rect>,
     pub detail_close: Option<egui::Rect>,
     pub copy: Option<egui::Rect>,
@@ -642,28 +719,11 @@ impl View {
                 });
                 ui.add_space(12.0);
                 if let Some(c) = controls.as_deref_mut() { c.library_toolbar(ui, catalog); if c.update_summary(ui, true) { self.updates_page = true; } ui.add_space(12.0); }
-                egui::Frame::new()
-                    .fill(ui.visuals().extreme_bg_color)
-                    .stroke(ui.visuals().widgets.noninteractive.bg_stroke)
-                    .corner_radius(8)
-                    .inner_margin(egui::Margin::symmetric(12, 0))
-                    .show(ui, |ui| {
-                        text_on_fill(ui, ui.visuals().extreme_bg_color);
-                        ui.horizontal(|ui| {
-                            ui.add(Icon::Search.image(ui.visuals().weak_text_color(), 18.0));
-                            let mut query = catalog.query.clone();
-                            let response = ui.add_sized(
-                                [ui.available_width(), 40.0],
-                                egui::TextEdit::singleline(&mut query).text_color(crate::ui::readable_text(ui.visuals().text_color(), &[ui.visuals().text_edit_bg_color()]))
-                                    .hint_text(egui::RichText::new("Search mods").color(crate::ui::readable_text(ui.visuals().weak_text_color(), &[ui.visuals().text_edit_bg_color()])))
-                                    .frame(egui::Frame::NONE.inner_margin(egui::Margin::symmetric(0, 11))),
-                            );
-                            self.stats.search = Some(response.rect);
-                            if search_requested { response.request_focus(); }
-                            response.clone().on_hover_text("Search mods or filenames (Ctrl+F)");
-                            if response.changed() { catalog.search(query); }
-                        });
-                    });
+                let mut query = catalog.query.clone();
+                let field = search_field(ui, &mut query, "Search mods", "library-search", search_requested, false);
+                self.stats.search = Some(field.input.rect);
+                self.stats.search_clear = field.clear;
+                if field.input.changed() { catalog.search(query); }
                 ui.add_space(16.0);
                 ui.horizontal_wrapped(|ui| {
                     for (filter, label) in [(ModFilter::All, "All"), (ModFilter::Installed, "On"), (ModFilter::Stored, "Off")] {
@@ -1420,6 +1480,36 @@ impl View {
 
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn built_in_dark_surfaces_are_neutral_and_elevated() {
+        let ctx = egui::Context::default();
+        setup(&ctx);
+        let v = &ctx.style_of(egui::Theme::Dark).visuals;
+        for color in [v.panel_fill, v.extreme_bg_color] {
+            let [r, g, b, _] = color.to_array();
+            assert!(r.max(g).max(b) - r.min(g).min(b) <= 16,
+                "dark surfaces should let the mod photos carry color: {color:?}");
+        }
+        assert!(v.extreme_bg_color.r() > v.panel_fill.r(), "cards must lift off the canvas");
+    }
+
+    #[test]
+    fn library_search_can_be_cleared_without_losing_keyboard_focus() {
+        let mut catalog = populated_catalog();
+        catalog.search("0000".into());
+        let mut view = View::default();
+        let ctx = egui::Context::default();
+        setup(&ctx);
+        render(&ctx, &mut view, &mut catalog, vec![], 680.0);
+        let clear = view.stats.search_clear.expect("nonempty search needs a clear action");
+        render(&ctx, &mut view, &mut catalog, click(clear.center()), 680.0);
+        assert!(catalog.query.is_empty());
+        let id = ctx.memory(|memory| memory.focused()).expect("clearing returns focus to search");
+        render(&ctx, &mut view, &mut catalog, vec![egui::Event::Text("new query".into())], 680.0);
+        assert_eq!(catalog.query, "new query");
+        assert_eq!(ctx.memory(|memory| memory.focused()), Some(id));
+    }
+
     #[test]
     fn library_reuses_cached_remote_photo_after_rescan_and_restart_offline() {
         use sha2::{Digest, Sha256};

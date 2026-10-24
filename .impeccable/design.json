@@ -27,7 +27,7 @@
       "accent-dark": {
         "role": "primary",
         "displayName": "accent dark",
-        "value": "#9BC7FF"
+        "value": "#89B4FF"
       },
       "panel-light": {
         "role": "neutral",
@@ -37,7 +37,7 @@
       "panel-dark": {
         "role": "neutral",
         "displayName": "panel dark",
-        "value": "#122C49"
+        "value": "#17191E"
       },
       "surface-light": {
         "role": "neutral",
@@ -47,7 +47,7 @@
       "surface-dark": {
         "role": "neutral",
         "displayName": "surface dark",
-        "value": "#1D3A57"
+        "value": "#22252C"
       },
       "text-light": {
         "role": "neutral",
@@ -57,7 +57,7 @@
       "text-dark": {
         "role": "neutral",
         "displayName": "text dark",
-        "value": "#F4F8FB"
+        "value": "#EDF0F5"
       },
       "muted-light": {
         "role": "neutral",
@@ -67,7 +67,7 @@
       "muted-dark": {
         "role": "neutral",
         "displayName": "muted dark",
-        "value": "#BED0DF"
+        "value": "#ACB4C0"
       },
       "border-light": {
         "role": "neutral",
@@ -77,7 +77,7 @@
       "border-dark": {
         "role": "neutral",
         "displayName": "border dark",
-        "value": "#405C75"
+        "value": "#3D444F"
       },
       "selection-fill-light": {
         "role": "secondary",
@@ -87,7 +87,7 @@
       "selection-fill-dark": {
         "role": "secondary",
         "displayName": "selection fill dark",
-        "value": "#2F4E2A"
+        "value": "#293E32"
       },
       "selection-stroke-light": {
         "role": "secondary",
@@ -97,7 +97,7 @@
       "selection-stroke-dark": {
         "role": "secondary",
         "displayName": "selection stroke dark",
-        "value": "#CCEBA2"
+        "value": "#A3D6AC"
       },
       "widget-fill-light": {
         "role": "neutral",
@@ -107,7 +107,7 @@
       "widget-fill-dark": {
         "role": "neutral",
         "displayName": "widget fill dark",
-        "value": "#1D3A57"
+        "value": "#22252C"
       },
       "hover-light": {
         "role": "neutral",
@@ -117,12 +117,52 @@
       "hover-dark": {
         "role": "neutral",
         "displayName": "hover dark",
-        "value": "#2D4D6C"
+        "value": "#2D323C"
       },
       "rail": {
         "role": "primary",
         "displayName": "rail",
         "value": "#0863B9"
+      },
+      "pressed-dark": {
+        "role": "neutral",
+        "displayName": "pressed dark",
+        "value": "#343B47"
+      },
+      "rail-dark": {
+        "role": "neutral",
+        "displayName": "rail dark",
+        "value": "#1C1F26"
+      },
+      "rail-selected-dark": {
+        "role": "primary",
+        "displayName": "rail selected dark",
+        "value": "#2C3C55"
+      },
+      "rail-selected-text-dark": {
+        "role": "primary",
+        "displayName": "rail selected text dark",
+        "value": "#B8D2FF"
+      },
+      "primary-dark": {
+        "role": "primary",
+        "displayName": "primary dark",
+        "value": "#3774D6"
+      },
+      "primary-text": {
+        "role": "primary",
+        "displayName": "primary text",
+        "value": "#FFFFFF"
+      },
+      "switch-on-dark": {
+        "role": "secondary",
+        "displayName": "switch on dark",
+        "value": "#4E8451"
+      },
+      "switch-off-dark": {
+        "role": "neutral",
+        "displayName": "switch off dark",
+        "value": "#57606E"
       }
     },
     "typographyMeta": {
@@ -177,7 +217,7 @@
       "compactListPreviewSize": 32,
       "compactListRowVerticalPadding": 4,
       "detailPreviewHeight": 240,
-      "searchHeight": 40,
+      "searchHeight": 48,
       "fileRowHeight": 48,
       "settingsContentMaxWidth": 1120,
       "settingsSavePlacement": "Save changes, Discard changes and Saved or Not saved section status stay above the Settings scroll region.",
@@ -206,13 +246,13 @@
       },
       {
         "name": "Search",
-        "source": "native/src/ui.rs::View::show",
-        "description": "Name and filename search with icon and keyboard focus."
+        "source": "native/src/ui.rs::search_field",
+        "description": "Shared 48pt shell, 10pt corners, 12pt horizontal and 6pt vertical margins, leading icon, 36pt text target, conditional 32x32pt clear control restoring focus, Ctrl+F hint on empty wide fields, full-shell accent focus outline and no input hover tooltip. Library filters live; Discover submits through Enter or its 88x36pt primary Search button."
       },
       {
         "name": "Main navigation",
         "source": "native/src/ui.rs::destinations",
-        "description": "Your mods, Discover and Updates in blue rail or compact top navigation."
+        "description": "Your mods, Discover and Updates in blue light or charcoal dark rail or compact top navigation."
       },
       {
         "name": "Add mods",
@@ -297,10 +337,10 @@
       "historical": true
     },
     "nativeDiscovery": {
-      "theme": "Plumbob built-in light and navy dark roles, with saved custom palettes retained.",
+      "theme": "Plumbob built-in light and charcoal dark roles, with saved custom palettes retained.",
       "navigation": "Discover in the shared 240pt rail at widths of at least 900pt; compact top destinations below that width.",
       "layout": {
-        "searchHeight": 42,
+        "searchHeight": 48,
         "searchButtonSize": [
           88,
           36
@@ -403,7 +443,7 @@
       }
     },
     "nativeUpdates": {
-      "theme": "Plumbob light and navy dark paired colors and native controls.",
+      "theme": "Plumbob light and charcoal dark paired colors and native controls.",
       "scope": "Manual checks for managed mods with explicitly attached CurseForge projects and an API key saved in local Settings.",
       "notices": "In-app summary and Update available on checked cards and list rows; no automatic startup checks or operating-system notifications.",
       "details": "Check this mod distinguishes unknown installed version, changed local files, unavailable recorded release, incomplete history, operational failure, and comparison results.",
@@ -495,14 +535,48 @@
         ],
         "fixturePolicy": "Only temporary fixture symlinks change; original file bytes are verified."
       }
+    },
+    "searchCharcoalRefresh": {
+      "source": [
+        "native/src/settings.rs::ThemeColors::base",
+        "native/src/ui.rs::base_style",
+        "native/src/ui.rs::chrome_colors",
+        "native/src/ui.rs::search_field",
+        "native/src/discovery.rs"
+      ],
+      "search": {
+        "height": 48,
+        "cornerRadius": 10,
+        "horizontalMargin": 12,
+        "verticalMargin": 6,
+        "textHeight": 36,
+        "clearSize": [
+          32,
+          32
+        ],
+        "submitSize": [
+          88,
+          36
+        ],
+        "focus": "Full-field 1.5pt accent outline; blue in built-in themes.",
+        "clear": "Conditional on query; clears and restores input focus.",
+        "shortcut": "Ctrl+F hint in empty wide fields.",
+        "submission": "Library filters live; Discover submits on Enter or Search.",
+        "inputHoverTooltip": false
+      },
+      "captureDirectory": ".impeccable/review/search-charcoal",
+      "captureScope": "discovery: desktop 1870/1200, 680 and 640x480 search/provider states; library: light/dark/custom/Settings; real-library/library-dark.png: real public covers in an isolated fixture.",
+      "independentDisposition": "ship with no material fixes for reviewed scope, contingent on documentation and full validation",
+      "fullValidation": "Pending for this refresh; earlier verification records remain historical.",
+      "customPalettes": "Saved custom palettes retain their own colors."
     }
   },
   "components": [],
   "narrative": {
     "northStar": "Plumbob",
-    "overview": "The user chose Plumbob from five concepts and approved its implementation. A blue navigation rail, pale blue background, white cards and green installed-state accents give the app a Sims-inspired identity. Keep words short, use recognizable icons, and let actual mod photos carry the library's personality. The navy dark counterpart keeps the same hierarchy.\n\nThis guide describes the Linux Fastframe/egui app. `native/src/settings.rs::ThemeColors::base` and `native/src/ui.rs::base_style` define the built-in colors. Rust widgets are authoritative; dimensions use egui logical points. Fresh settings default to light. Existing saved appearance choices and custom themes remain intact.",
+    "overview": "The user chose Plumbob from five concepts and approved its implementation. A blue navigation rail, pale blue background, white cards and green installed-state accents give the app a Sims-inspired identity. Keep words short, use recognizable icons, and let actual mod photos carry the library's personality. The charcoal dark counterpart keeps the same hierarchy with raised neutral cards, blue primary actions and restrained green state accents.\n\nThis guide describes the Linux Fastframe/egui app. `native/src/settings.rs::ThemeColors::base` and `native/src/ui.rs::base_style` define the built-in colors. Rust widgets are authoritative; dimensions use egui logical points. Fresh settings default to light. Existing saved appearance choices and custom themes remain intact.",
     "keyCharacteristics": [
-      "Blue navigation with Your mods, Discover and Updates.",
+      "Blue light navigation and charcoal dark navigation with Your mods, Discover and Updates.",
       "Photo cards and compact list rows with direct On/Off switches.",
       "Short labels, original plumbob and compass icons, and recoverable management actions."
     ],

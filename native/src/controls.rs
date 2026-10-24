@@ -1761,7 +1761,7 @@ mod tests {
         for mode in [egui::Theme::Light, egui::Theme::Dark] {
             let style = ctx.style_of(mode);
             let (background, accent) = if mode == egui::Theme::Dark {
-                ([0x12, 0x2C, 0x49], [0xE8, 0xB7, 0xF4])
+                ([0x17, 0x19, 0x1E], [0xE8, 0xB7, 0xF4])
             } else {
                 ([0xED, 0xF4, 0xF8], [0x12, 0x63, 0xCA])
             };

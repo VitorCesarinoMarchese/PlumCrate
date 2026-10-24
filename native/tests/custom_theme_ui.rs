@@ -121,7 +121,8 @@ fn custom_palettes_reach_sidebar_primary_actions_and_mod_switches() {
             },
         );
         reset.textures_delta.clear();
-        assert!(reset.shapes.iter().any(|s| matches!(&s.shape, egui::Shape::Rect(r) if r.rect.width() >= 239.0 && r.rect.width() <= 241.0 && r.rect.height() > 700.0 && r.fill == egui::Color32::from_rgb(8, 99, 185))), "switching back must restore the built-in rail");
+        let builtin_rail = if dark { egui::Color32::from_rgb(28, 31, 38) } else { egui::Color32::from_rgb(8, 99, 185) };
+        assert!(reset.shapes.iter().any(|s| matches!(&s.shape, egui::Shape::Rect(r) if r.rect.width() >= 239.0 && r.rect.width() <= 241.0 && r.rect.height() > 700.0 && r.fill == builtin_rail)), "switching back must restore the built-in rail for the current mode");
     }
 }
 

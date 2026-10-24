@@ -22,7 +22,7 @@ Project inspection includes the author's description, safe links, images, and fi
 
 ## Brand commitments
 
-The user chose the Plumbob concept from five directions and approved implementation. Use a clean Sims-inspired interface with short, nontechnical labels, recognizable icons and personality. Preserve the Sims 4 Mod Manager name. The blue rail, light default, green state accents and navy dark counterpart share one identity. Photo cards remain the default library view with a compact list switch. Existing saved appearance preferences and custom themes remain intact.
+The user chose the Plumbob concept from five directions and approved implementation. Use a clean Sims-inspired interface with short, nontechnical labels, recognizable icons and personality. Preserve the Sims 4 Mod Manager name. The blue light rail, light default and green state accents share one identity with the approved charcoal dark theme: neutral backgrounds, raised cards, blue primary actions and restrained green state accents. Shared library and Discover search keeps keyboard focus and clear controls visible; library filtering stays live and provider searches require Enter or Search. Photo cards remain the default library view with a compact list switch. Existing saved appearance preferences and custom themes remain intact.
 
 ## Evidence on hand
 

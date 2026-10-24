@@ -12,8 +12,12 @@ use ts4_mod_manager_native::{
     ui::{self, View},
 };
 
-const CASES: [(&str, bool, [f32; 2], u8); 12] = [
+const CASES: [(&str, bool, [f32; 2], u8); 16] = [
     ("browse-dark", true, [1200.0, 800.0], 0),
+    ("browse-search-focus", true, [1200.0, 800.0], 7),
+    ("browse-search-query", true, [1200.0, 800.0], 8),
+    ("browse-search-small", true, [640.0, 480.0], 8),
+    ("browse-small-top", true, [640.0, 480.0], 9),
     ("browse-light", false, [1200.0, 800.0], 0),
     ("browse-narrow", true, [680.0, 760.0], 0),
     ("browse-small", true, [640.0, 480.0], 0),
@@ -57,6 +61,7 @@ struct Capture {
     staged: Instant,
     started: Instant,
     opened: bool,
+    typed: bool,
 }
 impl Capture {
     fn stage(&mut self, ctx: &egui::Context) {
@@ -151,11 +156,21 @@ impl Capture {
         }
         self.requested = false;
         self.opened = false;
+        self.typed = false;
         self.staged = Instant::now();
     }
 }
 impl eframe::App for Capture {
     fn raw_input_hook(&mut self, _: &egui::Context, input: &mut egui::RawInput) {
+        if self.case >= CASES.len() { return; }
+        if !self.opened && matches!(CASES[self.case].3, 7 | 8) {
+            input.events.push(egui::Event::Key { key: egui::Key::F, physical_key: None,
+                pressed: true, repeat: false, modifiers: egui::Modifiers::CTRL });
+            self.opened = true;
+        } else if CASES[self.case].3 == 8 && !self.typed {
+            input.events.push(egui::Event::Text("Hair collection".into()));
+            self.typed = true;
+        }
         if !self.opened && self.staged.elapsed() > Duration::from_millis(200)
             && CASES[self.case].2[1] < 600.0 && CASES[self.case].3 == 0
             && let Some(card) = self.view.discovery.stats.first_card {
@@ -307,6 +322,7 @@ fn main() -> eframe::Result {
                 staged: Instant::now(),
                 started: Instant::now(),
                 opened: false,
+                typed: false,
             };
             app.stage(&cc.egui_ctx);
             Ok(Box::new(app))

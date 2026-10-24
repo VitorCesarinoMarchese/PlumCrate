@@ -137,11 +137,12 @@ fn editing_a_color_version_keeps_the_window_mode_and_fits_the_hex_value() {
     assert!(f.controls.settings.theme == Theme::Light);
     assert_eq!(f.ctx.theme(), egui::Theme::Light);
     let out = f.settle();
+    let accent = &f.controls.settings.custom_themes[0].dark.accent;
     let hex = out
         .shapes
         .iter()
         .find_map(|s| match &s.shape {
-            egui::Shape::Text(t) if t.galley.text() == "#9BC7FF" => Some((
+            egui::Shape::Text(t) if t.galley.text() == accent => Some((
                 s.clip_rect,
                 egui::Rect::from_min_size(t.pos, t.galley.size()),
             )),
