@@ -12,7 +12,7 @@ use ts4_mod_manager_native::{
     ui::{self, View},
 };
 
-const CASES: [(&str, bool, [f32; 2], u8); 16] = [
+const CASES: [(&str, bool, [f32; 2], u8); 22] = [
     ("browse-dark", true, [1200.0, 800.0], 0),
     ("browse-search-focus", true, [1200.0, 800.0], 7),
     ("browse-search-query", true, [1200.0, 800.0], 8),
@@ -29,6 +29,12 @@ const CASES: [(&str, bool, [f32; 2], u8); 16] = [
     ("browse-categories", true, [1200.0, 800.0], 4),
     ("browse-types", false, [680.0, 760.0], 5),
     ("browse-filters-small", true, [640.0, 480.0], 6),
+    ("browse-scroll-hidden", true, [1870.0, 1006.0], 10),
+    ("browse-scroll-up", true, [1200.0, 800.0], 11),
+    ("browse-scroll-end", false, [1200.0, 800.0], 12),
+    ("browse-scroll-hidden-small", true, [640.0, 480.0], 10),
+    ("browse-scroll-end-small", true, [640.0, 480.0], 12),
+    ("browse-scroll-motion", true, [1200.0, 800.0], 13),
 ];
 struct FixtureBytes(egui::load::Bytes);
 impl egui::load::BytesLoader for FixtureBytes {
@@ -62,16 +68,25 @@ struct Capture {
     started: Instant,
     opened: bool,
     typed: bool,
+    scrolled: bool,
+    returned: bool,
 }
 impl Capture {
     fn stage(&mut self, ctx: &egui::Context) {
         let (_, dark, size, state) = CASES[self.case];
+        ctx.memory_mut(|memory| memory.data = egui::util::IdTypeMap::default());
+        egui::Popup::close_all(ctx);
+        ctx.clear_animations();
+        ctx.input_mut(|input| *input = egui::InputState::default());
         ctx.set_theme(if dark {
             egui::Theme::Dark
         } else {
             egui::Theme::Light
         });
-        ctx.all_styles_mut(|style| style.animation_time = 0.0);
+        ctx.all_styles_mut(|style| style.animation_time = if state == 13 { 0.15 } else { 0.0 });
+        ctx.memory_mut(|memory| {
+            if let Some(id) = memory.focused() { memory.surrender_focus(id); }
+        });
         for command in [
             egui::ViewportCommand::MinInnerSize(size.into()),
             egui::ViewportCommand::MaxInnerSize(size.into()),
@@ -157,12 +172,30 @@ impl Capture {
         self.requested = false;
         self.opened = false;
         self.typed = false;
+        self.scrolled = false;
+        self.returned = false;
         self.staged = Instant::now();
     }
 }
 impl eframe::App for Capture {
     fn raw_input_hook(&mut self, _: &egui::Context, input: &mut egui::RawInput) {
         if self.case >= CASES.len() { return; }
+        let (_, _, size, state) = CASES[self.case];
+        let elapsed = self.staged.elapsed();
+        let delta = if matches!(state, 10..=13) && !self.scrolled && elapsed > Duration::from_millis(200) {
+            self.scrolled = true;
+            Some(if state == 12 { -50000.0 } else { -240.0 })
+        } else if state == 11 && !self.returned && elapsed > Duration::from_millis(650) {
+            self.returned = true;
+            Some(80.0)
+        } else if state == 6 && !self.returned && elapsed > Duration::from_millis(350) {
+            self.returned = true;
+            Some(-180.0)
+        } else { None };
+        if let Some(delta) = delta {
+            input.events.push(egui::Event::PointerMoved(egui::pos2(size[0]-100.0,if state == 6 { 350.0 } else { size[1]-80.0 })));
+            input.events.push(egui::Event::MouseWheel { unit:egui::MouseWheelUnit::Point,delta:egui::vec2(0.0,delta),phase:egui::TouchPhase::Move,modifiers:egui::Modifiers::NONE });
+        }
         if !self.opened && matches!(CASES[self.case].3, 7 | 8) {
             input.events.push(egui::Event::Key { key: egui::Key::F, physical_key: None,
                 pressed: true, repeat: false, modifiers: egui::Modifiers::CTRL });
@@ -171,17 +204,7 @@ impl eframe::App for Capture {
             input.events.push(egui::Event::Text("Hair collection".into()));
             self.typed = true;
         }
-        if !self.opened && self.staged.elapsed() > Duration::from_millis(200)
-            && CASES[self.case].2[1] < 600.0 && CASES[self.case].3 == 0
-            && let Some(card) = self.view.discovery.stats.first_card {
-            input.events.push(egui::Event::PointerMoved(card.center()));
-            input.events.push(egui::Event::MouseWheel {
-                unit: egui::MouseWheelUnit::Point,
-                delta: egui::vec2(0.0, -140.0),
-                phase: egui::TouchPhase::Move,
-                modifiers: egui::Modifiers::NONE,
-            });
-        }
+
     }
     fn ui(&mut self, ui: &mut egui::Ui, _frame: &mut eframe::Frame) {
         let ctx = ui.ctx().clone();
@@ -279,10 +302,14 @@ impl eframe::App for Capture {
             }
             self.stage(&ctx);
         } else if !self.requested
-            && self.staged.elapsed() > Duration::from_millis(500)
+            && (if state == 13 {
+                self.scrolled && self.view.discovery.stats.toolbar_height > 20.0 && self.view.discovery.stats.toolbar_height < 180.0
+            } else { self.staged.elapsed() > Duration::from_millis(if state >= 10 { 1000 } else { 500 }) })
             && ctx.content_rect().size() == CASES[self.case].2.into()
             && !ctx.has_pending_images()
         {
+            if state == 10 { assert!(self.view.discovery.stats.search.is_none(), "scroll-down capture must hide toolbar"); }
+            if matches!(state, 11 | 12) { assert!(self.view.discovery.stats.search.is_some(), "scroll-return capture must show toolbar"); }
             ctx.send_viewport_cmd(egui::ViewportCommand::Screenshot(Default::default()));
             self.requested = true;
         }
@@ -331,6 +358,8 @@ fn main() -> eframe::Result {
                 started: Instant::now(),
                 opened: false,
                 typed: false,
+                scrolled: false,
+                returned: false,
             };
             app.stage(&cc.egui_ctx);
             Ok(Box::new(app))

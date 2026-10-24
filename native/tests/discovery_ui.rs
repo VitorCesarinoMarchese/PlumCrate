@@ -912,7 +912,7 @@ fn card_downloads_remain_reachable_in_a_small_window() {
         &mut catalog,
         size,
         vec![
-            egui::Event::PointerMoved(egui::pos2(320.0, 330.0)),
+            egui::Event::PointerMoved(egui::pos2(320.0, 430.0)),
             egui::Event::MouseWheel {
                 unit: egui::MouseWheelUnit::Point,
                 delta: egui::vec2(0.0, -600.0),
@@ -1059,4 +1059,67 @@ fn discovery_filters_are_collapsed_at_every_size_and_navigation_is_right_aligned
         frame(&ctx, &mut view, &mut catalog, size, vec![]);
         assert!(view.discovery.stats.browse_by.is_some(), "filters open on demand");
     }
+}
+
+#[test]
+fn discover_toolbar_hides_down_and_returns_up_at_end_and_for_search() {
+    for size in [[1200.0, 800.0], [640.0, 480.0]] {
+        let ctx = egui::Context::default();
+        ui::setup(&ctx);
+        ctx.all_styles_mut(|s| s.animation_time = 0.0);
+        let mut view = View::default();
+        view.browse_page = true;
+        let generation = view.discovery.browser.begin(BrowseQuery::default());
+        let projects: Vec<_> = (1..=24).map(|id| serde_json::json!({"id":id,"gameId":78062,"name":format!("Project {id}"),"summary":"Fixture"})).collect();
+        view.discovery.browser.accept(generation, Ok(parse_browse_response(&serde_json::json!({"data":projects,"pagination":{"index":0,"pageSize":24,"resultCount":24,"totalCount":48}}).to_string()).unwrap()));
+        let mut catalog = Catalog::default();
+        let wheel = |delta| vec![egui::Event::PointerMoved(egui::pos2(size[0]-100.0,size[1]-80.0)), egui::Event::MouseWheel {unit:egui::MouseWheelUnit::Point,delta:egui::vec2(0.0,delta),modifiers:Default::default(),phase:egui::TouchPhase::Move}];
+        for _ in 0..3 { frame(&ctx,&mut view,&mut catalog,size,vec![]); }
+        frame(&ctx,&mut view,&mut catalog,size,wheel(-240.0));
+        for _ in 0..15 { frame(&ctx,&mut view,&mut catalog,size,vec![]); }
+        assert!(view.discovery.stats.search.is_none(), "downward browsing hides toolbar at {size:?}");
+        frame(&ctx,&mut view,&mut catalog,size,wheel(80.0));
+        for _ in 0..15 { frame(&ctx,&mut view,&mut catalog,size,vec![]); }
+        assert!(view.discovery.stats.search.is_some(), "upward browsing restores toolbar");
+        frame(&ctx,&mut view,&mut catalog,size,wheel(-200.0));
+        for _ in 0..15 { frame(&ctx,&mut view,&mut catalog,size,vec![]); }
+        assert!(view.discovery.stats.search.is_none());
+        frame(&ctx,&mut view,&mut catalog,size,wheel(-50000.0));
+        for _ in 0..25 { frame(&ctx,&mut view,&mut catalog,size,vec![]); }
+        assert!(view.discovery.stats.search.is_some(), "end restores toolbar");
+        assert!(view.discovery.stats.next.is_some(), "pagination available at end");
+        frame(&ctx,&mut view,&mut catalog,size,wheel(400.0));
+        for _ in 0..15 { frame(&ctx,&mut view,&mut catalog,size,vec![]); }
+        frame(&ctx,&mut view,&mut catalog,size,wheel(-120.0));
+        for _ in 0..15 { frame(&ctx,&mut view,&mut catalog,size,vec![]); }
+        assert!(view.discovery.stats.search.is_none());
+        frame(&ctx,&mut view,&mut catalog,size,vec![egui::Event::Key {key:egui::Key::F,physical_key:None,pressed:true,repeat:false,modifiers:egui::Modifiers::CTRL}]);
+        assert!(view.discovery.stats.search.is_some(), "Ctrl+F restores search immediately");
+
+    }
+}
+
+#[test]
+fn discover_toolbar_collapse_animates_and_search_can_skip_the_transition() {
+    let ctx = egui::Context::default();
+    ui::setup(&ctx);
+    ctx.all_styles_mut(|s| s.animation_time = 0.15);
+    let mut view = View::default();
+    view.browse_page = true;
+    let generation = view.discovery.browser.begin(BrowseQuery::default());
+    let projects: Vec<_> = (1..=24).map(|id| serde_json::json!({"id":id,"gameId":78062,"name":format!("Project {id}"),"summary":"Fixture"})).collect();
+    view.discovery.browser.accept(generation, Ok(parse_browse_response(&serde_json::json!({"data":projects,"pagination":{"index":0,"pageSize":24,"resultCount":24,"totalCount":48}}).to_string()).unwrap()));
+    let mut catalog = Catalog::default();
+    let size = [1200.0,800.0];
+    for _ in 0..3 { frame(&ctx,&mut view,&mut catalog,size,vec![]); }
+    let full = view.discovery.stats.toolbar_height;
+    assert!(full > 100.0);
+    frame(&ctx,&mut view,&mut catalog,size,vec![egui::Event::PointerMoved(egui::pos2(900.0,700.0)),egui::Event::MouseWheel {unit:egui::MouseWheelUnit::Point,delta:egui::vec2(0.0,-240.0),modifiers:Default::default(),phase:egui::TouchPhase::Move}]);
+    for _ in 0..3 { frame(&ctx,&mut view,&mut catalog,size,vec![]); }
+    let partial = view.discovery.stats.toolbar_height;
+    assert!(partial > 0.0 && partial < full, "collapse has intermediate height: {partial}/{full}");
+    for _ in 0..20 { frame(&ctx,&mut view,&mut catalog,size,vec![]); }
+    assert_eq!(view.discovery.stats.toolbar_height, 0.0);
+    frame(&ctx,&mut view,&mut catalog,size,vec![egui::Event::Key {key:egui::Key::F,physical_key:None,pressed:true,repeat:false,modifiers:egui::Modifiers::CTRL}]);
+    assert_eq!(view.discovery.stats.toolbar_height, full, "keyboard search skips animation");
 }

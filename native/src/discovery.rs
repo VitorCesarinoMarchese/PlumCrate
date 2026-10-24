@@ -334,9 +334,16 @@ pub struct DiscoverView {
     category_search: String,
     version_search: String,
     previews: crate::preview::Previews,
+    toolbar_hidden: bool,
+    toolbar_engaged: bool,
+    toolbar_animating: bool,
+    results_offset: f32,
+    toolbar_layout_changed: bool,
+    end_revealed: bool,
 }
 #[derive(Default)]
 pub struct Stats {
+    pub toolbar_height: f32,
     pub search: Option<egui::Rect>,
     pub search_button: Option<egui::Rect>,
     pub first_card: Option<egui::Rect>,
@@ -379,6 +386,9 @@ impl DiscoverView {
     fn submit(&mut self, ctx: &egui::Context, query: BrowseQuery, submission: Submission) {
         self.selected = None;
         self.details.clear();
+        self.toolbar_hidden = false;
+        self.results_offset = 0.0;
+        self.end_revealed = false;
         let generation = match submission {
             Submission::Refresh => self.browser.begin(query.clone()),
             Submission::Navigate => self.browser.navigate(query.clone()),
@@ -529,53 +539,24 @@ impl DiscoverView {
                 return false;
             }
         }
-        ui.horizontal(|ui| {
-            ui.label(RichText::new("Browse mods").size(27.0).strong().color(ui.visuals().text_color()));
-            ui.label(
-                RichText::new("The Sims 4 · CurseForge").color(ui.visuals().weak_text_color()),
-            );
-        });
-        let short = ui.ctx().content_rect().height() < 600.0;
-        if short {
-            egui::ScrollArea::vertical()
-                .id_salt("curseforge-short-window")
-                .auto_shrink([false, false])
-                .show(ui, |ui| self.content(ui, focus_search, false, catalog))
-                .inner
-        } else {
-            self.content(ui, focus_search, true, catalog)
+        if focus_search || self.browser.loading || self.browser.error.is_some() {
+            self.toolbar_hidden = false;
         }
+        self.toolbar_engaged = false;
+        self.content(ui, focus_search, catalog)
     }
-    fn content(&mut self, ui: &mut egui::Ui, focus_search: bool, scroll_cards: bool, catalog: &crate::catalog::Catalog) -> bool {
-        ui.add_space(16.0);
-        let field = crate::ui::search_field(ui, &mut self.query,
-            "Search CurseForge mods and custom content", "discover-search", focus_search, true);
-        self.stats.search = Some(field.input.rect);
-        self.stats.search_button = field.submit.as_ref().map(|button| button.rect);
-        let search = (field.input.lost_focus() && ui.input(|input| input.key_pressed(egui::Key::Enter)))
-            || field.submit.as_ref().is_some_and(|button| button.clicked());
-        ui.add_space(12.0);
-        let count = [self.class_id.is_some(), self.category.is_some(), self.game_version.is_some()]
-            .into_iter().filter(|active| *active).count();
-        let id = ui.make_persistent_id("browse-filters");
-        let mut filters = egui::collapsing_header::CollapsingState::load_with_default_open(ui.ctx(), id, false);
-        ui.horizontal_wrapped(|ui| {
-            let toggle = ui.add(egui::Button::new(format!("Filters ({count}) · {}", self.sort.label())).selected(filters.is_open()));
-            self.stats.filters_toggle = Some(toggle.rect);
-            self.stats.filters_toggle_id = Some(id);
-            if toggle.clicked() { filters.toggle(ui); }
-            ui.label(RichText::new(if catalog.root.is_some() {
-                "Browser downloads install verified files and save their CurseForge source."
-            } else {
-                "Choose a game folder to install verified downloads and save their source."
-            }).size(12.0).color(ui.visuals().weak_text_color()));
+    fn content(&mut self, ui: &mut egui::Ui, focus_search: bool, catalog: &crate::catalog::Catalog) -> bool {
+        let id = ui.make_persistent_id("discover-toolbar-motion");
+        if focus_search { ui.ctx().animate_bool_with_time(id, true, 0.0); }
+        ui.scope(|ui| {
+            ui.style_mut().animation_time = ui.style().animation_time.min(0.15);
+            let mut toolbar = egui::collapsing_header::CollapsingState::load_with_default_open(ui.ctx(), id, true);
+            toolbar.set_open(!self.toolbar_hidden);
+            let openness = toolbar.openness(ui.ctx());
+            self.toolbar_animating = openness > 0.0 && openness < 1.0;
+            let body = toolbar.show_body_unindented(ui, |ui| self.browse_toolbar(ui, focus_search, catalog));
+            self.stats.toolbar_height = body.map_or(0.0, |body| body.response.rect.height());
         });
-        let filters_changed = filters.show_body_unindented(ui, |ui| {
-            ui.add_space(8.0);
-            self.filters(ui)
-        }).is_some_and(|body| body.inner);
-        if search || filters_changed { self.search(ui.ctx()); }
-        ui.add_space(12.0);
         if let Some(message) = self.browser.error_message() {
             ui.heading(
                 if self.browser.error == Some(SourceLookupError::MissingApiKey) {
@@ -620,29 +601,6 @@ impl DiscoverView {
                 .color(ui.visuals().warn_fg_color),
             );
         }
-        let Some(page) = self.browser.page.clone() else {
-            return false;
-        };
-        ui.horizontal(|ui| {
-            let total = page.pagination.total_count;
-            ui.label(RichText::new(format!("{total} results")).strong());
-            if total > 0 {
-                let start = page.pagination.index + 1;
-                let end = page.pagination.index + page.pagination.result_count;
-                ui.label(RichText::new(format!("{start}–{end}")).color(ui.visuals().weak_text_color()));
-            }
-            ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                let next = ui.add_enabled(self.browser.next_query().is_some(), egui::Button::new("Next"));
-                self.stats.next = Some(next.rect);
-                if next.clicked() { self.submit(ui.ctx(), self.browser.next_query().unwrap(), Submission::Navigate); }
-                let previous = ui.add_enabled(self.browser.previous_query().is_some(), egui::Button::new("Previous"));
-                self.stats.previous = Some(previous.rect);
-                if previous.clicked() { self.submit(ui.ctx(), self.browser.previous_query().unwrap(), Submission::Navigate); }
-            });
-        });
-        if self.browser.loading {
-            return false;
-        }
         let Some(page) = self.browser.page.clone() else { return false; };
         self.previews.begin_frame(ui.ctx(), self.browser.generation);
         self.preload();
@@ -653,8 +611,69 @@ impl DiscoverView {
             ui.label("Try another name or clear the filters.");
             return false;
         }
-        self.cards(ui, &page.projects, scroll_cards, catalog);
+        self.cards(ui, &page.projects, catalog);
         false
+    }
+
+    fn browse_toolbar(&mut self, ui: &mut egui::Ui, focus_search: bool, catalog: &crate::catalog::Catalog) {
+        ui.horizontal(|ui| {
+            ui.label(RichText::new("Browse mods").size(27.0).strong().color(ui.visuals().text_color()));
+            ui.label(RichText::new("The Sims 4 · CurseForge").color(ui.visuals().weak_text_color()));
+        });
+        ui.add_space(16.0);
+        let field = crate::ui::search_field(ui, &mut self.query,
+            "Search CurseForge mods and custom content", "discover-search", focus_search, true);
+        self.toolbar_engaged = field.input.has_focus();
+        self.stats.search = Some(field.input.rect);
+        self.stats.search_button = field.submit.as_ref().map(|button| button.rect);
+        let search = (field.input.lost_focus() && ui.input(|input| input.key_pressed(egui::Key::Enter)))
+            || field.submit.as_ref().is_some_and(|button| button.clicked());
+        ui.add_space(12.0);
+        let count = [self.class_id.is_some(), self.category.is_some(), self.game_version.is_some()]
+            .into_iter().filter(|active| *active).count();
+        let id = ui.make_persistent_id("browse-filters");
+        let mut filters = egui::collapsing_header::CollapsingState::load_with_default_open(ui.ctx(), id, false);
+        ui.horizontal_wrapped(|ui| {
+            let toggle = ui.add(egui::Button::new(format!("Filters ({count}) · {}", self.sort.label())).selected(filters.is_open()));
+            self.stats.filters_toggle = Some(toggle.rect);
+            self.stats.filters_toggle_id = Some(id);
+            if toggle.clicked() { filters.toggle(ui); }
+            ui.label(RichText::new(if catalog.root.is_some() {
+                "Browser downloads install verified files and save their CurseForge source."
+            } else {
+                "Choose a game folder to install verified downloads and save their source."
+            }).size(12.0).color(ui.visuals().weak_text_color()));
+        });
+        self.toolbar_engaged |= filters.is_open() || egui::Popup::is_any_open(ui.ctx());
+        let filters_changed = filters.show_body_unindented(ui, |ui| {
+            ui.add_space(8.0);
+            if ui.ctx().content_rect().height() < 600.0 {
+                egui::ScrollArea::vertical().id_salt("browse-filter-controls")
+                    .max_height((ui.available_height() - 90.0).max(80.0))
+                    .show(ui, |ui| self.filters(ui)).inner
+            } else { self.filters(ui) }
+        }).is_some_and(|body| body.inner);
+        if search || filters_changed { self.search(ui.ctx()); }
+        ui.add_space(12.0);
+        if !self.browser.loading && let Some(page) = self.browser.page.clone() {
+            ui.horizontal(|ui| {
+                let total = page.pagination.total_count;
+                ui.label(RichText::new(format!("{total} results")).strong());
+                if total > 0 {
+                    let start = page.pagination.index + 1;
+                    let end = page.pagination.index + page.pagination.result_count;
+                    ui.label(RichText::new(format!("{start}–{end}")).color(ui.visuals().weak_text_color()));
+                }
+                ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                    let next = ui.add_enabled(self.browser.next_query().is_some(), egui::Button::new("Next"));
+                    self.stats.next = Some(next.rect);
+                    if next.clicked() { self.submit(ui.ctx(), self.browser.next_query().unwrap(), Submission::Navigate); }
+                    let previous = ui.add_enabled(self.browser.previous_query().is_some(), egui::Button::new("Previous"));
+                    self.stats.previous = Some(previous.rect);
+                    if previous.clicked() { self.submit(ui.ctx(), self.browser.previous_query().unwrap(), Submission::Navigate); }
+                });
+            });
+        }
     }
 
     fn filters(&mut self, ui: &mut egui::Ui) -> bool {
@@ -844,12 +863,12 @@ impl DiscoverView {
             self.game_version.clone(),
         )
     }
-    fn cards(&mut self, ui: &mut egui::Ui, projects: &[BrowseProject], scroll: bool, catalog: &crate::catalog::Catalog) {
+    fn cards(&mut self, ui: &mut egui::Ui, projects: &[BrowseProject], catalog: &crate::catalog::Catalog) {
         let columns = ((ui.available_width() + 16.0) / 280.0).floor().max(1.0) as usize;
         let width = (ui.available_width() - (columns - 1) as f32 * 16.0) / columns as f32;
         let rows = projects.len().div_ceil(columns);
         let generation = self.browser.generation;
-        let mut draw = |ui: &mut egui::Ui, visible: std::ops::Range<usize>| {
+        let draw = |ui: &mut egui::Ui, visible: std::ops::Range<usize>| {
             for row in visible {
                 ui.horizontal_top(|ui| {
                     ui.spacing_mut().item_spacing.x = 16.0;
@@ -988,13 +1007,28 @@ impl DiscoverView {
                 });
             }
         };
-        if scroll {
-            egui::ScrollArea::vertical()
+        {
+            let output = egui::ScrollArea::vertical()
                 .id_salt(("curseforge-results", generation))
                 .auto_shrink([false, false])
                 .show_rows(ui, 408.0, rows, draw);
-        } else {
-            draw(ui, 0..rows);
+            let offset = output.state.offset.y;
+            let max = (output.content_size.y - output.inner_rect.height()).max(0.0);
+            let delta = offset - self.results_offset;
+            let before = self.toolbar_hidden;
+            // Resizing the results viewport can clamp its offset without user scrolling.
+            // Keep the end reveal latched until the user moves back up the results.
+            if delta < -2.0 && !self.toolbar_layout_changed { self.end_revealed = false; }
+            if max <= 1.0 || offset >= max - 1.0 { self.end_revealed = true; }
+            if self.toolbar_engaged || self.end_revealed || offset <= 1.0 {
+                self.toolbar_hidden = false;
+            } else if !self.toolbar_layout_changed {
+                if delta > 2.0 { self.toolbar_hidden = true; }
+                else if delta < -2.0 { self.toolbar_hidden = false; }
+            }
+            self.results_offset = offset;
+            self.toolbar_layout_changed = before != self.toolbar_hidden || self.toolbar_animating;
+            if self.toolbar_layout_changed { ui.ctx().request_repaint(); }
         }
     }
     fn card_photo(&mut self, ui: &mut egui::Ui, url: Option<&str>, size: egui::Vec2) {
