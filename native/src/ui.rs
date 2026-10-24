@@ -10,6 +10,7 @@ fastframe_icons::icons! {
         directory: "../icons/",
         Search => lucide "search",
         Clear => lucide "x",
+        Activity => lucide "clock",
         Refresh => lucide "refresh-cw",
         Moon => lucide "moon",
         Sun => lucide "sun",
@@ -508,6 +509,7 @@ impl View {
                         if let Some(c) = controls.as_deref_mut() {
                             c.app_updates.banner(ui);
                         }
+                        if let Some(c) = controls.as_deref_mut() { c.activity_header(ui, catalog.loading, narrow); }
                         if ui.button("Help").on_hover_text("Tasks and keyboard shortcuts (F1)").clicked() { self.help_open = true; }
                         if !controls.as_ref().is_some_and(|c| c.settings_page) {
                         let dark = ui.visuals().dark_mode;
@@ -515,8 +517,9 @@ impl View {
                         let label = if dark { "Light" } else { "Dark" };
                         let theme_button = ui.add(egui::Button::image_and_text(
                             icon.image(foreground, 16.0),
-                            label,
-                        ));
+                            if narrow { "" } else { label },
+                        )).on_hover_text(format!("Switch to {label} appearance"));
+                        theme_button.widget_info(|| egui::WidgetInfo::labeled(egui::WidgetType::Button, ui.is_enabled(), label));
                         self.stats.theme_button = Some(theme_button.rect);
                         if theme_button.clicked() {
                             if let Some(c) = controls.as_deref_mut() {
@@ -634,46 +637,6 @@ impl View {
                 }
             });
 
-        egui::Panel::bottom("catalog-status")
-            .resizable(false)
-            .frame(
-                egui::Frame::new()
-                    .fill(ui.visuals().panel_fill)
-                    .inner_margin(egui::Margin::symmetric(24, 6)),
-            )
-            .show(ui, |ui| {
-                ui.horizontal_wrapped(|ui| {
-                    ui.label(
-                        RichText::new(if self.browse_page { "CurseForge browser" } else { "Local library" })
-                            .size(12.0)
-                            .color(ui.visuals().weak_text_color()),
-                    );
-                    ui.separator();
-                    if self.browse_page {
-                        ui.label(RichText::new("Browse and inspect mods before adding them to your library.").size(12.0).color(ui.visuals().weak_text_color()));
-                    } else if catalog.loading {
-                        ui.spinner();
-                        ui.label(RichText::new("Scanning your Mods folder...").size(12.0));
-                    } else if let Some(ms) = self.scan_ms {
-                        ui.label(
-                            RichText::new(format!(
-                                "{} mods · scanned in {ms:.0} ms",
-                                catalog.mods.len()
-                            ))
-                            .size(12.0)
-                            .color(ui.visuals().weak_text_color()),
-                        );
-                    } else {
-                        ui.label(
-                            RichText::new("Choose a game folder to browse your mods.").size(12.0),
-                        );
-                    }
-                });
-                if let Some(c) = controls.as_deref_mut() {
-                    c.activity(ui);
-                }
-            });
-
         let settings_page = controls.as_ref().is_some_and(|c| c.settings_page);
         egui::CentralPanel::default().frame(egui::Frame::new().fill(ui.visuals().panel_fill).inner_margin(24))
             .show(ui, |ui| {
@@ -778,7 +741,7 @@ impl View {
                 .as_ref()
                 .is_some_and(|c| c.review_open() || c.busy())
         {
-            self.details_popup(ui.ctx(), catalog, controls);
+            self.details_popup(ui.ctx(), catalog, controls.as_deref_mut());
         }
         if self.help_open && !review_open {
             let popup = crate::popup::show(ui.ctx(), "task-help", "Using your mod library", |ui| {
@@ -799,6 +762,7 @@ impl View {
             });
             if popup.inner || popup.should_close() { self.help_open = false; }
         }
+        if let Some(c) = controls { c.notifications(ui.ctx()); }
         scan_root
     }
 

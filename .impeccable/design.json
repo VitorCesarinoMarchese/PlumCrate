@@ -221,9 +221,6 @@
       "fileRowHeight": 48,
       "settingsContentMaxWidth": 1120,
       "settingsSavePlacement": "Save changes, Discard changes and Saved or Not saved section status stay above the Settings scroll region.",
-      "statusMarginHorizontal": 24,
-      "statusMarginVertical": 6,
-      "activityMaxHeight": 90,
       "cardHeightWithoutPreviews": 186,
       "cardImageHeightWithoutPreviews": 88,
       "shortDetailPreviewHeight": 120,
@@ -299,7 +296,7 @@
       ],
       "save": "Only Save changes validates, applies and persists the draft. Invalid hex colors, empty names and conflicting names prevent saving.",
       "settingsThemeSelection": "Built-in and custom-theme choices, creation, editing and removal stay staged with a scoped production-widget preview until Save changes.",
-      "headerThemeToggle": "Hidden in Settings. Outside Settings, applies and persists only light/dark mode using saved custom colors; preserves drafts and never applies draft colors.",
+      "headerThemeToggle": "Hidden in Settings. Outside Settings, applies and persists only light/dark mode using saved custom colors; preserves drafts and never applies draft colors. Compact headers use an icon-only control.",
       "localStorage": "~/.config/ts4-mod-manager/settings.json",
       "transfer": "Backup export uses saved values, omits the key unless explicitly included, and omits customThemes and activeCustomTheme for older version-1 compatibility; separate theme JSON transfers both palettes.",
       "importPreservation": "An empty or absent custom-theme collection preserves the local collection; an omitted API key preserves the local key.",
@@ -519,7 +516,7 @@
       "verification": "Rendered light/dark regression failed before the fix and passes afterward, including switching back to built-in chrome. Fifteen native fixture captures preserve inputs."
     },
     "nativeLibraryActions": {
-      "toggle": "Cards, list rows, details and context menus submit Action::Toggle { enabled } directly. Switch clicks open no details or review; failures appear in the bottom status.",
+      "toggle": "Cards, list rows, details and context menus submit Action::Toggle { enabled } directly. Switch clicks open no details or review; failures appear as persistent in-app error notifications and in Activity.",
       "safety": "Core toggle operations retain locking, ownership and collision checks, and journaling.",
       "newImports": "Folder and ZIP imports enable in the selected game after storage. An enable conflict retains imported library content and unrelated game files, shows a warning and offers no retry-import. Browser-assisted imports retain their existing consent and automatic enabling.",
       "captureVerification": {
@@ -569,6 +566,68 @@
       "independentDisposition": "ship with no material fixes for reviewed scope, contingent on documentation and full validation",
       "fullValidation": "Pending for this refresh; earlier verification records remain historical.",
       "customPalettes": "Saved custom palettes retain their own colors."
+    },
+    "nativeActivity": {
+      "source": [
+        "native/src/controls/activity.rs",
+        "native/src/controls.rs",
+        "native/src/ui.rs"
+      ],
+      "ownership": "controls/activity.rs owns Activity display and notification lifecycle; existing filesystem, approval, browser import and retry backends are preserved.",
+      "layout": "Header Activity replaces catalog-status bottom panel. Redundant Local library and CurseForge browser shell labels and scan-ms text removed; heading counts retained.",
+      "count": "Undismissed issues first, otherwise running tasks, otherwise unread messages; tooltip reports all three. Compact header uses icon/count and icon-only appearance toggle.",
+      "popup": {
+        "modal": false,
+        "anchor": "header Activity button",
+        "width": "min(content width - 48, 420) points",
+        "scrollMaxHeight": "clamp(content height - 180, 120, 420) points",
+        "close": "Outside click, Escape or explicit X using Clear SVG; tooltip/accessibility name Close activity. Closing never cancels work.",
+        "ordering": "Running tasks first, then recent notifications and operation history.",
+        "cancel": "Browser Cancel download import retained; disabled while Installing.",
+        "retry": "Existing browser retry and scoped operation Retry retained; Operation history defaults open for failed operations."
+      },
+      "notifications": {
+        "anchor": "bottom-right",
+        "inset": 24,
+        "framePadding": 16,
+        "cornerRadius": 12,
+        "contentMaxWidth": 360,
+        "actions": [
+          "View activity",
+          "Dismiss"
+        ],
+        "noticeSeconds": 5,
+        "errors": "Take priority over routine notices and remain foreground until explicitly dismissed; remain in history afterward.",
+        "read": "Reading routine notices in Activity prevents repeat toast.",
+        "deduplication": "Repeated notices remain distinct; unchanged errors deduplicated.",
+        "suppression": "No toast while Activity is open. Confirmation/review modals suppress both popup and toasts.",
+        "osNotifications": false
+      },
+      "history": {
+        "targetEntries": 30,
+        "retention": "Never evict undismissed errors.",
+        "storage": "Session memory only; not durable across restart."
+      },
+      "verification": {
+        "source": "native/examples/verify_activity.rs",
+        "captureDirectory": ".impeccable/review/header-activity",
+        "captures": [
+          "idle-dark",
+          "waiting-header",
+          "waiting-open",
+          "waiting-small",
+          "waiting-light",
+          "error-toast",
+          "error-open",
+          "success-toast",
+          "success-expired"
+        ],
+        "fixturePolicy": "No download starts and no user mods change.",
+        "independentDisposition": "ship; no material fixes; all nine captures valid",
+        "uiTests": "native/tests/activity_ui.rs: header/no-footer, task cancellation wide/compact, close without cancel, persistent error dismissal/history",
+        "modelTests": "expiration, deduplication, error priority and retention",
+        "fullValidation": "Still running; no passing claim. Documentation pass ran no builds, tests or captures."
+      }
     }
   },
   "components": [],

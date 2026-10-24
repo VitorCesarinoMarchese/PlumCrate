@@ -6,6 +6,8 @@ use crate::{
 use std::path::PathBuf;
 #[path = "controls/preferences.rs"]
 mod preferences;
+#[path = "controls/activity.rs"]
+mod activity;
 pub use preferences::PreferencesSection;
 
 struct Operation {
@@ -45,6 +47,8 @@ pub struct Controls {
     pub app_updates: crate::app_update::AppUpdates,
     pub updates: crate::updates::UpdateState,
     pub browser_import: crate::browser_import::BrowserImport,
+    pub activity_button_rect: Option<egui::Rect>,
+    pub activity_popup_rect: Option<egui::Rect>,
     pub browser_start_rect: Option<egui::Rect>,
     pub browser_cancel_rect: Option<egui::Rect>,
     pub browser_release_rect: Option<egui::Rect>,
@@ -60,6 +64,7 @@ pub struct Controls {
     pub confirm_rect: Option<egui::Rect>,
     pub import_rect: Option<egui::Rect>,
     previews: crate::preview::Previews,
+    activity: activity::Activity,
     worker: Mutations,
     managed: PathBuf,
     trash: PathBuf,
@@ -102,6 +107,8 @@ impl Controls {
             app_updates: crate::app_update::AppUpdates::default(),
             updates: crate::updates::UpdateState::default(),
             browser_import: crate::browser_import::BrowserImport::new(&home),
+            activity_button_rect: None,
+            activity_popup_rect: None,
             browser_start_rect: None,
             browser_cancel_rect: None,
             browser_release_rect: None,
@@ -117,6 +124,7 @@ impl Controls {
             confirm_rect: None,
             import_rect: None,
             previews: crate::preview::Previews::with_cache(home.join(".cache/ts4-mod-manager/photos")),
+            activity: Default::default(),
             worker: Mutations::start_with_recovery(managed.clone(), wake)?,
             managed,
             trash: home.join(".local/share/Trash/files"),
@@ -368,18 +376,20 @@ impl Controls {
     }
     fn browser_import_status(&mut self, ui: &mut egui::Ui) {
         use crate::browser_import::Phase;
+        if matches!(self.browser_import.phase, Phase::Waiting | Phase::Queued | Phase::Installing | Phase::Failed | Phase::Cancelled)
+            && let Some(project) = &self.browser_import.project {
+            ui.label(egui::RichText::new(&project.title).strong().color(ui.visuals().text_color()));
+        }
         match self.browser_import.phase {
             Phase::Waiting | Phase::Queued | Phase::Installing => {
                 ui.horizontal_wrapped(|ui| {
-                    ui.spinner();
-                    ui.label(match self.browser_import.phase { Phase::Waiting => "Waiting for the verified browser download…", Phase::Queued => "Download verified. Installation queued…", _ => "Finishing installation in the approved game folder…" });
+                    ui.add(egui::Spinner::new().size(16.0));
+                    ui.label(match self.browser_import.phase { Phase::Waiting => "Waiting for browser download…", Phase::Queued => "Download verified. Installation queued…", _ => "Installing in the approved game folder…" });
                     let cancel = ui.add_enabled(self.browser_import.phase != Phase::Installing, egui::Button::new("Cancel download import"));
                     self.browser_cancel_rect = Some(cancel.rect);
-                    if cancel.clicked() { self.browser_import.cancel(); }
+                    if cancel.clicked() { self.browser_import.cancel(); self.notice = Some("Browser download import cancelled.".into()); }
                 });
-                if let Some(project) = &self.browser_import.project {
-                    ui.label(format!("{} · watching {}", project.title, self.browser_import.download_dir.display()));
-                }
+                ui.label(egui::RichText::new(format!("Download folder: {}", self.browser_import.download_dir.display())).small().color(ui.visuals().weak_text_color()));
             }
             Phase::Failed | Phase::Cancelled => {
                 ui.horizontal_wrapped(|ui| {
@@ -389,7 +399,7 @@ impl Controls {
                     }
                 });
                 if let Some(error) = &self.browser_import.error { ui.label(error); }
-                if !self.browser_import.can_retry() { ui.label("Select Download via website on the project page to review a new request."); }
+                if !self.browser_import.can_retry() { ui.label("Open the project and choose Downloads to review a new request."); }
             }
             _ => {}
         }
@@ -729,7 +739,7 @@ impl Controls {
                             self.updates.invalidate();
                             self.refresh = catalog.root.clone();
                             if let Some(error) = enable_error {
-                                self.error = Some(format!("{name} was added but could not be enabled. Resolve the issue below, then turn it on.\n{error}"));
+                                self.error = Some(format!("{name} was added but could not be enabled. Open Activity for details, then turn it on.\n{error}"));
                             } else {
                                 self.notice = Some(format!("{name} added and enabled"));
                             }
@@ -791,7 +801,8 @@ impl Controls {
     pub fn show(&mut self, ui: &mut egui::Ui, catalog: &Catalog) {
         self.toolbar(ui, catalog);
         self.selected_actions(ui, catalog);
-        self.activity(ui);
+        self.activity_header(ui, catalog.loading, false);
+        self.notifications(ui.ctx());
         self.show_dialogs(ui.ctx(), catalog);
     }
     pub fn open_trash(&mut self, catalog: &Catalog) {
@@ -1022,58 +1033,6 @@ impl Controls {
                 self.saved_settings = saved;
             },
             Err(error) => self.error = Some(error),
-        }
-    }
-    pub fn activity(&mut self, ui: &mut egui::Ui) {
-        if let Some(theme) = self.saved_settings.custom_themes.iter().find(|theme| Some(&theme.name) == self.saved_settings.active_custom_theme.as_ref())
-            && !theme.palette(ui.visuals().dark_mode).contrast_warnings().is_empty() {
-            ui.label("Theme text is adjusted for readability. Your chosen colors are kept.");
-        }
-        if self.recovering {
-            ui.label("Checking interrupted operations. Waiting for other app writes if needed.");
-        } else if self.busy() {
-            ui.label("Approved operations will finish before the window closes.");
-        }
-        if let Some(notice) = &self.notice {
-            ui.label(
-                egui::RichText::new(notice)
-                    .size(12.0)
-                    .color(ui.visuals().weak_text_color()),
-            );
-        }
-        if let Some(error) = &self.error {
-            ui.colored_label(ui.visuals().error_fg_color, error);
-        }
-        self.browser_import_status(ui);
-        let mut retry = None;
-        if !self.operations.is_empty() {
-            egui::CollapsingHeader::new("Activity")
-                .id_salt("management-activity")
-                .show(ui, |ui| {
-                    egui::ScrollArea::vertical()
-                        .max_height(90.0)
-                        .show(ui, |ui| {
-                            for operation in self.operations.iter().rev() {
-                                ui.horizontal(|ui| {
-                                    ui.add(egui::Label::new(format!(
-                                        "#{} · {} · {} · {}",
-                                        operation.job.identity.operation,
-                                        operation.job.action.label(),
-                                        operation.job.identity.root.display(),
-                                        operation.status
-                                    )).wrap());
-                                    if operation.error && !matches!(operation.job.action, Action::ImportBrowser(_)) && ui.button("Retry").clicked() {
-                                        retry = Some(operation.job.clone())
-                                    }
-                                });
-                            }
-                        });
-                });
-        }
-        if let Some(mut job) = retry {
-            job.identity.operation = self.next;
-            self.next += 1;
-            self.submit(job.identity, job.action);
         }
     }
     pub fn review_open(&self) -> bool {

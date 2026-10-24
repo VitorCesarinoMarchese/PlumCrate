@@ -908,11 +908,12 @@ fn card_downloads_remain_reachable_in_a_small_window() {
     for _ in 0..5 {
         frame(&ctx, &mut view, &mut catalog, size, vec![]);
     }
+    let output = frame(&ctx, &mut view, &mut catalog, size, vec![]);
     let action = view.discovery.stats.card_actions[0];
-    assert!(
-        action.top() >= 105.0 && action.bottom() <= 409.0,
-        "download action must scroll fully into view: {action:?}"
-    );
+    assert!(ctx.content_rect().contains_rect(action), "download action must fit the window: {action:?}");
+    assert!(output.shapes.iter().any(|shape| shape.clip_rect.contains_rect(action)
+        && matches!(&shape.shape, egui::Shape::Rect(rect) if rect.rect.contains(action.center()) && rect.rect.width() <= action.width() + 2.0)),
+        "download action must scroll fully into the painted content area: {action:?}");
     frame(&ctx, &mut view, &mut catalog, size, click(action));
     assert!(matches!(
         view.discovery.take_import_request(),
