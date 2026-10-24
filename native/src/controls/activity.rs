@@ -97,6 +97,7 @@ impl Controls {
         operations
             + usize::from(self.recovering)
             + usize::from((self.browser_import.running() || self.browser_import.preparing()) && !browser_owned)
+            + self.download_queue.len()
     }
     pub fn activity_header(&mut self, ui: &mut egui::Ui, scanning: bool, compact: bool) {
         self.sync_activity(ui.input(|input| input.time));

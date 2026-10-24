@@ -39,6 +39,12 @@ enum PickPurpose {
     SettingsImport,
     SettingsExport(Settings),
 }
+struct QueuedDownload {
+    request: crate::project_details::ReviewRequest,
+    project_id: u64,
+    title: String,
+    root: PathBuf,
+}
 struct PendingPicker {
     purpose: PickPurpose,
     receiver: std::sync::mpsc::Receiver<Option<PathBuf>>,
@@ -51,6 +57,10 @@ pub struct Controls {
     pub activity_popup_rect: Option<egui::Rect>,
     pub browser_cancel_rect: Option<egui::Rect>,
     browser_pending_start: bool,
+    download_queue: std::collections::VecDeque<QueuedDownload>,
+    active_download: Option<u64>,
+    pub queue_remove_rects: Vec<egui::Rect>,
+    pub queue_skip_rect: Option<egui::Rect>,
     pub check_updates_rect: Option<egui::Rect>,
     pub record_release_rect: Option<egui::Rect>,
     pub open_update_page_rect: Option<egui::Rect>,
@@ -110,6 +120,10 @@ impl Controls {
             activity_popup_rect: None,
             browser_cancel_rect: None,
             browser_pending_start: false,
+            download_queue: Default::default(),
+            active_download: None,
+            queue_remove_rects: vec![],
+            queue_skip_rect: None,
             check_updates_rect: None,
             record_release_rect: None,
             open_update_page_rect: None,
@@ -278,7 +292,75 @@ impl Controls {
         self.confirm(catalog, Action::RecordRelease { report: Box::new(report.clone()), release: release.clone(), token: self.updates.token() }, "Confirm installed release", lines);
     }
     pub fn prepare_browser_import(&mut self, ctx: &egui::Context, catalog: &Catalog, request: crate::project_details::ReviewRequest) {
-        if self.browser_import.running() || self.browser_import.preparing() { self.notice = Some("Finish or cancel the current browser download first.".into()); return; }
+        let (project_id, title) = match &request {
+            crate::project_details::ReviewRequest::ProjectId(id) => (*id, format!("CurseForge project {id}")),
+            crate::project_details::ReviewRequest::Loaded { project, .. } => (project.project_id, project.title.clone()),
+        };
+        if self.browser_import.running() || self.browser_import.preparing() || !self.download_queue.is_empty() {
+            if let Some(label) = self.download_labels().get(&project_id) {
+                self.notice = Some(if label == "Downloading…" { format!("{title} is already downloading.") } else { format!("{title} is already in the download queue ({label}).") });
+                return;
+            }
+            let Some(root) = catalog.root.clone() else {
+                self.notice = Some("Choose a Sims 4 game folder before downloading a mod.".into()); return;
+            };
+            self.download_queue.push_back(QueuedDownload { request, project_id, title: title.clone(), root });
+            self.notice = Some(match self.download_queue.len() {
+                1 => format!("{title} is next in the download queue."),
+                position => format!("{title} is #{position} in the download queue."),
+            });
+            return;
+        }
+        self.start_browser_import(ctx, catalog, request, project_id);
+    }
+    /// Project IDs in download order: the active download first, then waiting mods.
+    pub fn download_positions(&self) -> Vec<u64> {
+        let active = (self.browser_import.running() || self.browser_import.preparing())
+            .then(|| self.browser_import.project.as_ref().map(|project| project.project_id).or(self.active_download))
+            .flatten();
+        active.into_iter().chain(self.download_queue.iter().map(|queued| queued.project_id)).collect()
+    }
+    /// Short per-project labels for download buttons, such as "Next in queue".
+    pub fn download_labels(&self) -> std::collections::HashMap<u64, String> {
+        let active = self.browser_import.running() || self.browser_import.preparing();
+        self.download_positions().into_iter().enumerate().map(|(index, id)| {
+            let queued = if active { index } else { index + 1 };
+            (id, match queued { 0 => "Downloading…".into(), 1 => "Next in queue".into(), n => format!("#{n} in queue") })
+        }).collect()
+    }
+    pub fn download_queue(&self) -> Vec<(u64, String)> {
+        self.download_queue.iter().map(|queued| (queued.project_id, queued.title.clone())).collect()
+    }
+    pub fn remove_queued_download(&mut self, project_id: u64) {
+        if let Some(index) = self.download_queue.iter().position(|queued| queued.project_id == project_id) {
+            let removed = self.download_queue.remove(index).unwrap();
+            self.notice = Some(format!("{} removed from the download queue.", removed.title));
+        }
+    }
+    pub fn skip_failed_download(&mut self) {
+        self.browser_import.dismiss();
+    }
+    fn advance_download_queue(&mut self, ctx: &egui::Context, catalog: &Catalog) {
+        let before = self.download_queue.len();
+        self.download_queue.retain(|queued| catalog.root.as_ref() == Some(&queued.root));
+        if self.download_queue.len() < before {
+            self.notice = Some("Download queue cleared because the game folder changed.".into());
+        }
+        if self.download_queue.is_empty()
+            || self.browser_import.running()
+            || self.browser_import.preparing()
+            || self.browser_import.phase == crate::browser_import::Phase::Failed
+            || self.browser_pending_start
+            || self.busy()
+            || catalog.loading
+            || self.picker.is_some()
+        {
+            return;
+        }
+        let next = self.download_queue.pop_front().unwrap();
+        self.start_browser_import(ctx, catalog, next.request, next.project_id);
+    }
+    fn start_browser_import(&mut self, ctx: &egui::Context, catalog: &Catalog, request: crate::project_details::ReviewRequest, project_id: u64) {
         let Some(root) = catalog.root.clone().filter(|_| !catalog.loading && !self.busy()) else {
             self.notice = Some("Choose a Sims 4 game folder before downloading a mod.".into()); return;
         };
@@ -287,6 +369,7 @@ impl Controls {
         };
         if self.picker.is_some() { self.notice = Some("Finish choosing a folder before downloading.".into()); return; }
         self.browser_pending_start = true;
+        self.active_download = Some(project_id);
         match request {
             crate::project_details::ReviewRequest::ProjectId(project_id) => self.browser_import.prepare(ctx, root, &key, project_id),
             crate::project_details::ReviewRequest::Loaded {project,file_id} => {
@@ -330,10 +413,37 @@ impl Controls {
                     }
                 });
                 if let Some(error) = &self.browser_import.error { ui.label(error); }
-                if !self.browser_import.can_retry() { ui.label("Open the project and choose Download in browser to start a new request."); }
+                if !self.browser_import.can_retry() && self.download_queue.is_empty() { ui.label("Open the project and choose Download in browser to start a new request."); }
             }
             _ => {}
         }
+        self.download_queue_status(ui);
+    }
+    fn download_queue_status(&mut self, ui: &mut egui::Ui) {
+        self.queue_remove_rects.clear();
+        self.queue_skip_rect = None;
+        if self.download_queue.is_empty() { return; }
+        if self.browser_import.phase == crate::browser_import::Phase::Failed {
+            ui.horizontal_wrapped(|ui| {
+                ui.label("Download queue paused.");
+                let skip = ui.button("Skip and continue");
+                self.queue_skip_rect = Some(skip.rect);
+                if skip.clicked() { self.skip_failed_download(); }
+            });
+        }
+        ui.label(egui::RichText::new("Up next").strong().color(ui.visuals().text_color()));
+        let mut remove = None;
+        for (index, queued) in self.download_queue.iter().enumerate() {
+            ui.horizontal_wrapped(|ui| {
+                ui.label(egui::RichText::new(&queued.title).color(ui.visuals().text_color()));
+                let position = if index == 0 { "Next in queue".to_owned() } else { format!("#{} in queue", index + 1) };
+                ui.label(egui::RichText::new(position).color(ui.visuals().weak_text_color()));
+                let button = ui.button("Remove").on_hover_text("Remove this mod from the download queue");
+                self.queue_remove_rects.push(button.rect);
+                if button.clicked() { remove = Some(queued.project_id); }
+            });
+        }
+        if let Some(project_id) = remove { self.remove_queued_download(project_id); }
     }
     fn start_picker(
         &mut self,
@@ -975,6 +1085,7 @@ impl Controls {
 
     pub fn show_dialogs(&mut self, ctx: &egui::Context, catalog: &Catalog) {
         self.browser_import.sync(catalog.root.as_ref(), self.saved_settings.curseforge_api_key.as_deref());
+        self.advance_download_queue(ctx, catalog);
         if self.browser_pending_start {
             match self.browser_import.phase {
                 crate::browser_import::Phase::Ready => {

@@ -326,6 +326,8 @@ pub struct DiscoverView {
     detail_jump: Option<DetailSection>,
     pub stats: Stats,
     import_request: Option<ReviewRequest>,
+    /// Queue labels by project ID, refreshed by the app each frame.
+    pub download_labels: std::collections::HashMap<u64, String>,
     library_request: Option<crate::catalog::EntryId>,
     jobs: Option<Jobs>,
     key: Option<String>,
@@ -970,6 +972,11 @@ impl DiscoverView {
                                             ("View in library", crate::ui::Icon::Check, fill,
                                                 crate::ui::readable_text(ui.visuals().text_color(), &[fill]),
                                                 "Already in your library. Open the local mod.")
+                                        } else if let Some(status) = self.download_labels.get(&project.id) {
+                                            let fill = ui.visuals().widgets.inactive.weak_bg_fill;
+                                            (status.as_str(), crate::ui::Icon::Download, fill,
+                                                crate::ui::readable_text(ui.visuals().text_color(), &[fill]),
+                                                "In the download queue. Open Activity to manage it.")
                                         } else {
                                             ("Download in browser", crate::ui::Icon::Download, colors.primary, colors.primary_text,
                                                 "Download in your browser, then install automatically.")
@@ -1157,7 +1164,7 @@ impl DiscoverView {
                         if ui.button("Copy link").clicked() {
                             ui.ctx().copy_text(url.into());
                         }
-                        let download = ui.add_enabled(!matches!(self.details.project,Load::Loading),egui::Button::new("Download in browser"));
+                        let download = ui.add_enabled(!matches!(self.details.project,Load::Loading),egui::Button::new(self.download_labels.get(&project.id).map_or("Download in browser",String::as_str)));
                         self.stats.browser_import = Some(download.rect);
                         if download.clicked() {
                             self.import_request = Some(match &self.details.project {

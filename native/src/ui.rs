@@ -647,6 +647,7 @@ impl View {
                 }
                 if self.browse_page {
                     let key = controls.as_ref().and_then(|c| c.source_api_key());
+                    self.discovery.download_labels = controls.as_ref().map(|c| c.download_labels()).unwrap_or_default();
                     let settings_requested = self.discovery.show(ui, key, search_requested, catalog);
                     if let Some(c) = controls.as_deref_mut() && let Some(request) = self.discovery.take_import_request() { c.prepare_browser_import(ui.ctx(), catalog, request); }
                     if let Some(identity) = self.discovery.take_library_request()

@@ -382,6 +382,17 @@ impl BrowserImport {
         self.watch(ctx, approved)
     }
 
+    pub fn dismiss(&mut self) -> bool {
+        if !matches!(self.phase, Phase::Failed | Phase::Cancelled) {
+            return false;
+        }
+        self.approved = None;
+        self.permit = None;
+        self.error = None;
+        self.phase = Phase::Idle;
+        true
+    }
+
     fn fail(&mut self, error: String) {
         if let Some(permit) = &self.permit {
             permit.cancel();
@@ -504,6 +515,20 @@ mod tests {
             assert!(Instant::now() < deadline, "watch did not find the fixture");
             thread::sleep(Duration::from_millis(10));
         }
+    }
+
+    #[test]
+    fn dismissing_a_failed_download_clears_it_but_never_interrupts_active_work() {
+        let home = tempfile::tempdir().unwrap();
+        let mut import = review(home.path());
+        import.start(&Context::default()).unwrap();
+        assert!(!import.dismiss());
+        assert_eq!(import.phase, Phase::Waiting);
+        import.finish(import.token(), Err("fixture failure".into()));
+        assert!(import.dismiss());
+        assert_eq!(import.phase, Phase::Idle);
+        assert!(import.error.is_none());
+        assert!(!import.can_retry());
     }
 
     #[test]
