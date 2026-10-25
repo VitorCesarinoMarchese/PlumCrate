@@ -852,6 +852,18 @@ impl Controls {
     pub fn open_trash(&mut self, catalog: &Catalog) {
         if let Some(identity) = self.identity(catalog) { self.submit(identity, Action::ListTrash); }
     }
+    pub fn set_marked_enabled(&mut self, catalog: &Catalog, enabled: bool) {
+        if catalog.loading || self.busy() { return; }
+        let Some(root) = catalog.root.clone() else { return; };
+        for entry in &catalog.mods {
+            let identity = EntryId::of(entry);
+            if entry.id.is_none() || entry.enabled == enabled || !catalog.marked.contains(&identity) { continue; }
+            let identity = Identity { operation: self.next, root: root.clone(), entry: Some(identity), generation: catalog.generation() };
+            self.next += 1;
+            self.submit(identity, Action::Toggle { enabled });
+        }
+    }
+
     pub fn toggle_selected(&mut self, catalog: &Catalog) {
         let Some(entry) = catalog.selected_mod().filter(|entry| entry.id.is_some()) else { return; };
         if catalog.loading || self.busy() { return; }
@@ -2015,6 +2027,31 @@ mod tests {
         assert!(matches!(controls.dialog, Some(Dialog::Import { zip: false, .. })));
         assert!(controls.operations.is_empty());
     }
+    #[test]
+    fn bulk_toggle_queues_only_marked_managed_mods_needing_a_change() {
+        let dir = tempfile::tempdir().unwrap();
+        let mut controls = Controls::new(dir.path().join("managed"), dir.path().into(), Settings::default(), || {}).unwrap();
+        controls.recovering = false;
+        let mut catalog = Catalog::default();
+        let generation = catalog.begin_scan(dir.path().join("game"));
+        let entries = [("a", Some("a"), false), ("b", Some("b"), false), ("c", None, false), ("d", Some("d"), false), ("e", Some("e"), true)]
+            .into_iter().map(|(name, id, enabled)| serde_json::from_value(serde_json::json!({
+                "key": name, "name": name, "id": id, "files": ["file.package"], "mod_files": ["file.package"],
+                "source": if id.is_some() { "managed" } else { "external" }, "enabled": enabled, "group_path": [name]
+            })).unwrap()).collect();
+        catalog.accept_scan(generation, Ok(entries));
+        for index in [0, 1, 2, 4] { catalog.toggle_mark(index); }
+        controls.set_marked_enabled(&catalog, true);
+        assert_eq!(controls.operations.len(), 2);
+        assert_eq!(controls.operations[0].job.identity.entry, Some(EntryId::Managed("a".into())));
+        assert_eq!(controls.operations[1].job.identity.entry, Some(EntryId::Managed("b".into())));
+        assert_ne!(controls.operations[0].job.identity.operation, controls.operations[1].job.identity.operation);
+        assert!(controls.operations.iter().all(|op| matches!(op.job.action, Action::Toggle { enabled: true })));
+        assert!(catalog.selected.is_none());
+        controls.set_marked_enabled(&catalog, false);
+        assert_eq!(controls.operations.len(), 2, "busy bulk actions must not submit twice");
+    }
+
     #[test]
     fn late_failed_review_keeps_its_history_identity_without_replacing_new_selection() {
         let dir = tempfile::tempdir().unwrap();

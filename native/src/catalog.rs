@@ -1,4 +1,7 @@
-use std::{collections::BTreeMap, path::PathBuf};
+use std::{
+    collections::{BTreeMap, HashSet},
+    path::PathBuf,
+};
 use ts4_mod_manager_core::mod_scan::ScannedMod;
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
@@ -46,6 +49,7 @@ pub struct Catalog {
     pub mods: Vec<ScannedMod>,
     pub visible: Vec<usize>,
     pub selected: Option<EntryId>,
+    pub marked: HashSet<EntryId>,
     pub loading: bool,
     pub error: Option<String>,
     pub root: Option<PathBuf>,
@@ -69,6 +73,7 @@ impl Catalog {
             self.search_keys.clear();
             self.visible.clear();
             self.selected = None;
+            self.marked.clear();
         }
         self.root = Some(root);
         self.loading = true;
@@ -157,6 +162,21 @@ impl Catalog {
                     .then_some(index)
             })
             .collect();
+        if !self.marked.is_empty() {
+            let visible_ids: HashSet<_> = self.visible.iter().map(|&index| EntryId::of(&self.mods[index])).collect();
+            self.marked.retain(|id| visible_ids.contains(id));
+        }
+    }
+
+    pub fn toggle_mark(&mut self, index: usize) {
+        if let Some(entry) = self.mods.get(index) {
+            let id = EntryId::of(entry);
+            if !self.marked.remove(&id) { self.marked.insert(id); }
+        }
+    }
+
+    pub fn mark_visible(&mut self) {
+        self.marked = self.visible.iter().map(|&index| EntryId::of(&self.mods[index])).collect();
     }
 
     pub fn select(&mut self, index: usize) {
@@ -188,6 +208,32 @@ mod tests {
             "group_path": [name], "enabled": true
         }))
         .expect("fixture")
+    }
+
+    #[test]
+    fn multi_selection_tracks_identity_and_only_selects_visible_entries() {
+        let mut catalog = Catalog::default();
+        let generation = catalog.begin_scan("A".into());
+        catalog.accept_scan(generation, Ok(vec![entry("First", Some("one")), entry("Second", Some("two"))]));
+        catalog.toggle_mark(0);
+        catalog.toggle_mark(1);
+        assert_eq!(catalog.marked.len(), 2);
+        assert!(catalog.selected.is_none(), "multi-select must not open details");
+        catalog.toggle_mark(0);
+        assert_eq!(catalog.marked.len(), 1);
+        catalog.search("First".into());
+        assert!(catalog.marked.is_empty(), "hidden entries must not remain action targets");
+        catalog.mark_visible();
+        assert_eq!(catalog.marked, [EntryId::Managed("one".into())].into());
+        let generation = catalog.begin_scan("A".into());
+        catalog.accept_scan(generation, Ok(vec![entry("First renamed", Some("one"))]));
+        assert_eq!(catalog.marked.len(), 1);
+        let generation = catalog.begin_scan("A".into());
+        catalog.accept_scan(generation, Ok(vec![]));
+        assert!(catalog.marked.is_empty());
+        catalog.marked.insert(EntryId::Managed("one".into()));
+        catalog.begin_scan("B".into());
+        assert!(catalog.marked.is_empty());
     }
 
     #[test]

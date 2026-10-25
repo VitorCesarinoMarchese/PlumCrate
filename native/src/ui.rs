@@ -377,6 +377,7 @@ pub struct View {
     updates_page: bool,
     pub discovery: crate::discovery::DiscoverView,
     detail_open: Option<EntryId>,
+    selecting: bool,
     editing_root: bool,
     help_open: bool,
     copied: Option<(EntryId, f64)>,
@@ -387,6 +388,9 @@ pub struct View {
 
 #[derive(Default)]
 pub struct RenderStats {
+    pub select_mode: Option<egui::Rect>,
+    pub select_all: Option<egui::Rect>,
+    pub first_checkbox: Option<egui::Rect>,
     pub logo: Option<egui::Rect>,
     pub browse_tab: Option<egui::Rect>,
     pub library_tab: Option<egui::Rect>,
@@ -689,6 +693,13 @@ impl View {
                     for (filter, label) in [(ModFilter::All, "All"), (ModFilter::Installed, "On"), (ModFilter::Stored, "Off")] {
                         if ui.add(egui::Button::new(label).selected(catalog.installation_filter == filter)).on_hover_text(filter.label()).clicked() { catalog.set_filter(filter); }
                     }
+                    let select = ui.add(egui::Button::new(if self.selecting { "Done" } else { "Select" }).selected(self.selecting));
+                    self.stats.select_mode = Some(select.rect);
+                    if select.clicked() {
+                        self.selecting = !self.selecting;
+                        self.detail_open = None;
+                        catalog.marked.clear();
+                    }
                     ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
                         let list = ui.add(egui::Button::image_and_text(Icon::List.image(foreground, 18.0), "").selected(self.layout == LibraryLayout::List)).on_hover_text("List view");
                         list.widget_info(|| egui::WidgetInfo::labeled(egui::WidgetType::Button, ui.is_enabled(), "List"));
@@ -699,6 +710,24 @@ impl View {
                         if cards.clicked() { self.layout = LibraryLayout::Cards; }
                     });
                 });
+                if self.selecting {
+                    ui.horizontal_wrapped(|ui| {
+                        ui.label(format!("{} selected", catalog.marked.len()));
+                        let all = ui.add_enabled(!catalog.visible.is_empty(), egui::Button::new("Select all shown"));
+                        self.stats.select_all = Some(all.rect);
+                        if all.clicked() { catalog.mark_visible(); }
+                        if ui.add_enabled(!catalog.marked.is_empty(), egui::Button::new("Clear selection")).clicked() { catalog.marked.clear(); }
+                        if let Some(c) = controls.as_deref_mut() {
+                            let ready = !catalog.loading && !c.busy();
+                            for (enabled, label) in [(true, "Enable selected"), (false, "Disable selected")] {
+                                let actionable = catalog.mods.iter().any(|entry| entry.id.is_some() && entry.enabled != enabled && catalog.marked.contains(&EntryId::of(entry)));
+                                if ui.add_enabled(ready && actionable, egui::Button::new(label)).on_hover_text("Changes selected managed mods only. External mods are skipped.").clicked() {
+                                    c.set_marked_enabled(catalog, enabled);
+                                }
+                            }
+                        }
+                    });
+                }
                 ui.add_space(12.0);
                 if catalog.visible.is_empty() {
                     ui.add_space(32.0);
@@ -745,7 +774,7 @@ impl View {
                 egui::ScrollArea::vertical().max_height(crate::popup::body_height(ui.ctx())).show(ui, |ui| {
                     for (title, body) in [
                         ("Add mods", "Choose your Sims 4 game folder, then Import folder or Import ZIP. New mods start enabled. Use the library switch to turn a mod on or off. Originals stay in place."),
-                        ("Inspect and organize", "Click a card or list row for details. Use Previous/Next to browse. Right-click a mod for rename, source and trash actions. Trash remains recoverable."),
+                        ("Inspect and organize", "Use Select to choose multiple mods, or Select all shown for the current search and filter. Enable selected and Disable selected change managed mods only. Done clears the selection. Click a card or list row for details. Use Previous/Next to browse. Right-click a mod for rename, source and trash actions. Trash remains recoverable."),
                         ("Browse CurseForge", "Browse mods searches The Sims 4 mods and custom content on CurseForge. Save your API key in Settings, then search, filter by category or sort. Click a card for details or choose Download in browser to open the download page. This saves the selected source and installs the verified file in your selected game. Use Activity to inspect or cancel the task."),
                         ("Save a source", "Find source uses your locally saved CurseForge key. No match? Attach a known URL manually. Review every attachment before saving."),
                         ("Check updates", "Attach a CurseForge source, then choose Check updates. Record the release you installed to compare versions. Update notices link to the mod page; download there, replace your local files, and record the new release."),
@@ -822,8 +851,9 @@ impl View {
                             };
                             let entry = &catalog.mods[index];
                             let identity = EntryId::of(entry);
-                            let selected = catalog.selected.as_ref() == Some(&identity);
+                            let selected = if self.selecting { catalog.marked.contains(&identity) } else { catalog.selected.as_ref() == Some(&identity) };
                             let mut toggle_requested = false;
+                    let mut mark_requested = false;
                             let response = ui
                                 .push_id(&identity, |ui| {
                                     ui.style_mut().interaction.selectable_labels = false;
@@ -860,6 +890,15 @@ impl View {
                                         image_rect,
                                         true,
                                     );
+                                    if self.selecting {
+                                        let check_rect = egui::Rect::from_min_size(egui::pos2(rect.right() - 38.0, rect.top() + 8.0), egui::vec2(30.0, 30.0));
+                                        let mut check_ui = ui.new_child(egui::UiBuilder::new().max_rect(check_rect));
+                                        let mut checked = selected;
+                                        let check = check_ui.checkbox(&mut checked, "").on_hover_text(format!("Select {}", entry.name));
+                                        check.widget_info(|| egui::WidgetInfo::selected(egui::WidgetType::Checkbox, true, selected, format!("Select {}", entry.name)));
+                                        mark_requested = check.changed();
+                                        if self.stats.first_checkbox.is_none() { self.stats.first_checkbox = Some(check.rect); }
+                                    }
                                     if entry.id.as_ref().is_some_and(|id| controls.as_ref().is_some_and(|c| c.updates.available(id))) {
                                         let badge = egui::Rect::from_min_size(image_rect.min + egui::vec2(6.0, 6.0), egui::vec2(132.0, 24.0));
                                         ui.painter().rect_filled(badge, 4, ui.visuals().selection.bg_fill);
@@ -963,7 +1002,9 @@ impl View {
                                 self.stats.first_row = Some(response.rect.intersect(ui.clip_rect()));
                             }
                             self.stats.rows += 1;
-                            if response.clicked() && !toggle_requested {
+                            if mark_requested || (self.selecting && response.clicked() && !toggle_requested) {
+                                catalog.toggle_mark(index);
+                            } else if response.clicked() && !toggle_requested {
                                 catalog.select(index);
                                 self.detail_open = catalog.selected.clone();
                             }
@@ -1001,8 +1042,9 @@ impl View {
                         if count == 1 { "mod file" } else { "mod files" }
                     );
                     if entry.id.as_ref().is_some_and(|id| controls.as_ref().is_some_and(|c| c.updates.available(id))) { subtitle.push_str(" · Update available"); }
-                    let selected = catalog.selected.as_ref() == Some(&identity);
+                    let selected = if self.selecting { catalog.marked.contains(&identity) } else { catalog.selected.as_ref() == Some(&identity) };
                     let mut toggle_requested = false;
+                    let mut mark_requested = false;
                     let response = ui
                         .push_id(identity, |ui| {
                             let (rect, response) = ui.allocate_exact_size(
@@ -1018,13 +1060,16 @@ impl View {
                             let inner = rect.shrink2(egui::vec2(12.0, if compact {4.0} else {10.0}));
                             let thumbnail =
                                 egui::Rect::from_min_size(inner.min, egui::Vec2::splat(inner.height().min(44.0)));
-                            self.paint_preview(
-                                ui,
-                                entry.preview.as_deref(),
-                                catalog.root.as_deref(),
-                                thumbnail,
-                                true,
-                            );
+                            if self.selecting {
+                                let mut check_ui = ui.new_child(egui::UiBuilder::new().max_rect(thumbnail).layout(egui::Layout::left_to_right(egui::Align::Center)));
+                                let mut checked = selected;
+                                let check = check_ui.checkbox(&mut checked, "").on_hover_text(format!("Select {}", entry.name));
+                                check.widget_info(|| egui::WidgetInfo::selected(egui::WidgetType::Checkbox, true, selected, format!("Select {}", entry.name)));
+                                mark_requested = check.changed();
+                                if self.stats.first_checkbox.is_none() { self.stats.first_checkbox = Some(check.rect); }
+                            } else {
+                                self.paint_preview(ui, entry.preview.as_deref(), catalog.root.as_deref(), thumbnail, true);
+                            }
                             let mut row = ui.new_child(
                                 egui::UiBuilder::new()
                                     .max_rect(egui::Rect::from_min_max(
@@ -1092,7 +1137,9 @@ impl View {
                         self.stats.first_row = Some(response.rect.intersect(ui.clip_rect()));
                     }
                     self.stats.rows += 1;
-                    if response.clicked() && !toggle_requested {
+                    if mark_requested || (self.selecting && response.clicked() && !toggle_requested) {
+                        catalog.toggle_mark(index);
+                    } else if response.clicked() && !toggle_requested {
                         catalog.select(index);
                         self.detail_open = catalog.selected.clone();
                     }
@@ -1591,6 +1638,36 @@ mod tests {
             let sampled_aspect = source.x * uv.width() / (source.y * uv.height());
             assert!((sampled_aspect - destination.x / destination.y).abs() < 0.001);
             assert!(uv.min.x >= 0.0 && uv.min.y >= 0.0 && uv.max.x <= 1.0 && uv.max.y <= 1.0);
+        }
+    }
+
+    #[test]
+    fn multi_select_works_in_both_library_views_without_opening_details() {
+        for layout in [LibraryLayout::Cards, LibraryLayout::List] {
+            let ctx = egui::Context::default();
+            setup(&ctx);
+            let mut catalog = populated_catalog();
+            let mut view = View { layout, ..View::default() };
+            render(&ctx, &mut view, &mut catalog, vec![], 1200.0);
+            render(&ctx, &mut view, &mut catalog, vec![], 1200.0);
+            let pos = view.stats.select_mode.unwrap().center();
+            render(&ctx, &mut view, &mut catalog, click(pos), 1200.0);
+            render(&ctx, &mut view, &mut catalog, vec![], 1200.0);
+            let pos = view.stats.first_checkbox.unwrap().center();
+            render(&ctx, &mut view, &mut catalog, click(pos), 1200.0);
+            assert_eq!(catalog.marked.len(), 1);
+            assert!(view.detail_open.is_none());
+            render(&ctx, &mut view, &mut catalog, vec![], 1200.0);
+            let pos = view.stats.first_row.unwrap().center();
+            render(&ctx, &mut view, &mut catalog, click(pos), 1200.0);
+            assert!(catalog.marked.is_empty());
+            assert!(view.detail_open.is_none());
+            let pos = view.stats.select_all.unwrap().center();
+            render(&ctx, &mut view, &mut catalog, click(pos), 1200.0);
+            assert_eq!(catalog.marked.len(), catalog.visible.len());
+            let pos = view.stats.select_mode.unwrap().center();
+            render(&ctx, &mut view, &mut catalog, click(pos), 1200.0);
+            assert!(catalog.marked.is_empty());
         }
     }
 
