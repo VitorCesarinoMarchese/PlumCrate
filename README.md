@@ -43,9 +43,9 @@ Browse your collection by photo, find a file by name, and choose which mods are 
 | Recover removed mods | Move managed mods to trash and review where they will go before restoring them. |
 | Make it yours | Choose light, dark, or system appearance, create a custom theme, and remember your game folders. |
 
-## Alpha 0.01
+## First alpha
 
-The first alpha, **0.01**, is being prepared. Expect rough edges and report problems before relying on the app for your main collection.
+The first alpha, **v0.0.1-alpha.1**, is being prepared. Read the [release notes](docs/releases/v0.0.1-alpha.1.md) for features, download instructions, and limitations. Expect rough edges and report problems before relying on the app for your main collection.
 
 Linux is the current supported platform. Windows and macOS have not been verified. Release downloads will appear on the [releases page](https://github.com/VitorCesarinoMarchese/TS4ModManager/releases) when published. Until then, use the [build and run guide](docs/development.md#run-the-app).
 
