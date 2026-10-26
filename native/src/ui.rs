@@ -390,6 +390,7 @@ pub struct View {
 pub struct RenderStats {
     pub select_mode: Option<egui::Rect>,
     pub select_all: Option<egui::Rect>,
+    pub trash_selected: Option<egui::Rect>,
     pub first_checkbox: Option<egui::Rect>,
     pub logo: Option<egui::Rect>,
     pub browse_tab: Option<egui::Rect>,
@@ -505,7 +506,7 @@ impl View {
                                 else { self.editing_root = true; self.root_input = root.display().to_string(); }
                         }
                         if narrow && let Some(c) = controls.as_deref_mut()
-                            && ui.add(egui::Button::image(Icon::Trash.image(foreground, 18.0))).on_hover_text("Restore from trash").clicked() { c.open_trash(catalog); }
+                            && ui.add(egui::Button::image(Icon::Trash.image(foreground, 18.0))).on_hover_text("Trash").clicked() { c.open_trash(catalog); }
                         if let Some(c) = controls.as_deref_mut() {
                             c.app_updates.banner(ui);
                         }
@@ -725,6 +726,11 @@ impl View {
                                     c.set_marked_enabled(catalog, enabled);
                                 }
                             }
+                            let managed_selected = catalog.mods.iter().any(|entry| entry.id.is_some() && catalog.marked.contains(&EntryId::of(entry)));
+                            let trash = ui.add_enabled(ready && managed_selected, egui::Button::new("Move selected to trash"))
+                                .on_hover_text("Review selected managed mods before moving them to recoverable trash. External mods stay untouched.");
+                            self.stats.trash_selected = Some(trash.rect);
+                            if trash.clicked() { c.review_marked_trash(catalog); }
                         }
                     });
                 }
@@ -774,7 +780,7 @@ impl View {
                 egui::ScrollArea::vertical().max_height(crate::popup::body_height(ui.ctx())).show(ui, |ui| {
                     for (title, body) in [
                         ("Add mods", "Choose your Sims 4 game folder, then Import folder or Import ZIP. New mods start enabled. Use the library switch to turn a mod on or off. Originals stay in place."),
-                        ("Inspect and organize", "Use Select to choose multiple mods, or Select all shown for the current search and filter. Enable selected and Disable selected change managed mods only. Done clears the selection. Click a card or list row for details. Use Previous/Next to browse. Right-click a mod for rename, source and trash actions. Trash remains recoverable."),
+                        ("Inspect and organize", "Use Select to choose multiple mods, or Select all shown for the current search and filter. Enable selected and Disable selected change managed mods only. Move selected to trash lists managed mods for confirmation and keeps them recoverable in Trash. External mods stay untouched. Done clears the selection. Click a card or list row for details. Use Previous/Next to browse. Right-click a mod for rename, source and trash actions. Trash allows restore, or permanent deletion of app-managed mods after an irreversible-deletion acknowledgement and confirmation."),
                         ("Browse CurseForge", "Browse mods searches The Sims 4 mods and custom content on CurseForge. Save your API key in Settings, then search, filter by category or sort. Click a card for details or choose Download in browser to open the download page. This saves the selected source and installs the verified file in your selected game. Use Activity to inspect or cancel the task."),
                         ("Save a source", "Find source uses your locally saved CurseForge key. No match? Attach a known URL manually. Review every attachment before saving."),
                         ("Check updates", "Attach a CurseForge source, then choose Check updates. Record the release you installed to compare versions. Update notices link to the mod page; download there, replace your local files, and record the new release."),

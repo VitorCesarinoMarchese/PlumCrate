@@ -10,12 +10,14 @@ use ts4_mod_manager_native::{
     settings::{Settings, Theme},
     ui,
 };
-const CASES: [(&str, bool, bool, bool, [f32; 2]); 5] = [
-    ("cards-light", false, false, true, [1200., 800.]),
-    ("list-dark", true, true, true, [1200., 800.]),
+const CASES: [(&str, bool, bool, bool, [f32; 2]); 7] = [
+    ("cards-light", false, false, false, [1200., 800.]),
+    ("list-dark", true, true, false, [1200., 800.]),
     ("list-narrow", false, true, false, [680., 760.]),
-    ("list-minimum", false, true, true, [640., 480.]),
-    ("cards-wide", false, false, true, [1876., 996.]),
+    ("list-minimum", false, true, false, [640., 480.]),
+    ("cards-wide", false, false, false, [1876., 996.]),
+    ("trash-review", true, false, true, [1200., 800.]),
+    ("trash-review-minimum", false, true, true, [640., 480.]),
 ];
 struct Capture {
     fixture: support::Fixture,
@@ -31,7 +33,7 @@ struct Capture {
 impl Capture {
     fn stage(&mut self, ctx: &egui::Context) {
         self.fixture = support::fixture();
-        let (_, dark, list, _enabled, size) = CASES[self.case];
+        let (_, dark, list, review, size) = CASES[self.case];
         ui::apply_settings_theme(
             ctx,
             &Settings {
@@ -40,7 +42,7 @@ impl Capture {
             },
         );
         self.list_selected = !list;
-        self.clicks = 2;
+        self.clicks = if review { 3 } else { 2 };
         self.frames = 0;
         self.requested = false;
         self.scans = 0;
@@ -65,7 +67,10 @@ impl eframe::App for Capture {
                 .list_switch
                 .inspect(|_| self.list_selected = true)
         } else if self.clicks > 0 {
-            let rect = if self.clicks == 2 { self.fixture.view.stats.select_mode } else { self.fixture.view.stats.first_checkbox };
+            let total = if CASES[self.case].3 { 3 } else { 2 };
+            let rect = if self.clicks == total { self.fixture.view.stats.select_mode }
+                else if self.clicks == total - 1 { self.fixture.view.stats.first_checkbox }
+                else { self.fixture.view.stats.trash_selected };
             if rect.is_some() { self.clicks -= 1; }
             rect
         } else {
@@ -134,7 +139,7 @@ impl eframe::App for Capture {
                 "the complete checkbox must fit in the visible row"
             );
             assert_eq!(self.scans, 1, "only initial loading may scan the library");
-            assert!(!self.fixture.controls.review_open());
+            assert_eq!(self.fixture.controls.review_open(), CASES[self.case].3);
             assert!(self.fixture.view.stats.detail_close.is_none());
             assert_eq!(self.fixture.catalog.marked.len(), 1);
             assert_eq!(
@@ -209,6 +214,6 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             Ok(Box::new(app))
         }),
     )?;
-    println!("5 selection captures; no mod files changed, original bytes preserved");
+    println!("7 selection and trash review captures; no mod files changed, original bytes preserved");
     Ok(())
 }

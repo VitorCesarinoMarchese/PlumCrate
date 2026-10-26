@@ -1,3 +1,6 @@
+mod trash_deletion;
+pub use trash_deletion::{TrashDeletion, TrashDeletionEntry, delete_reviewed_trash, review_trash_deletion};
+
 use std::fs;
 use std::path::{Path, PathBuf};
 
@@ -17,6 +20,8 @@ pub struct UninstallResult {
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "camelCase")]
 pub struct TrashEntry {
+    #[serde(default)]
+    pub title: Option<String>,
     pub name: String,
     pub path: String,
     pub original_path: Option<String>,
@@ -151,7 +156,19 @@ pub fn list_trash_entries(trash_files_dir: &Path) -> Result<Vec<TrashEntry>, Man
             if !is_mod_trash_entry(trash_files_dir, &name, &path, info.as_ref()) {
                 return None;
             }
+            // Display metadata is read in the worker, never while painting the UI.
+            // It does not grant restore or deletion eligibility.
+            let title = (|| {
+                crate::fs_scope::Directory::open(&path).ok()?;
+                let meta = path.join("meta.json");
+                if !fs::symlink_metadata(&meta).ok()?.is_file() { return None; }
+                let metadata: crate::managed_storage::ModMetadata = serde_json::from_slice(&fs::read(meta).ok()?).ok()?;
+                let title = metadata.custom_name.filter(|name| !name.trim().is_empty())
+                    .unwrap_or_else(|| if metadata.display_name.trim().is_empty() { metadata.name } else { metadata.display_name });
+                Some(title)
+            })();
             Some(TrashEntry {
+                title,
                 name,
                 path: path.to_string_lossy().to_string(),
                 original_path: info.as_ref().and_then(|info| info.original_path.clone()),
@@ -629,6 +646,7 @@ mod tests {
         let entries = list_trash_entries(&trash_files).expect("list");
 
         assert_eq!(entries[0].name, trash_name);
+        assert_eq!(serde_json::to_value(&entries[0]).unwrap()["title"], "ModA");
         assert_eq!(
             entries[0].original_path.as_deref(),
             Some(tmp.path().join("mods").join(id).to_string_lossy().as_ref())
@@ -655,6 +673,7 @@ mod tests {
         .unwrap();
         let entries = list_trash_entries(&trash_files).expect("list");
         assert_eq!(entries[0].name, trash_name);
+        assert!(entries[0].title.is_none());
         restore_trashed_mod(tmp.path(), &mods_dir, &trash_files, &trash_name).expect("restore");
 
         assert!(mods_dir.join("LooseMod/main.package").exists());

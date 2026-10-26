@@ -51,7 +51,8 @@ Project-specific rules for future coding agents working on TS4 Mod Manager.
 
 ## Filesystem safety
 
-- Never permanently delete user files.
+- Never permanently delete user files except app-managed mods already in trash, after an explicit review, acknowledgement that deletion cannot be undone, and user confirmation.
+- Permanent deletion must verify app ownership and unchanged reviewed trash contents. Never empty unrelated system trash.
 - Never delete unmanaged files.
 - Safe removal must move files to trash where applicable.
 - App-created symlinks may be removed only when ownership/safety checks pass.

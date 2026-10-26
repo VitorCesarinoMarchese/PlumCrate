@@ -33,6 +33,8 @@ pub enum Action {
     RemoveSource,
     Trash,
     ListTrash,
+    ReviewTrashDeletion(Vec<String>),
+    DeleteTrash(Box<ts4_mod_manager_core::lifecycle::TrashDeletion>),
     Restore(String),
     Lookup(Option<String>),
     CheckUpdates {
@@ -46,7 +48,7 @@ pub enum Action {
 }
 impl Action {
     pub fn read_only(&self) -> bool {
-        matches!(self, Self::Lookup(_) | Self::CheckUpdates { .. })
+        matches!(self, Self::Lookup(_) | Self::CheckUpdates { .. } | Self::ReviewTrashDeletion(_))
     }
     pub fn label(&self) -> &str {
         match self {
@@ -62,6 +64,8 @@ impl Action {
             Self::RemoveSource => "Remove source",
             Self::Trash => "Move to trash",
             Self::ListTrash => "Read trash",
+            Self::ReviewTrashDeletion(_) => "Review permanent deletion",
+            Self::DeleteTrash(_) => "Delete permanently",
             Self::Restore(_) => "Restore",
             Self::Lookup(_) => "Find source",
             Self::CheckUpdates { .. } => "Check updates",
@@ -82,6 +86,8 @@ pub enum Output {
     Imported { name: String, enable_error: Option<String> },
     Candidates(Vec<SourceCandidate>),
     Trash(Vec<ts4_mod_manager_core::lifecycle::TrashEntry>),
+    TrashDeletion(Box<ts4_mod_manager_core::lifecycle::TrashDeletion>),
+    TrashDeleted(usize),
     Updates { token: u64, reports: Vec<(String, Result<UpdateReport, String>)> },
     BrowserImported { token: u64, metadata: Box<storage::ModMetadata> },
 }
@@ -346,6 +352,13 @@ pub fn execute(job: &Job) -> Result<Output, String> {
             Ok(Output::Changed(
                 result.issues.into_iter().map(|i| i.message).collect(),
             ))
+        }
+        Action::ReviewTrashDeletion(names) => Ok(Output::TrashDeletion(Box::new(
+            ts4_mod_manager_core::lifecycle::review_trash_deletion(managed, &job.trash, names).map_err(error)?
+        ))),
+        Action::DeleteTrash(review) => {
+            ts4_mod_manager_core::lifecycle::delete_reviewed_trash(managed, &job.trash, review).map_err(error)?;
+            Ok(Output::TrashDeleted(review.entries().len()))
         }
         Action::ListTrash => Ok(Output::Trash(
             ts4_mod_manager_core::lifecycle::list_trash_entries(&job.trash).map_err(error)?,

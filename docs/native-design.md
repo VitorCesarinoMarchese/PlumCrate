@@ -172,4 +172,4 @@ Earlier bottom-anchor regression evidence: `native/tests/discovery_ui.rs::reachi
 - Do require user initiation for downloads and update checks.
 - Don't invent photos, authors, provider candidates or counters.
 - Don't open details or a confirmation popup when a managed mod's On/Off switch is clicked.
-- Don't permanently delete user files or remove unmanaged files.
+- Allow permanent deletion only of reviewed app-managed mods already in Trash, after an explicit irreversible-deletion acknowledgement and confirmation. Never remove unmanaged files or unrelated system trash.

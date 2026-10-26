@@ -176,6 +176,44 @@ impl Directory {
             .collect())
     }
 
+    #[cfg(target_os = "linux")]
+    pub(crate) fn remove_reviewed_entry(&self, name: &str, expected_digest: &str, directory: bool) -> Result<(), ManagerError> {
+        use sha2::{Digest, Sha256};
+        use std::{io::Read, os::{fd::AsRawFd, unix::fs::OpenOptionsExt}};
+        component(name)?;
+        let original = std::ffi::CString::new(name).map_err(|_| ManagerError::new(ErrorCode::InvalidPath, "Invalid trash name"))?;
+        let staged_name = format!(".ts4-deleting-{}", uuid::Uuid::new_v4());
+        let staged = std::ffi::CString::new(staged_name.as_str()).map_err(|_| ManagerError::new(ErrorCode::InvalidPath, "Invalid staging name"))?;
+        let rename = |from: &std::ffi::CStr, to: &std::ffi::CStr| {
+            let result = unsafe { libc::renameat2(self.file.as_raw_fd(), from.as_ptr(), self.file.as_raw_fd(), to.as_ptr(), libc::RENAME_NOREPLACE) };
+            if result == 0 { Ok(()) } else { Err(io_error(std::io::Error::last_os_error())) }
+        };
+        // Pin the parent and take the entry out of its public name before rechecking it.
+        rename(&original, &staged)?;
+        let path = std::path::PathBuf::from(format!("/proc/self/fd/{}", self.file.as_raw_fd())).join(&staged_name);
+        let result = (|| {
+            let digest = if directory {
+                let (child, _) = self.parent(&Path::new(&staged_name).join("sentinel"), false)?;
+                child.mod_content_digest()?
+            } else {
+                let mut file = fs::OpenOptions::new().read(true).custom_flags(libc::O_NOFOLLOW | libc::O_NONBLOCK).open(&path).map_err(io_error)?;
+                if !file.metadata().map_err(io_error)?.is_file() { return Err(ManagerError::new(ErrorCode::InvalidPath, "Trash index is not a regular file")); }
+                let mut bytes = Vec::new();
+                file.read_to_end(&mut bytes).map_err(io_error)?;
+                format!("{:x}", Sha256::digest(bytes))
+            };
+            if digest != expected_digest { return Err(ManagerError::new(ErrorCode::InvalidPath, "Trash contents changed. Review again before deleting.")); }
+            if directory { fs::remove_dir_all(&path) } else { fs::remove_file(&path) }.map_err(io_error)
+        })();
+        if let Err(error) = result {
+            if let Err(restore) = rename(&staged, &original) {
+                return Err(ManagerError::new(ErrorCode::IoError, format!("{}. Remaining trash is at {staged_name}; could not restore its name: {}", error.message, restore.message)));
+            }
+            return Err(error);
+        }
+        Ok(())
+    }
+
     pub fn open(path: &Path) -> Result<Self, ManagerError> {
         use std::os::unix::fs::OpenOptionsExt;
         let absolute = if path.is_absolute() {
@@ -557,5 +595,30 @@ pub fn create_directory(path: &Path) -> Result<(), ManagerError> {
             ErrorCode::InternalError,
             "Descriptor-relative directory creation is unsupported on this platform",
         ))
+    }
+}
+
+#[cfg(all(test, target_os = "linux"))]
+mod reviewed_deletion_tests {
+    use super::*;
+
+    #[test]
+    fn staged_deletion_restores_changed_and_symlink_entries_without_following_them() {
+        use std::os::unix::fs::symlink;
+        let temp = tempfile::tempdir().unwrap();
+        let bundle = temp.path().join("bundle");
+        fs::create_dir(&bundle).unwrap();
+        fs::write(bundle.join("mod.package"), b"reviewed").unwrap();
+        let digest = Directory::open(&bundle).unwrap().mod_content_digest().unwrap();
+        let parent = Directory::open(temp.path()).unwrap();
+        fs::write(bundle.join("mod.package"), b"changed").unwrap();
+        assert!(parent.remove_reviewed_entry("bundle", &digest, true).is_err());
+        assert_eq!(fs::read(bundle.join("mod.package")).unwrap(), b"changed");
+        fs::rename(&bundle, temp.path().join("outside")).unwrap();
+        symlink(temp.path().join("outside"), &bundle).unwrap();
+        assert!(parent.remove_reviewed_entry("bundle", &digest, true).is_err());
+        assert!(fs::symlink_metadata(&bundle).unwrap().file_type().is_symlink());
+        assert_eq!(fs::read(temp.path().join("outside/mod.package")).unwrap(), b"changed");
+        assert!(fs::read_dir(temp.path()).unwrap().all(|entry| !entry.unwrap().file_name().to_string_lossy().starts_with(".ts4-deleting-")));
     }
 }

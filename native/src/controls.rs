@@ -15,6 +15,19 @@ struct Operation {
     status: String,
     error: bool,
 }
+struct TrashSelection {
+    root: PathBuf,
+    generation: u64,
+    entries: Vec<(EntryId, String)>,
+}
+impl TrashSelection {
+    fn current(&self, catalog: &Catalog) -> bool {
+        !catalog.loading && catalog.root.as_ref() == Some(&self.root)
+            && catalog.generation() == self.generation
+            && self.entries.iter().all(|(id, _)| catalog.marked.contains(id))
+            && catalog.mods.iter().filter(|entry| entry.id.is_some() && catalog.marked.contains(&EntryId::of(entry))).count() == self.entries.len()
+    }
+}
 enum Dialog {
     Import {
         identity: Identity,
@@ -30,6 +43,8 @@ enum Dialog {
         title: String,
         lines: Vec<String>,
     },
+    TrashSelected(TrashSelection),
+    DeleteTrash { identity: Identity, review: Box<ts4_mod_manager_core::lifecycle::TrashDeletion>, acknowledged: bool },
     SettingsImport(Settings, bool),
 }
 enum PickPurpose {
@@ -71,6 +86,9 @@ pub struct Controls {
     theme_edit: Option<crate::settings::CustomTheme>,
     theme_edit_original: Option<String>,
     pub confirm_rect: Option<egui::Rect>,
+    pub delete_ack_rect: Option<egui::Rect>,
+    pub empty_trash_rect: Option<egui::Rect>,
+    pub trash_delete_rects: Vec<egui::Rect>,
     pub import_rect: Option<egui::Rect>,
     previews: crate::preview::Previews,
     activity: activity::Activity,
@@ -134,6 +152,9 @@ impl Controls {
             theme_edit,
             theme_edit_original,
             confirm_rect: None,
+            delete_ack_rect: None,
+            empty_trash_rect: None,
+            trash_delete_rects: vec![],
             import_rect: None,
             previews: crate::preview::Previews::with_cache(home.join(".cache/ts4-mod-manager/photos")),
             activity: Default::default(),
@@ -632,6 +653,7 @@ impl Controls {
                 | Action::Attach(_)
                 | Action::RemoveSource
                 | Action::Trash
+                | Action::DeleteTrash(_)
                 | Action::Restore(_)
         ) {
             self.approve(&catalog, &identity, action)?
@@ -803,6 +825,16 @@ impl Controls {
                         {
                             self.updates.accept(token, reports);
                         }
+                        Ok(Output::TrashDeletion(review)) if identity.current(catalog.root.as_ref(), catalog.selected.as_ref(), catalog.generation()) => {
+                            self.trash_entries = None;
+                            self.dialog = Some(Dialog::DeleteTrash { identity: identity.clone(), review, acknowledged: false });
+                        }
+                        Ok(Output::TrashDeleted(count)) => {
+                            self.notice = Some(format!("{count} trashed mods permanently deleted"));
+                            if identity.current(catalog.root.as_ref(), catalog.selected.as_ref(), catalog.generation()) {
+                                self.open_trash(catalog);
+                            }
+                        }
                         Ok(Output::Trash(entries))
                             if identity.current(
                                 catalog.root.as_ref(),
@@ -852,6 +884,21 @@ impl Controls {
     pub fn open_trash(&mut self, catalog: &Catalog) {
         if let Some(identity) = self.identity(catalog) { self.submit(identity, Action::ListTrash); }
     }
+    pub fn review_trash_deletion(&mut self, catalog: &Catalog, names: Vec<String>) {
+        if catalog.loading || self.busy() { return; }
+        if let Some(identity) = self.identity(catalog) { self.submit(identity, Action::ReviewTrashDeletion(names)); }
+    }
+
+    pub fn review_marked_trash(&mut self, catalog: &Catalog) {
+        if catalog.loading || self.busy() || self.review_open() { return; }
+        let Some(root) = catalog.root.clone() else { return; };
+        let entries: Vec<_> = catalog.mods.iter()
+            .filter(|entry| entry.id.is_some() && catalog.marked.contains(&EntryId::of(entry)))
+            .map(|entry| (EntryId::of(entry), entry.name.clone())).collect();
+        if entries.is_empty() { return; }
+        self.dialog = Some(Dialog::TrashSelected(TrashSelection { root, generation: catalog.generation(), entries }));
+    }
+
     pub fn set_marked_enabled(&mut self, catalog: &Catalog, enabled: bool) {
         if catalog.loading || self.busy() { return; }
         let Some(root) = catalog.root.clone() else { return; };
@@ -1120,6 +1167,9 @@ impl Controls {
             self.candidates = None;
         }
         self.confirm_rect = None;
+        self.delete_ack_rect = None;
+        self.empty_trash_rect = None;
+        self.trash_delete_rects.clear();
         self.previews.begin_frame(ctx, catalog.generation());
         if let Some((identity, candidates)) = self.candidates.take() {
             let mut keep = true;
@@ -1186,30 +1236,69 @@ impl Controls {
             )
         }) {
             let mut keep = true;
-            let popup = crate::popup::show(ctx, "restore-from-trash", "Restore from trash", |ui| {
-                if entries.is_empty() {
-                    ui.label("No recoverable entries in trash.");
+            let popup = crate::popup::show_width(ctx, "restore-from-trash", "Trash", 600.0, |ui| {
+                ui.label("Restore removed mods to your library. Deleting them requires a separate review.");
+                ui.add_space(8.0);
+                let reviewing = self.operations.iter().any(|op| matches!(op.job.action, Action::ReviewTrashDeletion(_)) && matches!(op.status.as_str(), "Queued" | "Running"));
+                if self.busy() || reviewing {
+                    ui.horizontal(|ui| { ui.spinner(); ui.label("Preparing review…"); });
+                } else {
+                    ui.label(egui::RichText::new(format!("{} {} in Trash", entries.len(), if entries.len() == 1 { "mod" } else { "mods" })).strong());
                 }
-                egui::ScrollArea::vertical().max_height(crate::popup::body_height(ctx)).show(ui, |ui| {
-                    for entry in &entries {
-                        ui.label(&entry.path);
-                        if let Some(path) = &entry.original_path {
-                            ui.label(format!("Original location: {path}"));
+                if let Some(error) = &self.error {
+                    ui.add(egui::Label::new(egui::RichText::new(error).color(ui.visuals().error_fg_color)).truncate()).on_hover_text(error);
+                }
+                ui.separator();
+                let ready = !self.busy() && !reviewing && !catalog.loading;
+                egui::ScrollArea::vertical()
+                    .id_salt("trash-list")
+                    .auto_shrink([false, true])
+                    .max_height((ctx.content_rect().height() - 300.0).clamp(80.0, 420.0))
+                    .show(ui, |ui| {
+                        if entries.is_empty() {
+                            ui.add_space(24.0);
+                            ui.label(egui::RichText::new("Trash is empty").size(18.0).strong());
+                            ui.label("Mods you remove from your library will appear here.");
+                            ui.add_space(24.0);
                         }
-                        if ui.button(format!("Review restore: {}", entry.name)).clicked() {
-                            self.confirm(
-                                catalog,
-                                Action::Restore(entry.name.clone()),
-                                "Restore mod",
-                                vec![entry.path.clone(), "Restore checks destinations and refuses to overwrite files.".into()],
-                            );
-                            keep = false;
+                        for entry in &entries {
+                            ui.push_id(&entry.name, |ui| {
+                                ui.add_space(8.0);
+                                ui.add(egui::Label::new(egui::RichText::new(entry.title.as_deref().unwrap_or(&entry.name)).strong()).truncate()).on_hover_text(&entry.name);
+                                if let Some(date) = &entry.deletion_date {
+                                    ui.label(egui::RichText::new(format!("Removed {}", date.replace('T', " · "))).small().color(ui.visuals().weak_text_color()));
+                                }
+                                ui.horizontal_wrapped(|ui| {
+                                    let selection = ui.visuals().selection;
+                                    if ui.add_enabled(ready, egui::Button::new(egui::RichText::new("Restore…").color(selection.stroke.color)).fill(selection.bg_fill).stroke(selection.stroke).min_size(egui::vec2(100.0, 36.0))).clicked() {
+                                        self.confirm(catalog, Action::Restore(entry.name.clone()), "Restore mod", vec![entry.title.as_deref().unwrap_or(&entry.name).to_owned(), "Restore checks destinations and refuses to overwrite files.".into()]);
+                                        keep = false;
+                                    }
+                                    let delete = ui.add_enabled(ready, egui::Button::new("Delete permanently…").frame(true).stroke(ui.visuals().widgets.noninteractive.bg_stroke).min_size(egui::vec2(150.0, 36.0)));
+                                    self.trash_delete_rects.push(delete.rect);
+                                    if delete.clicked() { self.review_trash_deletion(catalog, vec![entry.name.clone()]); }
+                                });
+                                ui.collapsing("File locations", |ui| {
+                                    ui.label("In Trash");
+                                    ui.label(&entry.path);
+                                    if let Some(path) = &entry.original_path { ui.label("Original location"); ui.label(path); }
+                                });
+                                ui.add_space(8.0);
+                                ui.separator();
+                            });
                         }
-                    }
+                    });
+                ui.add_space(8.0);
+                ui.label(egui::RichText::new("Only verified app-managed mods can be deleted. Other system trash stays untouched.").small().color(ui.visuals().weak_text_color()));
+                ui.add_space(8.0);
+                ui.horizontal(|ui| {
+                    let empty = ui.add_enabled(!entries.is_empty() && ready, egui::Button::new("Empty mod trash…").frame(true).stroke(ui.visuals().widgets.noninteractive.bg_stroke).min_size(egui::vec2(150.0, 36.0)));
+                    self.empty_trash_rect = Some(empty.rect);
+                    if empty.clicked() { self.review_trash_deletion(catalog, vec![]); }
+                    ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                        if ui.add_sized([80.0, 36.0], egui::Button::new("Close").frame(true).stroke(ui.visuals().widgets.noninteractive.bg_stroke)).clicked() { keep = false; }
+                    });
                 });
-                if crate::popup::close(ui).clicked() {
-                    keep = false;
-                }
             });
             if keep && !popup.should_close() {
                 self.trash_entries = Some((identity, entries));
@@ -1232,9 +1321,12 @@ impl Controls {
             Dialog::Rename(..) => "Rename mod",
             Dialog::Manual(..) => "Attach manual source URL",
             Dialog::Confirm { title, .. } => title,
+            Dialog::TrashSelected(..) => "Move selected mods to trash",
+            Dialog::DeleteTrash { .. } => "Permanently delete trashed mods?",
             Dialog::SettingsImport(..) => "Review imported settings",
         }
         .to_string();
+        let destructive = matches!(&dialog, Dialog::DeleteTrash { .. });
         let popup = crate::popup::show(ctx, "management-review", &title, |ui| {
             let (label, enabled) = egui::ScrollArea::vertical()
                 .max_height(crate::popup::body_height(ctx))
@@ -1272,6 +1364,33 @@ impl Controls {
                             }
                             (action.label(), current)
                         }
+                        Dialog::DeleteTrash { identity, review, acknowledged } => {
+                            ui.label("This permanently deletes the listed mods from Trash. They cannot be restored afterward. Original import files and unrelated system trash stay untouched.");
+                            for entry in review.entries() { ui.label(&entry.title); }
+                            ui.add_space(12.0);
+                            let acknowledgement = ui.scope(|ui| {
+                                let outline = egui::Stroke::new(1.0, ui.visuals().text_color());
+                                let widgets = &mut ui.visuals_mut().widgets;
+                                for widget in [&mut widgets.inactive, &mut widgets.hovered, &mut widgets.active] {
+                                    widget.bg_stroke = outline;
+                                    widget.corner_radius = egui::CornerRadius::same(3);
+                                }
+                                ui.checkbox(acknowledged, "I understand this cannot be undone.")
+                            }).inner;
+                            self.delete_ack_rect = Some(acknowledgement.rect);
+                            let current = !catalog.loading && !self.busy() && identity.current(catalog.root.as_ref(), catalog.selected.as_ref(), catalog.generation());
+                            if !current { ui.colored_label(ui.visuals().error_fg_color, "Catalog or game folder changed, or another operation is running. Cancel and review again."); }
+                            ("Delete permanently", current && *acknowledged)
+                        }
+                        Dialog::TrashSelected(selection) => {
+                            ui.label(format!("Move {} managed {} to trash?", selection.entries.len(), if selection.entries.len() == 1 { "mod" } else { "mods" }));
+                            ui.label("Verified installed links will be removed. Files stay recoverable in Trash. External mods stay untouched.");
+                            ui.add_space(12.0);
+                            for (_, name) in &selection.entries { ui.label(name); }
+                            let current = selection.current(catalog) && !self.busy();
+                            if !current { ui.colored_label(ui.visuals().error_fg_color, "Selection or catalog changed, or another operation is running. Cancel and review again."); }
+                            ("Move to trash", current)
+                        }
                         Dialog::SettingsImport(settings, key_included) => {
                             ui.label("Replaces your current draft. Save changes in Settings to apply it.");
                             ui.label(format!("Theme: {}", match settings.theme {
@@ -1288,7 +1407,15 @@ impl Controls {
                     }
                     action
                 }).inner;
-            let (approve, cancel) = crate::popup::actions(ui, label, enabled);
+            let (approve, cancel) = if destructive {
+                ui.scope(|ui| {
+                    let fill = ui.visuals().error_fg_color;
+                    let text = crate::ui::readable_text(ui.visuals().text_color(), &[fill]);
+                    ui.visuals_mut().selection.bg_fill = fill;
+                    ui.visuals_mut().selection.stroke.color = text;
+                    crate::popup::actions(ui, label, enabled)
+                }).inner
+            } else { crate::popup::actions(ui, label, enabled) };
             if enabled {
                 self.confirm_rect = Some(approve.rect);
             }
@@ -1341,6 +1468,24 @@ impl Controls {
                         Ok(_) => keep = false,
                         Err(error) => self.error = Some(error),
                     },
+                    Dialog::DeleteTrash { identity, review, acknowledged } => {
+                        if *acknowledged && !catalog.loading && !self.busy() {
+                            match self.approve(catalog, identity, Action::DeleteTrash(review.clone())) {
+                                Ok(_) => keep = false,
+                                Err(error) => self.error = Some(error),
+                            }
+                        }
+                    }
+                    Dialog::TrashSelected(selection) => {
+                        if selection.current(catalog) && !self.busy() {
+                            for (entry, _) in &selection.entries {
+                                let identity = Identity { operation: self.next, root: selection.root.clone(), entry: Some(entry.clone()), generation: selection.generation };
+                                self.next += 1;
+                                self.submit(identity, Action::Trash);
+                            }
+                            keep = false;
+                        }
+                    }
                     Dialog::SettingsImport(settings, _) => {
                         self.settings = settings.clone();
                         self.sync_imported_theme();
@@ -1359,6 +1504,46 @@ impl Controls {
 }
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn trash_actions_fit_and_restore_click_opens_review() {
+        let dir = tempfile::tempdir().unwrap();
+        let mut catalog = Catalog::default();
+        let generation = catalog.begin_scan(dir.path().join("game"));
+        catalog.accept_scan(generation, Ok(vec![]));
+        let mut controls = Controls::new(dir.path().join("managed"), dir.path().into(), Settings::default(), || {}).unwrap();
+        let deadline = std::time::Instant::now() + std::time::Duration::from_secs(5);
+        while controls.busy() {
+            controls.poll(&mut catalog);
+            assert!(std::time::Instant::now() < deadline);
+            std::thread::sleep(std::time::Duration::from_millis(2));
+        }
+        let identity = controls.identity(&catalog).unwrap();
+        controls.trash_entries = Some((identity, (0..20).map(|n| ts4_mod_manager_core::lifecycle::TrashEntry {
+            title: Some(format!("Mod {n}")), name: format!("mod-{n}"), path: format!("/{}", "long-directory/".repeat(30)),
+            original_path: Some(format!("/{}", "original/".repeat(30))), deletion_date: None,
+        }).collect()));
+        let ctx = egui::Context::default();
+        crate::ui::setup(&ctx);
+        let screen = egui::Rect::from_min_size(egui::Pos2::ZERO, egui::vec2(640.0, 480.0));
+        let render = |controls: &mut Controls, events| {
+            let mut output = ctx.run_ui(egui::RawInput { screen_rect: Some(screen), events, ..Default::default() }, |ui| controls.show_dialogs(ui.ctx(), &catalog));
+            output.textures_delta.clear();
+            output
+        };
+        for _ in 0..3 { render(&mut controls, vec![]); }
+        let output = render(&mut controls, vec![]);
+        let popup = ctx.read_response(egui::Id::new(("restore-from-trash", "Trash"))).unwrap().rect;
+        assert!(screen.contains_rect(popup), "Trash popup overflowed: {popup:?}");
+        let restore = output.shapes.iter().find_map(|shape| match &shape.shape {
+            egui::epaint::Shape::Text(text) if text.galley.text() == "Restore…" => Some(text.pos + text.galley.rect.center().to_vec2()),
+            _ => None,
+        }).expect("visible Restore action");
+        render(&mut controls, vec![egui::Event::PointerMoved(restore), egui::Event::PointerButton { pos: restore, button: egui::PointerButton::Primary, pressed: true, modifiers: Default::default() }]);
+        render(&mut controls, vec![egui::Event::PointerButton { pos: restore, button: egui::PointerButton::Primary, pressed: false, modifiers: Default::default() }]);
+        assert!(matches!(controls.dialog, Some(Dialog::Confirm { action: Action::Restore(_), .. })));
+        assert!(controls.trash_entries.is_none());
+    }
+
     #[test]
     fn popup_keeps_actions_aligned_and_fits_a_small_window() {
         let fixture = tempfile::tempdir().unwrap();
@@ -2027,6 +2212,160 @@ mod tests {
         assert!(matches!(controls.dialog, Some(Dialog::Import { zip: false, .. })));
         assert!(controls.operations.is_empty());
     }
+    #[test]
+    fn permanent_trash_deletion_requires_acknowledgement_and_a_current_review() {
+        use ts4_mod_manager_core::{managed_storage as storage, lifecycle};
+        let dir = tempfile::tempdir().unwrap();
+        let managed = dir.path().join("managed");
+        let root = dir.path().join("game");
+        let source = dir.path().join("source");
+        std::fs::create_dir_all(root.join("Mods")).unwrap();
+        std::fs::create_dir(&source).unwrap();
+        std::fs::write(source.join("mod.package"), b"original").unwrap();
+        let metadata = storage::create_managed_mod(&managed, storage::ImportRequest {
+            name: "Delete fixture".into(), slug: None, source_dir: source.clone(),
+        }).unwrap();
+        let trash = dir.path().join(".local/share/Trash/files");
+        let entry = lifecycle::uninstall_managed_mod(&managed, &root.join("Mods"), &trash, &metadata.mod_id).unwrap();
+        let mut catalog = Catalog::default();
+        let generation = catalog.begin_scan(root);
+        catalog.accept_scan(generation, Ok(vec![]));
+        let mut controls = Controls::new(managed, dir.path().into(), Settings::default(), || {}).unwrap();
+        let deadline = std::time::Instant::now() + std::time::Duration::from_secs(5);
+        while controls.busy() {
+            controls.poll(&mut catalog);
+            assert!(std::time::Instant::now() < deadline);
+            std::thread::sleep(std::time::Duration::from_millis(2));
+        }
+        controls.review_trash_deletion(&catalog, vec![]);
+        let deadline = std::time::Instant::now() + std::time::Duration::from_secs(5);
+        while !matches!(controls.dialog, Some(Dialog::DeleteTrash { .. })) {
+            controls.poll(&mut catalog);
+            assert!(std::time::Instant::now() < deadline);
+            std::thread::sleep(std::time::Duration::from_millis(2));
+        }
+        let ctx = egui::Context::default();
+        crate::ui::setup(&ctx);
+        frame(&ctx, &mut controls, &catalog, vec![]);
+        frame(&ctx, &mut controls, &catalog, vec![]);
+        assert!(controls.confirm_rect.is_none(), "unchecked acknowledgement must disable deletion");
+        assert!(std::path::Path::new(&entry.trashed_path).exists());
+        let pos = controls.delete_ack_rect.unwrap().center();
+        let click = |pos| vec![egui::Event::PointerMoved(pos),
+            egui::Event::PointerButton { pos, button: egui::PointerButton::Primary, pressed: true, modifiers: Default::default() },
+            egui::Event::PointerButton { pos, button: egui::PointerButton::Primary, pressed: false, modifiers: Default::default() }];
+        frame(&ctx, &mut controls, &catalog, click(pos));
+        frame(&ctx, &mut controls, &catalog, vec![]);
+        assert!(controls.confirm_rect.is_some());
+        catalog.begin_scan(dir.path().join("other-game"));
+        frame(&ctx, &mut controls, &catalog, vec![]);
+        assert!(controls.confirm_rect.is_none(), "a changed game must invalidate confirmation");
+        frame(&ctx, &mut controls, &catalog, vec![egui::Event::Key { key: egui::Key::Escape,
+            physical_key: None, pressed: true, repeat: false, modifiers: Default::default() }]);
+        assert!(!controls.review_open());
+        assert!(std::path::Path::new(&entry.trashed_path).exists());
+        catalog.loading = false;
+        controls.review_trash_deletion(&catalog, vec![]);
+        let deadline = std::time::Instant::now() + std::time::Duration::from_secs(5);
+        while !matches!(controls.dialog, Some(Dialog::DeleteTrash { .. })) {
+            controls.poll(&mut catalog);
+            assert!(std::time::Instant::now() < deadline);
+            std::thread::sleep(std::time::Duration::from_millis(2));
+        }
+        frame(&ctx, &mut controls, &catalog, vec![]);
+        frame(&ctx, &mut controls, &catalog, vec![]);
+        let pos = controls.delete_ack_rect.unwrap().center();
+        frame(&ctx, &mut controls, &catalog, click(pos));
+        frame(&ctx, &mut controls, &catalog, vec![]);
+        let pos = controls.confirm_rect.unwrap().center();
+        frame(&ctx, &mut controls, &catalog, click(pos));
+        let deadline = std::time::Instant::now() + std::time::Duration::from_secs(5);
+        while controls.busy() {
+            controls.poll(&mut catalog);
+            assert!(std::time::Instant::now() < deadline);
+            std::thread::sleep(std::time::Duration::from_millis(2));
+        }
+        assert!(!std::path::Path::new(&entry.trashed_path).exists());
+        assert_eq!(std::fs::read(source.join("mod.package")).unwrap(), b"original");
+        assert!(controls.operations.iter().all(|operation| !operation.error));
+    }
+
+    #[test]
+    fn bulk_trash_requires_confirmation_rejects_stale_reviews_and_preserves_files() {
+        use ts4_mod_manager_core::{managed_storage as storage, toggle, lifecycle};
+        let dir = tempfile::tempdir().unwrap();
+        let root = dir.path().join("game");
+        let managed = dir.path().join("managed");
+        std::fs::create_dir_all(root.join("Mods")).unwrap();
+        std::fs::write(root.join("Mods/unmanaged.package"), b"unmanaged").unwrap();
+        let mut ids = vec![];
+        for name in ["one", "two", "unselected"] {
+            let source = dir.path().join(name);
+            std::fs::create_dir(&source).unwrap();
+            std::fs::write(source.join(format!("{name}.package")), name).unwrap();
+            let metadata = storage::create_managed_mod(&managed, storage::ImportRequest {
+                name: name.into(), slug: Some(name.into()), source_dir: source,
+            }).unwrap();
+            assert!(toggle::apply_toggle(&managed, &root.join("Mods"), &metadata.mod_id, true).unwrap().applied);
+            ids.push(metadata.mod_id);
+        }
+        let mut catalog = Catalog::default();
+        let generation = catalog.begin_scan(root.clone());
+        catalog.accept_scan(generation, Ok(crate::worker::scan(&root, &managed).unwrap().mods));
+        for id in &ids[..2] { catalog.marked.insert(EntryId::Managed(id.clone())); }
+        for entry in catalog.mods.iter().filter(|entry| entry.id.is_none()) { catalog.marked.insert(EntryId::of(entry)); }
+        let mut controls = Controls::new(managed.clone(), dir.path().into(), Settings::default(), || {}).unwrap();
+        let deadline = std::time::Instant::now() + std::time::Duration::from_secs(5);
+        while controls.busy() {
+            controls.poll(&mut catalog);
+            assert!(std::time::Instant::now() < deadline);
+            std::thread::sleep(std::time::Duration::from_millis(2));
+        }
+        let ctx = egui::Context::default();
+        crate::ui::setup(&ctx);
+        controls.review_marked_trash(&catalog);
+        assert!(controls.review_open());
+        assert!(controls.operations.is_empty());
+        frame(&ctx, &mut controls, &catalog, vec![]);
+        frame(&ctx, &mut controls, &catalog, vec![egui::Event::Key {
+            key: egui::Key::Escape, physical_key: None, pressed: true, repeat: false, modifiers: Default::default(),
+        }]);
+        assert!(!controls.review_open());
+        assert!(controls.operations.is_empty());
+        controls.review_marked_trash(&catalog);
+        catalog.marked.remove(&EntryId::Managed(ids[0].clone()));
+        frame(&ctx, &mut controls, &catalog, vec![]);
+        assert!(controls.confirm_rect.is_none(), "changed selection cannot approve a stale review");
+        controls.dialog = None;
+        catalog.marked.insert(EntryId::Managed(ids[0].clone()));
+        controls.review_marked_trash(&catalog);
+        frame(&ctx, &mut controls, &catalog, vec![]);
+        frame(&ctx, &mut controls, &catalog, vec![]);
+        let pos = controls.confirm_rect.unwrap().center();
+        frame(&ctx, &mut controls, &catalog, vec![egui::Event::PointerMoved(pos),
+            egui::Event::PointerButton { pos, button: egui::PointerButton::Primary, pressed: true, modifiers: Default::default() },
+            egui::Event::PointerButton { pos, button: egui::PointerButton::Primary, pressed: false, modifiers: Default::default() }]);
+        assert_eq!(controls.operations.len(), 2);
+        assert!(controls.operations.iter().all(|op| matches!(op.job.action, Action::Trash)));
+        let deadline = std::time::Instant::now() + std::time::Duration::from_secs(5);
+        while controls.busy() {
+            controls.poll(&mut catalog);
+            assert!(std::time::Instant::now() < deadline);
+            std::thread::sleep(std::time::Duration::from_millis(2));
+        }
+        assert!(controls.operations.iter().all(|op| !op.error));
+        for name in ["one", "two"] {
+            assert!(!root.join(format!("Mods/{name}.package")).exists());
+            assert_eq!(std::fs::read(dir.path().join(name).join(format!("{name}.package"))).unwrap(), name.as_bytes());
+        }
+        assert_eq!(std::fs::read(root.join("Mods/unmanaged.package")).unwrap(), b"unmanaged");
+        assert!(storage::read_managed_mod(&managed, &ids[2]).is_ok());
+        let trash = lifecycle::list_trash_entries(&controls.trash).unwrap();
+        assert_eq!(trash.len(), 2);
+        for entry in trash { lifecycle::restore_trashed_mod(&managed, &root.join("Mods"), &controls.trash, &entry.name).unwrap(); }
+        for id in &ids { assert!(storage::read_managed_mod(&managed, id).is_ok()); }
+    }
+
     #[test]
     fn bulk_toggle_queues_only_marked_managed_mods_needing_a_change() {
         let dir = tempfile::tempdir().unwrap();
