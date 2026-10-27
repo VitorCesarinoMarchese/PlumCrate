@@ -3,6 +3,11 @@ import assert from 'node:assert/strict';
 import {readFile} from 'node:fs/promises';
 const origin='https://ts4-mod-manager.vercel.app';
 const read=name=>readFile(new URL(`../public/${name}`,import.meta.url),'utf8');
+test('the public repository links to the website and player guide',async()=>{
+  const readme=await readFile(new URL('../../README.md',import.meta.url),'utf8');
+  assert.ok(readme.includes(`](${origin}/)`),'The repository must link to the production website');
+  assert.ok(readme.includes(`](${origin}/guide)`),'The repository must link to the player guide');
+});
 for(const [file,path] of [['index.html','/'],['guide.html','/guide']]){
   test(`${file} exposes canonical identity and social metadata without JavaScript`,async()=>{
     const html=await read(file);

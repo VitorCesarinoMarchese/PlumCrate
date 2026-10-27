@@ -8,7 +8,7 @@ Your Sims 4 mods and custom content, organized on your Linux desktop.
 
 Browse your collection by photo, find a file by name, and choose which mods are active in your game. Keep downloaded mods in a local library, with direct on/off switches and recoverable trash.
 
-[Getting started](#getting-started) · [Documentation](docs/README.md) · [Report a bug](https://github.com/VitorCesarinoMarchese/TS4ModManager/issues) · [Releases](https://github.com/VitorCesarinoMarchese/TS4ModManager/releases)
+[Website](https://ts4-mod-manager.vercel.app/) · [Player guide](https://ts4-mod-manager.vercel.app/guide) · [Getting started](#getting-started) · [Documentation](docs/README.md) · [Report a bug](https://github.com/VitorCesarinoMarchese/TS4ModManager/issues) · [Releases](https://github.com/VitorCesarinoMarchese/TS4ModManager/releases)
 
 ![Sims 4 Mod Manager in light mode, showing the mod library with photo cards](docs/images/library-light.png)
 
