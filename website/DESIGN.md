@@ -101,7 +101,7 @@ The preview selector changes composition and resets the screenshot to Light, or 
 
 Light, Dark and Settings controls swap the genuine screenshot and its linked full-size image. Alt text follows the screenshot and language. The reveal lasts 0.35s with `cubic-bezier(.16, 1, .3, 1)`; reduced motion disables it and smooth scrolling. Captions disclose the demonstration library and link the original artwork credits.
 
-EN and PT-BR update visitor copy, screenshot descriptions, accessible navigation labels, release text and the document language. Semantic question disclosures work without a custom accordion. A skip link and visible keyboard focus support navigation. Focus uses a 3px outline with 5px offset; the light green focus token applies against blue and dark backgrounds. Hover slightly reduces brightness.
+EN and PT-BR are links to static language pages, with the selected language marked by `aria-current="true"`. They keep the existing button appearance and preserve guide sections and preview choices when JavaScript is available. Each page includes translated visitor copy, screenshot descriptions, navigation labels, metadata, and the document language before JavaScript runs. Semantic question disclosures work without a custom accordion. A skip link and visible keyboard focus support navigation. Focus uses a 3px outline with 5px offset; the light green focus token applies against blue and dark backgrounds. Hover slightly reduces brightness.
 
 ### User guide
 
@@ -127,4 +127,4 @@ Guide contents follow the section crossing the reading line below the sticky hea
 
 The contents column sits 24px below the measured header height and scrolls internally in short desktop windows. Anchor and skip-link offsets account for the sticky header. Mobile contents stay in the existing inline grid.
 
-Both pages render their header links from `public/site-navigation.js`. The shared order is The app, Get started, User guide, GitHub, with the same destinations and English/Portuguese labels. Static HTML fallback menus are checked against each other and the shared definition. Below 720px, both pages hide The app and Get started while retaining User guide and GitHub. Page context changes only the User guide current-page indication, never link order.
+Both pages expose static header links, checked against `public/site-navigation.js`. The build uses that shared definition for Portuguese labels. The shared order is The app, Get started, User guide, GitHub, with the same destinations in each language. Below 720px, both pages hide The app and Get started while retaining User guide and GitHub. Page context changes only the User guide current-page indication, never link order.

@@ -1,1 +1,15 @@
-{"name":"ts4-mod-manager-site","private":true,"type":"module","scripts":{"dev":"node dev.mjs","test":"node --test tests/*.test.mjs"}}
+{
+  "name": "ts4-mod-manager-site",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "node dev.mjs",
+    "test": "node --test tests/*.test.mjs",
+    "build": "node build.mjs",
+    "verify": "node verify.mjs"
+  },
+  "devDependencies": {
+    "parse5": "8.0.1",
+    "playwright": "1.64.1"
+  }
+}

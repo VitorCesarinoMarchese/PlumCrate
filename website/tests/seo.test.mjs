@@ -33,5 +33,5 @@ test('crawlers can discover both canonical pages through robots and sitemap',asy
   assert.ok(robots.includes(`Sitemap: ${origin}/sitemap.xml`));
   const sitemap=await read('sitemap.xml');
   assert.ok(sitemap.includes(`xmlns="http://www.sitemaps.org/schemas/sitemap/0.9"`));
-  assert.deepEqual([...sitemap.matchAll(/<loc>(.*?)<\/loc>/g)].map(m=>m[1]),[origin+'/',origin+'/guide']);
+  assert.deepEqual([...sitemap.matchAll(/<loc>(.*?)<\/loc>/g)].map(m=>m[1]),[origin+'/',origin+'/guide',origin+'/pt-br',origin+'/pt-br/guide']);
 });

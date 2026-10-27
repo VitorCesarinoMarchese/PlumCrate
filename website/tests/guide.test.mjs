@@ -6,7 +6,7 @@ const publicDir=new URL('../public/',import.meta.url);
 test('the visitor guide stays on the website instead of opening the developer reference',async()=>{
   const homepage=await readFile(new URL('index.html',publicDir),'utf8');
   assert.doesNotMatch(homepage,/href="https:\/\/github\.com\/[^\"]*\/docs\/native-app\.md"/);
-  assert.match(homepage,/href="guide(?:\.html)?"[^>]*data-i18n="guide"/);
+  assert.match(homepage,/href="\/guide"[^>]*data-i18n="guide"/);
 });
 test('the user guide has valid task navigation and official CurseForge sources',async()=>{
   const guide=await readFile(new URL('guide.html',publicDir),'utf8');

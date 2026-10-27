@@ -4,6 +4,7 @@ Run the bilingual marketing website locally with Node.js 22 or later:
 
 ```sh
 cd website
+npm ci
 npm run dev
 ```
 
@@ -11,7 +12,7 @@ Open <http://localhost:4173> for the selected Gallery website. Open <http://loca
 
 ## User guide
 
-The [player guide](https://ts4-mod-manager.vercel.app/guide) lives at `/guide` in production and `guide.html` locally, in English and Brazilian Portuguese. Landing-page guide links preserve the selected language. It covers installation, game-folder selection, imports, library controls, optional CurseForge access, manual update checks, trash and settings. Desktop control labels remain English to match the current app. The top navigation stays visible while scrolling. Both pages render the same links from `public/site-navigation.js`, preserving labels, order, destinations and language. The contents menu follows the reading position and shows the current section as a subdued, disabled link; other sections remain clickable.
+The [player guide](https://ts4-mod-manager.vercel.app/guide) lives at `/guide` in English and `/pt-br/guide` in Brazilian Portuguese, locally and in production. Landing-page guide links preserve the selected language. It covers installation, game-folder selection, imports, library controls, optional CurseForge access, manual update checks, trash and settings. Desktop control labels remain English to match the current app. The top navigation stays visible while scrolling. Both pages expose the same static navigation, checked against `public/site-navigation.js`. The contents menu follows the reading position and shows the current section as a subdued, disabled link; other sections remain clickable.
 
 CurseForge sources were checked on 2026-10-20. The official support article describes a developer application reviewed by Overwolf; section 2.2 of the API terms restricts sharing or transferring keys. The guide links to that process without promising a general personal-key entitlement, and describes local configuration only for authorized access. It never collects keys. Local mod management remains usable without a key.
 
@@ -24,10 +25,11 @@ Gallery is live at <https://ts4-mod-manager.vercel.app>. Its production default 
 From the `website` directory, deploy with your authenticated Vercel account:
 
 ```sh
-npx vercel deploy --prod --yes --project ts4-mod-manager --scope vitorcesarinomarcheses-projects
+npx vercel link --yes --project ts4-mod-manager --scope vitorcesarinomarcheses-projects
+npx vercel deploy --prod --yes --scope vitorcesarinomarcheses-projects
 ```
 
-The checked-in `vercel.json` uses `public` as the output directory and disables the build command. The root `api/release.js` becomes a Node.js function. This deployment uses the CLI; automatic Git deployments are not connected. If importing this repository through Vercel later, set Root Directory to `website` and Framework Preset to Other.
+The checked-in `vercel.json` runs `npm run build` and publishes `dist`. `build.mjs` renders English templates and the existing Portuguese translations in `copy/pt-BR.mjs` into four static pages with localized metadata, navigation, and language alternatives. Edit those sources and rebuild; `dist` is ignored by git. `npm run dev` also builds once at startup. Restart it after editing a source. The root `api/release.js` becomes a Node.js function. This deployment uses the CLI; automatic Git deployments are not connected. If importing this repository through Vercel later, set Root Directory to `website` and Framework Preset to Other.
 
 After deploying, verify both languages, all screenshot tabs, and `/api/release` on the production URL.
 
@@ -43,11 +45,14 @@ When an AppImage exists, the main button points directly to its GitHub asset. Th
 
 ```sh
 npm test
+npm run build
+npx playwright install chromium
+npm run verify
 node --check public/app.js
 node --check api/release.js
 ```
 
-Navigation tests cover long sections, reverse scrolling, the initial section and the document end. Guide tests check the visitor destination, section anchors, task coverage, official API sources, and absence of key-collection inputs. The release selection tests cover empty releases, prereleases, draft exclusion, incompatible files, allowed download URLs, and publication ordering. Run the desktop app's checks from AGENTS.md before reporting repository work complete.
+Navigation tests cover long sections, reverse scrolling, the initial section and the document end. Guide tests check the visitor destination, section anchors, task coverage, official API sources, and absence of key-collection inputs. The release selection tests cover empty releases, prereleases, draft exclusion, incompatible files, allowed download URLs, and publication ordering. `npm run verify` starts a temporary local server and checks all four pages at desktop and mobile widths, with and without JavaScript. It checks language switching, legacy language links, guide sections, titles, screenshots, and preview state. GitHub release responses are fixtures. Captures go to the ignored `.impeccable/review/google-seo` directory. Run the desktop app's checks from AGENTS.md before reporting repository work complete.
 
 ## Assets
 
@@ -57,8 +62,10 @@ Each screenshot has an Impeccable provenance sidecar. The plumbob is the existin
 
 ## Search discovery
 
-Both pages include static descriptions, canonical URLs, social previews, and JSON-LD. The homepage identifies TS4 Mod Manager as a free Linux application. `public/robots.txt` allows crawling and advertises `public/sitemap.xml`, which lists the production homepage and guide. Preview and language query parameters share those canonical pages; Portuguese is currently a client-side translation, not a separately indexed page.
+The English homepage and guide use `/` and `/guide`; Portuguese uses `/pt-br` and `/pt-br/guide`. Each page contains its full text, navigation, descriptive title, social metadata, JSON-LD, and its own canonical URL before JavaScript runs. Reciprocal `hreflang` links identify English, Brazilian Portuguese, and the default English page. Language controls are ordinary links. JavaScript preserves guide sections and preview choices across language navigation and forwards old `?lang=pt-BR` links to the Portuguese pages.
 
-After deploying, verify ownership of `https://ts4-mod-manager.vercel.app` in [Bing Webmaster Tools](https://www.bing.com/webmasters/) and submit `https://ts4-mod-manager.vercel.app/sitemap.xml`. Inspect the homepage and guide there for crawl or indexing errors. Ownership verification requires the owner's account; do not invent a verification token. DuckDuckGo [largely sources traditional results from Bing](https://duckduckgo.com/duckduckgo-help-pages/results/sources). A sitemap helps discovery but does not guarantee indexing or ranking. Keep a public link to the site on the GitHub repository.
+`public/robots.txt` allows crawling and advertises `public/sitemap.xml`, which lists all four canonical pages. Preview query parameters share each language's canonical page. The repository README links to the public website and guide. Keep the repository's About website field set to `https://ts4-mod-manager.vercel.app/` so visitors and crawlers can follow it.
+
+These changes follow Google's guidance on [language-specific URLs](https://developers.google.com/search/docs/specialty/international/managing-multi-regional-sites), [crawlable links](https://developers.google.com/search/docs/crawling-indexing/links-crawlable), and [search discovery](https://developers.google.com/search/docs/fundamentals/seo-starter-guide). They do not guarantee indexing or ranking. Google says changes can take weeks or longer to affect results. Useful community references and links from relevant Linux and Sims resources remain ongoing work; do not manufacture links, reviews, or verification tokens.
 
 Run `npm test` to check canonical URLs, structured data, crawl discovery, and the visible product heading alongside existing website tests.
