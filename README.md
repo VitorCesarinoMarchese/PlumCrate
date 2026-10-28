@@ -1,16 +1,16 @@
 <p align="center">
-  <img src="native/assets/logo.svg" width="640" alt="Sims 4 Mod Manager logo">
+  <img src="native/assets/logo.svg" width="640" alt="PlumCrate logo">
 </p>
 
-# Sims 4 Mod Manager
+# PlumCrate
 
 Your Sims 4 mods and custom content, organized on your Linux desktop.
 
 Browse your collection by photo, find a file by name, and choose which mods are active in your game. Keep downloaded mods in a local library, with direct on/off switches and recoverable trash.
 
-[Website](https://ts4-mod-manager.vercel.app/) · [Player guide](https://ts4-mod-manager.vercel.app/guide) · [Getting started](#getting-started) · [Documentation](docs/README.md) · [Report a bug](https://github.com/VitorCesarinoMarchese/TS4ModManager/issues) · [Releases](https://github.com/VitorCesarinoMarchese/TS4ModManager/releases)
+[Website](https://plumcrate.vercel.app/) · [Player guide](https://plumcrate.vercel.app/guide) · [Getting started](#getting-started) · [Documentation](docs/README.md) · [Report a bug](https://github.com/VitorCesarinoMarchese/PlumCrate/issues) · [Releases](https://github.com/VitorCesarinoMarchese/PlumCrate/releases)
 
-![Sims 4 Mod Manager in light mode, showing the mod library with photo cards](docs/images/library-light.png)
+![PlumCrate in light mode, showing the mod library with photo cards](docs/images/library-light.png)
 
 *The current app with real mod covers in a demo library. [Cover credits and screenshot sources](docs/images/README.md).*
 
@@ -47,7 +47,7 @@ Browse your collection by photo, find a file by name, and choose which mods are 
 
 The first alpha, **v0.0.1-alpha.1**, is being prepared. Read the [release notes](docs/releases/v0.0.1-alpha.1.md) for features, download instructions, and limitations. Expect rough edges and report problems before relying on the app for your main collection.
 
-Linux is the current supported platform. Windows and macOS have not been verified. Release downloads will appear on the [releases page](https://github.com/VitorCesarinoMarchese/TS4ModManager/releases) when published. Until then, use the [build and run guide](docs/development.md#run-the-app).
+Linux is the current supported platform. Windows and macOS have not been verified. Release downloads will appear on the [releases page](https://github.com/VitorCesarinoMarchese/PlumCrate/releases) when published. Until then, use the [build and run guide](docs/development.md#run-the-app).
 
 The app manages local mods and checks attached CurseForge projects for newer releases on request. Update notices open the mod page for manual download; you replace your local files yourself. Browser-assisted installation opens the official release page and watches your Downloads folder after you approve the source and installation. The website may still require a Download or save click. CurseForge browsing, installation, lookup, and update checks need your own API key saved in local Settings. Suggestions and installed-release records are saved only after you confirm them, and weak source matches show a warning.
 
@@ -72,10 +72,10 @@ Imports, source changes, migration, trash, and restore keep their review steps. 
 
 ## Help and contribute
 
-[Open an issue](https://github.com/VitorCesarinoMarchese/TS4ModManager/issues) with what you expected, what happened, your Linux distribution, and steps to reproduce the problem. Screenshots help. Keep API keys and private file paths out of reports.
+[Open an issue](https://github.com/VitorCesarinoMarchese/PlumCrate/issues) with what you expected, what happened, your Linux distribution, and steps to reproduce the problem. Screenshots help. Keep API keys and private file paths out of reports.
 
 For code contributions, follow the [development and validation guide](docs/development.md). Architecture, safety contracts, packaging instructions, and past migration reports live in [docs](docs/README.md).
 
-Sims 4 Mod Manager is an independent project and is not affiliated with Electronic Arts or Maxis.
+PlumCrate is an independent project and is not affiliated with Electronic Arts or Maxis.
 
 Licensed under the [MIT License](LICENSE).

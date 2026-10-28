@@ -10,7 +10,7 @@ from verify import preview_png, snapshot, assert_preview_pixels
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--binary", type=Path, default=Path(__file__).parent / "target/release/ts4-mod-manager-native")
+    parser.add_argument("--binary", type=Path, default=Path(__file__).parent / "target/release/plumcrate")
     parser.add_argument("--capture-dir", type=Path, required=True)
     args = parser.parse_args()
     binary = args.binary.resolve()

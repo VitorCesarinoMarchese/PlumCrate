@@ -60,7 +60,7 @@ pub fn fetch(directory: &Path, url: &str) -> Result<image::DynamicImage, String>
             .build();
         let response = agent
             .get(url)
-            .set("User-Agent", "TS4ModManager/0.1 photo cache")
+            .set("User-Agent", "PlumCrate/0.1 photo cache")
             .call()
             .map_err(|_| "Preview request failed")?;
         let mut bytes = vec![];

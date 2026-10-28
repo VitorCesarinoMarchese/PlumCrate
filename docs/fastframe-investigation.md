@@ -13,7 +13,7 @@ Fastframe's role and fit
 
 Fastframe is a collection of desktop libraries for egui apps. It supplies shared desktop behavior; the application still owns its layout and product logic. Adoption here means replacing React, CSS, Zustand, and the Tauri shell with an egui/eframe application. It is not a frontend dependency we can install into the existing React app. [Fastframe overview](https://github.com/crmne/fastframe/blob/bb79dbddef01e660f9cfc37ccd9dff1c299a8d47/docs/_guide/what-is-fastframe.md).
 
-| Concern | Fit for TS4 Mod Manager | Work still owned by this app |
+| Concern | Fit for PlumCrate | Work still owned by this app |
 | --- | --- | --- |
 | Fonts and text | `fastframe-fonts` and `fastframe-text` supply font fallback and desktop text rendering settings. | Text sizes, layout, truncation, and selectable filenames. |
 | Icons and colors | `fastframe-icons` and `fastframe-theme` supply shared icons and palette infrastructure. | Mod cards, dialogs, custom theme schema compatibility, and mapping colors to widgets. |

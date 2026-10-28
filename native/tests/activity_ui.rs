@@ -1,4 +1,4 @@
-use ts4_mod_manager_native::{
+use plumcrate::{
     catalog::Catalog,
     controls::Controls,
     settings::Settings,
@@ -106,7 +106,7 @@ fn idle_library_has_header_activity_without_a_permanent_footer() {
 fn browser_waiting_can_be_cancelled_from_activity_at_compact_and_wide_sizes() {
     for size in [[640.0, 480.0], [1876.0, 996.0]] {
         let mut f = Fixture::new();
-        f.controls.browser_import.phase = ts4_mod_manager_native::browser_import::Phase::Waiting;
+        f.controls.browser_import.phase = plumcrate::browser_import::Phase::Waiting;
         f.frame(size, 1.0, vec![]);
         let button = f
             .controls
@@ -131,7 +131,7 @@ fn browser_waiting_can_be_cancelled_from_activity_at_compact_and_wide_sizes() {
         f.frame(size, 4.0, click(cancel));
         assert_eq!(
             f.controls.browser_import.phase,
-            ts4_mod_manager_native::browser_import::Phase::Cancelled
+            plumcrate::browser_import::Phase::Cancelled
         );
         assert!(!f._directory.path().join("managed/mods").exists());
     }
@@ -176,7 +176,7 @@ fn errors_remain_visible_until_dismissed_and_remain_in_activity_history() {
 #[test]
 fn dismissing_the_activity_panel_does_not_cancel_its_running_task() {
     let mut f = Fixture::new();
-    f.controls.browser_import.phase = ts4_mod_manager_native::browser_import::Phase::Waiting;
+    f.controls.browser_import.phase = plumcrate::browser_import::Phase::Waiting;
     f.frame([640.0, 480.0], 1.0, vec![]);
     f.frame(
         [640.0, 480.0],
@@ -196,6 +196,6 @@ fn dismissing_the_activity_panel_does_not_cancel_its_running_task() {
     assert!(f.controls.activity_popup_rect.is_none());
     assert_eq!(
         f.controls.browser_import.phase,
-        ts4_mod_manager_native::browser_import::Phase::Waiting
+        plumcrate::browser_import::Phase::Waiting
     );
 }

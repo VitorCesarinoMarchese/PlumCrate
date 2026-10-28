@@ -77,7 +77,7 @@ Run this command inside the baseline environment:
 
 ```sh
 python3 native/appimage.py \
-  --binary /build/target/release/ts4-mod-manager-native \
+  --binary /build/target/release/plumcrate \
   --appimagetool /tools/AppRun \
   --output /build/packages
 ```

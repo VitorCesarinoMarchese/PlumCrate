@@ -2,7 +2,7 @@ use std::{
     collections::{BTreeMap, HashSet},
     path::PathBuf,
 };
-use ts4_mod_manager_core::mod_scan::ScannedMod;
+use plumcrate_core::mod_scan::ScannedMod;
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub enum EntryId {
@@ -198,7 +198,7 @@ impl Catalog {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use ts4_mod_manager_core::mod_scan::ModSource;
+    use plumcrate_core::mod_scan::ModSource;
 
     fn entry(name: &str, id: Option<&str>) -> ScannedMod {
         serde_json::from_value(serde_json::json!({

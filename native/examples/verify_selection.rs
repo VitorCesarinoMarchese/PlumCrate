@@ -6,7 +6,7 @@ use std::{
     path::PathBuf,
     time::{Duration, Instant},
 };
-use ts4_mod_manager_native::{
+use plumcrate::{
     settings::{Settings, Theme},
     ui,
 };
@@ -101,7 +101,7 @@ impl eframe::App for Capture {
         self.fixture.controls.poll(&mut self.fixture.catalog);
         if let Some(root) = self.fixture.controls.refresh.take() {
             self.scans += 1;
-            let scan = ts4_mod_manager_native::worker::scan(
+            let scan = plumcrate::worker::scan(
                 &root,
                 &self.fixture.directory.path().join("managed"),
             )

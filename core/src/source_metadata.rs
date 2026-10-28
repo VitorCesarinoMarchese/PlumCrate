@@ -16,7 +16,7 @@ pub fn resolve_source_metadata(source_url: &str) -> SourceMetadata {
     }
 
     let response = ureq::get(trimmed)
-        .set("User-Agent", "TS4ModManager/0.1 metadata resolver")
+        .set("User-Agent", "PlumCrate/0.1 metadata resolver")
         .call();
 
     let Ok(response) = response else {

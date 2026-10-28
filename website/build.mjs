@@ -5,16 +5,16 @@ import {parse, parseFragment, serialize} from 'parse5';
 import {homepage, guide} from './copy/pt-BR.mjs';
 import {languageHref, navigationItems} from './public/site-navigation.js';
 
-const origin = 'https://ts4-mod-manager.vercel.app';
+const origin = 'https://plumcrate.vercel.app';
 const publicDirectory = fileURLToPath(new URL('./public/', import.meta.url));
 export const defaultOutputDirectory = fileURLToPath(new URL('./dist/', import.meta.url));
 const pages = [
   {file: 'index.html', path: '/', localizedFile: 'pt-br.html', copy: homepage,
-    title: 'TS4 Mod Manager para Linux | Gerenciador de Mods do The Sims 4',
+    title: 'PlumCrate para Linux | Gerenciador de Mods do The Sims 4',
     description: 'Gerencie seus mods e conteúdo personalizado do The Sims 4 no Linux. Importe pastas ou ZIPs, organize sua biblioteca e ative ou desative mods. Grátis e de código aberto.'},
   {file: 'guide.html', path: '/guide', localizedFile: 'pt-br/guide.html', copy: guide,
-    title: 'Guia do TS4 Mod Manager | Mods do The Sims 4 no Linux',
-    description: 'Aprenda a instalar o TS4 Mod Manager no Linux, escolher a pasta do jogo, importar mods e conteúdo personalizado, ativar mods e restaurar arquivos.'},
+    title: 'Guia do PlumCrate | Mods do The Sims 4 no Linux',
+    description: 'Aprenda a instalar o PlumCrate no Linux, escolher a pasta do jogo, importar mods e conteúdo personalizado, ativar mods e restaurar arquivos.'},
 ];
 
 function* elements(node) {
@@ -55,8 +55,8 @@ function renderPage(html, page, language) {
       if (name === 'description' || name === 'og:description') setAttribute(node, 'content', page.description);
       if (name === 'og:title') setAttribute(node, 'content', page.title);
       if (name === 'og:url') setAttribute(node, 'content', origin + localizedPath);
-      if (name === 'og:image:alt') setAttribute(node, 'content', 'Biblioteca do TS4 Mod Manager no Linux com capas e interruptores de mods');
-      if (node.tagName === 'img' && attribute(node, 'alt')) setAttribute(node, 'alt', 'Biblioteca real do Sims 4 Mod Manager no tema claro, com capas dos mods e interruptores');
+      if (name === 'og:image:alt') setAttribute(node, 'content', 'Biblioteca do PlumCrate no Linux com capas e interruptores de mods');
+      if (node.tagName === 'img' && attribute(node, 'alt')) setAttribute(node, 'alt', 'Biblioteca real do PlumCrate no tema claro, com capas dos mods e interruptores');
     }
     if (node.tagName === 'html') setAttribute(node, 'lang', language);
     if (attribute(node, 'rel') === 'canonical') setAttribute(node, 'href', origin + localizedPath);
@@ -66,7 +66,7 @@ function renderPage(html, page, language) {
       data.inLanguage = language;
       if (language === 'pt-BR') {
         data.description = page.description;
-        if (data['@type'] === 'TechArticle') data.name = 'Guia do TS4 Mod Manager';
+        if (data['@type'] === 'TechArticle') data.name = 'Guia do PlumCrate';
         if (data.about) data.about.url = origin + '/pt-br';
       }
       node.childNodes[0].value = JSON.stringify(data, null, 2);

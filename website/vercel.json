@@ -17,5 +17,29 @@
         }
       ]
     }
+  ],
+  "redirects": [
+    {
+      "source": "/",
+      "has": [
+        {
+          "type": "host",
+          "value": "ts4-mod-manager.vercel.app"
+        }
+      ],
+      "destination": "https://plumcrate.vercel.app/",
+      "permanent": true
+    },
+    {
+      "source": "/:path*",
+      "has": [
+        {
+          "type": "host",
+          "value": "ts4-mod-manager.vercel.app"
+        }
+      ],
+      "destination": "https://plumcrate.vercel.app/:path*",
+      "permanent": true
+    }
   ]
 }

@@ -24,13 +24,13 @@ def main():
         with tarfile.open(archives[0]) as archive:
             archive.extractall(root / "unpacked", filter="data")
         bundle, = (root / "unpacked").iterdir()
-        executable = bundle / "bin/ts4-mod-manager-native"
+        executable = bundle / "bin/plumcrate"
         assert executable.stat().st_mode & 0o111
-        desktop = (bundle / "share/applications/ts4-mod-manager-native.desktop").read_text()
-        assert "Exec=ts4-mod-manager-native" in desktop
-        assert "Icon=ts4-mod-manager-native" in desktop
-        assert (bundle / "share/icons/hicolor/256x256/apps/ts4-mod-manager-native.png").is_file()
-        licenses = bundle / "share/licenses/ts4-mod-manager-native"
+        desktop = (bundle / "share/applications/plumcrate.desktop").read_text()
+        assert "Exec=plumcrate" in desktop
+        assert "Icon=plumcrate" in desktop
+        assert (bundle / "share/icons/hicolor/256x256/apps/plumcrate.png").is_file()
+        licenses = bundle / "share/licenses/plumcrate"
         assert (licenses / "Inter-LICENSE.txt").is_file()
         assert (licenses / "Lucide-LICENSE.txt").is_file()
         assert (licenses / "LICENSE").read_bytes() == (native.parent / "LICENSE").read_bytes()

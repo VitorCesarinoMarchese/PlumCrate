@@ -1,7 +1,7 @@
 use std::path::PathBuf;
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
-use ts4_mod_manager_native::{
+use plumcrate::{
     catalog::Catalog,
     cli::Options,
     controls::Controls,
@@ -20,16 +20,16 @@ fn main() {
 fn run() -> Result<(), String> {
     let options = Options::parse(std::env::args().skip(1))?;
     if options.version {
-        println!("ts4-mod-manager-native {}", env!("CARGO_PKG_VERSION"));
+        println!("plumcrate {}", env!("CARGO_PKG_VERSION"));
         return Ok(());
     }
     if options.verify_workflows {
-        println!("{}", ts4_mod_manager_native::workflows::verify()?);
+        println!("{}", plumcrate::workflows::verify()?);
         return Ok(());
     }
     if options.help {
         println!(
-            "TS4 Mod Manager native manager\n\nUsage: ts4-mod-manager-native [--root PATH] [--managed-root PATH]\n\n  --root PATH          Sims 4 folder containing Mods\n  --home PATH          Home to use for detection and default managed path\n  --verify-workflows   Verify management using newly created temporary fixtures\n  --inspect            Print catalog JSON and exit; requires --root\n  --query TEXT         Initial name/filename search\n  --settings           Open the full Settings page\n  --dark               Start with dark theme\n  --size WIDTHxHEIGHT   Initial window size, default 1200x800\n  --screenshot PATH    Save a rendered PNG and exit; requires --root\n\nManage local mods, check releases, and install verified browser downloads."
+            "PlumCrate, a Sims 4 mod manager for Linux\n\nUsage: plumcrate [--root PATH] [--managed-root PATH]\n\n  --root PATH          Sims 4 folder containing Mods\n  --home PATH          Home to use for detection and default managed path\n  --verify-workflows   Verify management using newly created temporary fixtures\n  --inspect            Print catalog JSON and exit; requires --root\n  --query TEXT         Initial name/filename search\n  --settings           Open the full Settings page\n  --dark               Start with dark theme\n  --size WIDTHxHEIGHT   Initial window size, default 1200x800\n  --screenshot PATH    Save a rendered PNG and exit; requires --root\n\nManage local mods, check releases, and install verified browser downloads."
         );
         return Ok(());
     }
@@ -55,7 +55,7 @@ fn run() -> Result<(), String> {
         );
         return Ok(());
     }
-    fastframe_log::Logging::new("ts4-mod-manager-native", env!("CARGO_PKG_VERSION"))
+    fastframe_log::Logging::new("plumcrate", env!("CARGO_PKG_VERSION"))
         .filter("warn")
         .init()
         .map_err(|error| error.to_string())?;
@@ -78,7 +78,7 @@ fn run() -> Result<(), String> {
         ..Default::default()
     };
     eframe::run_native(
-        "Sims 4 Mod Manager · Native",
+        "PlumCrate",
         native_options,
         Box::new(move |cc| {
             ui::setup(&cc.egui_ctx);
@@ -252,7 +252,7 @@ impl eframe::App for NativeApp {
         if self.window_rendered && let Some(receipt) = self.app_update_receipt.take() {
             let ctx = ui.ctx().clone();
             std::thread::Builder::new().name("app-update-started".into()).spawn(move || {
-                if let Err(error) = ts4_mod_manager_native::app_update::acknowledge(&receipt) {
+                if let Err(error) = plumcrate::app_update::acknowledge(&receipt) {
                     eprintln!("{error}");
                     ctx.send_viewport_cmd(egui::ViewportCommand::Close);
                 }
@@ -260,7 +260,7 @@ impl eframe::App for NativeApp {
         }
         self.window_rendered = true;
         if self.app_update_receipt.is_some() { ui.ctx().request_repaint(); }
-        ts4_mod_manager_native::desktop_links::dispatch_pending(ui.ctx());
+        plumcrate::desktop_links::dispatch_pending(ui.ctx());
         let Some(path) = self.screenshot.as_ref() else {
             return;
         };

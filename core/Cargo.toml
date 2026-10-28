@@ -1,11 +1,11 @@
 [package]
-name = "ts4-mod-manager-core"
+name = "plumcrate-core"
 version = "0.0.1-alpha.1"
 license = "MIT"
 edition = "2021"
 
 [lib]
-name = "ts4_mod_manager_core"
+name = "plumcrate_core"
 path = "src/lib.rs"
 
 [dependencies]

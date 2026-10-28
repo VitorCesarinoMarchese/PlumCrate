@@ -1,6 +1,6 @@
 use crate::catalog::EntryId;
 use std::{path::PathBuf, sync::mpsc, thread::JoinHandle};
-use ts4_mod_manager_core::{
+use plumcrate_core::{
     managed_storage as storage, source_candidates::SourceCandidate, toggle,
     mod_updates::{Release, UpdateReport},
 };
@@ -34,7 +34,7 @@ pub enum Action {
     Trash,
     ListTrash,
     ReviewTrashDeletion(Vec<String>),
-    DeleteTrash(Box<ts4_mod_manager_core::lifecycle::TrashDeletion>),
+    DeleteTrash(Box<plumcrate_core::lifecycle::TrashDeletion>),
     Restore(String),
     Lookup(Option<String>),
     CheckUpdates {
@@ -85,8 +85,8 @@ pub enum Output {
     Changed(Vec<String>),
     Imported { name: String, enable_error: Option<String> },
     Candidates(Vec<SourceCandidate>),
-    Trash(Vec<ts4_mod_manager_core::lifecycle::TrashEntry>),
-    TrashDeletion(Box<ts4_mod_manager_core::lifecycle::TrashDeletion>),
+    Trash(Vec<plumcrate_core::lifecycle::TrashEntry>),
+    TrashDeletion(Box<plumcrate_core::lifecycle::TrashDeletion>),
     TrashDeleted(usize),
     Updates { token: u64, reports: Vec<(String, Result<UpdateReport, String>)> },
     BrowserImported { token: u64, metadata: Box<storage::ModMetadata> },
@@ -145,7 +145,7 @@ impl Mutations {
             .name("approved-management-fifo".into())
             .spawn(move || {
                 if let Some(managed) = recovery {
-                    let result = ts4_mod_manager_core::operation::recover_pending(&managed)
+                    let result = plumcrate_core::operation::recover_pending(&managed)
                         .map(|issues| issues.into_iter().map(|i| i.message).collect())
                         .map_err(|e| format!("{}: {}", e.code.as_str(), e.message));
                     let _ = out.send(Event::Recovered(result));
@@ -211,7 +211,7 @@ fn imported(job: &Job, metadata: storage::ModMetadata) -> Output {
 pub fn execute(job: &Job) -> Result<Output, String> {
     let mods = job.identity.root.join("Mods");
     let managed = &job.managed;
-    let error = |e: ts4_mod_manager_core::error::ManagerError| {
+    let error = |e: plumcrate_core::error::ManagerError| {
         format!("{}: {}", e.code.as_str(), e.message)
     };
     match &job.action {
@@ -223,7 +223,7 @@ pub fn execute(job: &Job) -> Result<Output, String> {
             Ok(imported(job, metadata))
         }
         Action::ImportZip { path, name } => {
-            let metadata = ts4_mod_manager_core::archive_import::import_archive_to_managed(
+            let metadata = plumcrate_core::archive_import::import_archive_to_managed(
                 managed, path, name.clone(), None,
             ).map_err(error)?;
             Ok(imported(job, metadata))
@@ -233,11 +233,11 @@ pub fn execute(job: &Job) -> Result<Output, String> {
             Ok(Output::Changed(issues))
         }
         Action::Migrate { files } => {
-            let _authority = ts4_mod_manager_core::operation::acquire(managed).map_err(error)?;
+            let _authority = plumcrate_core::operation::acquire(managed).map_err(error)?;
             let Some(EntryId::External(key)) = &job.identity.entry else {
                 return Err("Select an external mod".into());
             };
-            let current = ts4_mod_manager_core::mod_scan::scan_mods(&mods, managed).map_err(error)?
+            let current = plumcrate_core::mod_scan::scan_mods(&mods, managed).map_err(error)?
                 .into_iter()
                 .find(|m| m.key == *key)
                 .ok_or("External mod no longer exists")?;
@@ -245,7 +245,7 @@ pub fn execute(job: &Job) -> Result<Output, String> {
                 return Err("External files changed. Review them again.".into());
             }
             let result =
-                ts4_mod_manager_core::external_migration::migrate_external_mod(managed, &mods, key)
+                plumcrate_core::external_migration::migrate_external_mod(managed, &mods, key)
                     .map_err(error)?;
             Ok(Output::Changed(
                 result.issues.into_iter().map(|i| i.message).collect(),
@@ -307,18 +307,18 @@ pub fn execute(job: &Job) -> Result<Output, String> {
             changed()
         }
         Action::ImportBrowser(request) => {
-            let metadata = ts4_mod_manager_core::browser_import::import_browser_download(managed, &request.root.join("Mods"), &request.project, &request.release, &request.matched, &request.permit)
+            let metadata = plumcrate_core::browser_import::import_browser_download(managed, &request.root.join("Mods"), &request.project, &request.release, &request.matched, &request.permit)
                 .map_err(|error| error.message)?;
             Ok(Output::BrowserImported { token: request.token, metadata: Box::new(metadata) })
         }
         Action::RecordRelease { report, release, .. } => {
-            ts4_mod_manager_core::mod_updates::confirm_installed_release(managed, id(job)?, report, release)
+            plumcrate_core::mod_updates::confirm_installed_release(managed, id(job)?, report, release)
                 .map_err(error)?;
             changed()
         }
         Action::CheckUpdates { mod_ids, api_key, epoch, token } => {
             use std::sync::atomic::Ordering;
-            use ts4_mod_manager_core::curseforge_client::{CurseForgeClient, UreqCurseForgeTransport};
+            use plumcrate_core::curseforge_client::{CurseForgeClient, UreqCurseForgeTransport};
             let started = std::time::Instant::now();
             let client = CurseForgeClient::new(api_key.as_deref(), CachedTransport {
                 inner: UreqCurseForgeTransport::default(),
@@ -331,7 +331,7 @@ pub fn execute(job: &Job) -> Result<Output, String> {
                     Err("Check timed out. Check this mod separately or try again.".into())
                 } else {
                     match &client {
-                        Ok(client) => ts4_mod_manager_core::mod_updates::check_mod_updates(managed, mod_id, client)
+                        Ok(client) => plumcrate_core::mod_updates::check_mod_updates(managed, mod_id, client)
                             .map_err(update_error),
                         Err(_) => Err("Save a valid CurseForge API key in Settings, then try again.".into()),
                     }
@@ -342,7 +342,7 @@ pub fn execute(job: &Job) -> Result<Output, String> {
         }
         Action::Trash => {
             storage::read_managed_mod(managed, id(job)?).map_err(error)?;
-            let result = ts4_mod_manager_core::lifecycle::uninstall_managed_mod(
+            let result = plumcrate_core::lifecycle::uninstall_managed_mod(
                 managed,
                 &mods,
                 &job.trash,
@@ -354,22 +354,22 @@ pub fn execute(job: &Job) -> Result<Output, String> {
             ))
         }
         Action::ReviewTrashDeletion(names) => Ok(Output::TrashDeletion(Box::new(
-            ts4_mod_manager_core::lifecycle::review_trash_deletion(managed, &job.trash, names).map_err(error)?
+            plumcrate_core::lifecycle::review_trash_deletion(managed, &job.trash, names).map_err(error)?
         ))),
         Action::DeleteTrash(review) => {
-            ts4_mod_manager_core::lifecycle::delete_reviewed_trash(managed, &job.trash, review).map_err(error)?;
+            plumcrate_core::lifecycle::delete_reviewed_trash(managed, &job.trash, review).map_err(error)?;
             Ok(Output::TrashDeleted(review.entries().len()))
         }
         Action::ListTrash => Ok(Output::Trash(
-            ts4_mod_manager_core::lifecycle::list_trash_entries(&job.trash).map_err(error)?,
+            plumcrate_core::lifecycle::list_trash_entries(&job.trash).map_err(error)?,
         )),
         Action::Restore(name) => {
-            ts4_mod_manager_core::lifecycle::restore_trashed_mod(managed, &mods, &job.trash, name)
+            plumcrate_core::lifecycle::restore_trashed_mod(managed, &mods, &job.trash, name)
                 .map_err(error)?;
             changed()
         }
         Action::Lookup(key) => Ok(Output::Candidates(
-            ts4_mod_manager_core::source_lookup::find_source_candidates(
+            plumcrate_core::source_lookup::find_source_candidates(
                 managed,
                 &mods,
                 id(job)?,
@@ -380,8 +380,8 @@ pub fn execute(job: &Job) -> Result<Output, String> {
     }
 }
 
-fn update_error(error: ts4_mod_manager_core::error::ManagerError) -> String {
-    use ts4_mod_manager_core::error::ErrorCode;
+fn update_error(error: plumcrate_core::error::ManagerError) -> String {
+    use plumcrate_core::error::ErrorCode;
     match error.code {
         ErrorCode::SourceMissingApiKey | ErrorCode::SourceUnauthorized => "CurseForge rejected the API key. Save a valid key in Settings, then try again.",
         ErrorCode::SourceRateLimited => "CurseForge is limiting requests. Wait a moment, then try again.",
@@ -394,12 +394,12 @@ fn update_error(error: ts4_mod_manager_core::error::ManagerError) -> String {
 }
 
 struct CachedTransport {
-    inner: ts4_mod_manager_core::curseforge_client::UreqCurseForgeTransport,
+    inner: plumcrate_core::curseforge_client::UreqCurseForgeTransport,
     responses: std::cell::RefCell<std::collections::HashMap<String, (u16, String)>>,
 }
-impl ts4_mod_manager_core::curseforge_client::CurseForgeTransport for CachedTransport {
-    fn get(&self, request: &ts4_mod_manager_core::curseforge_client::CurseForgeRequest)
-        -> Result<(u16, String), ts4_mod_manager_core::curseforge_client::SourceLookupError> {
+impl plumcrate_core::curseforge_client::CurseForgeTransport for CachedTransport {
+    fn get(&self, request: &plumcrate_core::curseforge_client::CurseForgeRequest)
+        -> Result<(u16, String), plumcrate_core::curseforge_client::SourceLookupError> {
         if let Some(response) = self.responses.borrow().get(&request.url) { return Ok(response.clone()); }
         let response = self.inner.get(request)?;
         if response.0 == 200 { self.responses.borrow_mut().insert(request.url.clone(), response.clone()); }
@@ -458,7 +458,7 @@ mod lookup_worker_tests {
 mod update_error_tests {
     #[test]
     fn provider_errors_explain_the_recovery_without_showing_keys() {
-        use ts4_mod_manager_core::error::{ErrorCode, ManagerError};
+        use plumcrate_core::error::{ErrorCode, ManagerError};
         let message = super::update_error(ManagerError::new(ErrorCode::SourceUnauthorized, "sensitive provider payload"));
         assert!(message.contains("Settings"));
         assert!(!message.contains("sensitive"));

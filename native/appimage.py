@@ -23,14 +23,14 @@ def write_checksum(image):
 def create_appdir(bundle, appdir):
     shutil.copytree(bundle / "bin", appdir / "usr/bin")
     shutil.copytree(bundle / "share", appdir / "usr/share")
-    (appdir / "ts4-mod-manager-native.desktop").symlink_to(
-        "usr/share/applications/ts4-mod-manager-native.desktop")
-    (appdir / "ts4-mod-manager-native.png").symlink_to(
-        "usr/share/icons/hicolor/256x256/apps/ts4-mod-manager-native.png")
+    (appdir / "plumcrate.desktop").symlink_to(
+        "usr/share/applications/plumcrate.desktop")
+    (appdir / "plumcrate.png").symlink_to(
+        "usr/share/icons/hicolor/256x256/apps/plumcrate.png")
     launcher = appdir / "AppRun"
     launcher.write_text('#!/bin/sh\nset -eu\n'
                         'appdir=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)\n'
-                        'exec "$appdir/usr/bin/ts4-mod-manager-native" "$@"\n')
+                        'exec "$appdir/usr/bin/plumcrate" "$@"\n')
     launcher.chmod(0o755)
 
 

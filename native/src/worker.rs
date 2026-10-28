@@ -1,7 +1,7 @@
 use std::path::{Path, PathBuf};
 use std::sync::{Arc, Condvar, Mutex, mpsc};
 use std::time::Instant;
-use ts4_mod_manager_core::{mod_scan::ScannedMod, path_detection::GameInstance};
+use plumcrate_core::{mod_scan::ScannedMod, path_detection::GameInstance};
 
 #[derive(Debug)]
 pub enum Request {
@@ -49,11 +49,11 @@ impl Mailbox {
 
 pub fn scan(root: &Path, managed_root: &Path) -> Result<ScanOutput, String> {
     let start = Instant::now();
-    let instance = ts4_mod_manager_core::path_detection::validate_custom_instance(root)
+    let instance = plumcrate_core::path_detection::validate_custom_instance(root)
         .map_err(|error| error.message)?;
     let mods_dir = instance.path.join("Mods");
     std::fs::read_dir(&mods_dir).map_err(|error| format!("Cannot read Mods folder: {error}"))?;
-    let mods = ts4_mod_manager_core::mod_scan::scan_mods(&mods_dir, managed_root).map_err(|e| e.message)?;
+    let mods = plumcrate_core::mod_scan::scan_mods(&mods_dir, managed_root).map_err(|e| e.message)?;
     Ok(ScanOutput {
         instance,
         mods,
@@ -89,7 +89,7 @@ impl Jobs {
                     let completion = match request {
                         Request::Detect { generation, home } => Completion::Detected {
                             generation,
-                            instances: ts4_mod_manager_core::path_detection::detect_game_instances(
+                            instances: plumcrate_core::path_detection::detect_game_instances(
                                 &home,
                             ),
                         },

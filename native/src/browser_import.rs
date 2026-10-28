@@ -6,7 +6,7 @@ use std::{
     thread::{self, Thread},
     time::{Duration, Instant},
 };
-use ts4_mod_manager_core::{
+use plumcrate_core::{
     browser_import::{
         BrowserProject, BrowserRelease, DownloadWatch, ImportPermit, MatchedDownload,
         load_browser_project,
@@ -471,7 +471,7 @@ fn parse_download_directory(home: &Path, value: &str) -> Option<PathBuf> {
 mod tests {
     use super::*;
     use serde_json::json;
-    use ts4_mod_manager_core::curseforge_client::{
+    use plumcrate_core::curseforge_client::{
         CurseForgeRequest, CurseForgeTransport, SourceLookupError,
     };
 
@@ -732,7 +732,7 @@ mod tests {
         let queued = ready(&mut import);
         let game_mods = queued.root.join("Mods");
         std::fs::create_dir_all(&game_mods).unwrap();
-        ts4_mod_manager_core::browser_import::import_browser_download(
+        plumcrate_core::browser_import::import_browser_download(
             &home.path().join("managed"),
             &game_mods,
             &queued.project,

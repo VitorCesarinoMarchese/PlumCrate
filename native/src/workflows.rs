@@ -152,7 +152,7 @@ pub fn verify() -> Result<serde_json::Value, String> {
         return Err("Import altered source bytes".into());
     }
     for entry in &catalog.mods {
-        let metadata = ts4_mod_manager_core::managed_storage::read_managed_mod(
+        let metadata = plumcrate_core::managed_storage::read_managed_mod(
             &fixture.managed,
             entry.id.as_deref().ok_or("Unmanaged result")?,
         )

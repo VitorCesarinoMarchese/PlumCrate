@@ -1,6 +1,6 @@
 #[path = "support/project_details.rs"]
 mod support;
-use ts4_mod_manager_native::{
+use plumcrate::{
     catalog::Catalog,
     project_details::ReviewRequest,
     ui::{self, View},

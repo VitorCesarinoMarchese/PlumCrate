@@ -17,7 +17,7 @@ try {
     for (const width of [1440, 390]) {
       const context = await browser.newContext({javaScriptEnabled, viewport: {width, height: 900}});
       await context.route('**/api/release', route => route.fulfill({json: {
-        available: false, url: 'https://github.com/VitorCesarinoMarchese/TS4ModManager/releases',
+        available: false, url: 'https://github.com/VitorCesarinoMarchese/PlumCrate/releases',
       }}));
       const page = await context.newPage();
       const errors = [];
@@ -27,8 +27,8 @@ try {
         assert.equal(response.status(), 200, path);
         const language = path.startsWith('/pt-br') ? 'pt-BR' : 'en';
         assert.equal(await page.locator('html').getAttribute('lang'), language);
-        assert.match(await page.title(), /TS4 Mod Manager.*Linux|TS4 Mod Manager.*The Sims 4/);
-        assert.equal(await page.locator('link[rel="canonical"]').getAttribute('href'), `https://ts4-mod-manager.vercel.app${path}`);
+        assert.match(await page.title(), /PlumCrate.*Linux|PlumCrate.*The Sims 4/);
+        assert.equal(await page.locator('link[rel="canonical"]').getAttribute('href'), `https://plumcrate.vercel.app${path}`);
         assert.equal(await page.locator('.languages a').count(), 2);
         assert.equal(await page.locator('.languages [aria-current="true"]').getAttribute('data-lang'), language);
         assert.equal(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), true, `${path} overflows at ${width}px`);

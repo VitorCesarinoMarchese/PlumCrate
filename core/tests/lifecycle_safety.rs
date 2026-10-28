@@ -2,7 +2,7 @@
 
 use std::{fs, path::PathBuf};
 use tempfile::TempDir;
-use ts4_mod_manager_core::{
+use plumcrate_core::{
     error::ErrorCode,
     lifecycle::{restore_trashed_mod, uninstall_managed_mod},
     managed_storage::{create_managed_mod, ImportRequest},
@@ -112,7 +112,7 @@ fn trash_and_restore_work_across_filesystems() {
     let result = uninstall_managed_mod(&managed, &game, &trash, &id).unwrap();
     assert!(!managed.join("mods").join(&id).exists());
     assert!(
-        ts4_mod_manager_core::mod_scan::scan_mods(&game, &managed).unwrap().is_empty(),
+        plumcrate_core::mod_scan::scan_mods(&game, &managed).unwrap().is_empty(),
         "preserved source holding must not appear as a managed mod"
     );
     let trashed = PathBuf::from(result.trashed_path);
@@ -139,8 +139,8 @@ fn trash_enumerates_links_for_every_instance_and_preserves_foreign_replacements(
     let (managed, game, id) = imported(&temp);
     let other = temp.path().join("other/Mods");
     fs::create_dir_all(&other).unwrap();
-    ts4_mod_manager_core::toggle::apply_toggle(&managed, &game, &id, true).unwrap();
-    ts4_mod_manager_core::toggle::apply_toggle(&managed, &other, &id, true).unwrap();
+    plumcrate_core::toggle::apply_toggle(&managed, &game, &id, true).unwrap();
+    plumcrate_core::toggle::apply_toggle(&managed, &other, &id, true).unwrap();
     let trash = temp.path().join("Trash/files");
     uninstall_managed_mod(&managed, &game, &trash, &id).unwrap();
     assert!(fs::symlink_metadata(game.join("test.package")).is_err());
@@ -230,7 +230,7 @@ fn restore_rejects_unrelated_trash_and_redirected_info_before_moving_mod_bytes()
 #[test]
 fn cross_device_wrapper_restore_retires_wrapper_and_preserves_originals() {
     use std::os::unix::fs::MetadataExt;
-    use ts4_mod_manager_core::lifecycle::list_trash_entries;
+    use plumcrate_core::lifecycle::list_trash_entries;
     let temp = tempfile::tempdir().unwrap();
     let cross = tempfile::Builder::new()
         .prefix("ts4-wrapper-restore-")

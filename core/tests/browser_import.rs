@@ -1,6 +1,6 @@
 use serde_json::{json, Value};
 use std::{fs, io::Write, path::Path};
-use ts4_mod_manager_core::{
+use plumcrate_core::{
     browser_import::{self, DownloadWatch, ImportPermit},
     curseforge_client::{
         CurseForgeClient, CurseForgeRequest, CurseForgeTransport, SourceLookupError,
@@ -176,11 +176,11 @@ fn verified_raw_import_attaches_baseline_enables_preserves_original_and_deduplic
     let client =
         CurseForgeClient::new(Some("fixture"), provider(b"package", "mod.package")).unwrap();
     let report =
-        ts4_mod_manager_core::mod_updates::check_mod_updates(&managed, &meta.mod_id, &client)
+        plumcrate_core::mod_updates::check_mod_updates(&managed, &meta.mod_id, &client)
             .unwrap();
     assert_eq!(
         report.status,
-        ts4_mod_manager_core::mod_updates::UpdateStatus::NoNewerRelease
+        plumcrate_core::mod_updates::UpdateStatus::NoNewerRelease
     );
 
     let second = match_download(&downloads, &p);
@@ -398,7 +398,7 @@ fn identical_release_reenables_without_duplicate_and_changed_baseline_is_preserv
         &ImportPermit::default(),
     )
     .unwrap();
-    ts4_mod_manager_core::toggle::apply_toggle(&m, &g, &meta.mod_id, false).unwrap();
+    plumcrate_core::toggle::apply_toggle(&m, &g, &meta.mod_id, false).unwrap();
     assert!(!g.join("mod.package").exists());
     let again = browser_import::import_browser_download(
         &m,

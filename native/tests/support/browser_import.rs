@@ -1,10 +1,10 @@
-use ts4_mod_manager_core::{
+use plumcrate_core::{
     browser_import::{BrowserProject, load_browser_project},
     curseforge_client::{
         CurseForgeClient, CurseForgeRequest, CurseForgeTransport, SourceLookupError,
     },
 };
-use ts4_mod_manager_native::{catalog::Catalog, controls::Controls, settings::Settings, ui::View};
+use plumcrate::{catalog::Catalog, controls::Controls, settings::Settings, ui::View};
 pub const BYTES: &[u8] = b"synthetic browser package";
 pub const KEY: &str = "fixture-only";
 struct Provider;

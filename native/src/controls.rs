@@ -44,7 +44,7 @@ enum Dialog {
         lines: Vec<String>,
     },
     TrashSelected(TrashSelection),
-    DeleteTrash { identity: Identity, review: Box<ts4_mod_manager_core::lifecycle::TrashDeletion>, acknowledged: bool },
+    DeleteTrash { identity: Identity, review: Box<plumcrate_core::lifecycle::TrashDeletion>, acknowledged: bool },
     SettingsImport(Settings, bool),
 }
 enum PickPurpose {
@@ -104,9 +104,9 @@ pub struct Controls {
     dialog: Option<Dialog>,
     candidates: Option<(
         Identity,
-        Vec<ts4_mod_manager_core::source_candidates::SourceCandidate>,
+        Vec<plumcrate_core::source_candidates::SourceCandidate>,
     )>,
-    trash_entries: Option<(Identity, Vec<ts4_mod_manager_core::lifecycle::TrashEntry>)>,
+    trash_entries: Option<(Identity, Vec<plumcrate_core::lifecycle::TrashEntry>)>,
     picker: Option<PendingPicker>,
     picker_directory: PathBuf,
     #[cfg(test)]
@@ -213,10 +213,10 @@ impl Controls {
             let available = self.updates.reports.keys().filter(|id| self.updates.available(id)).count();
             let errors = self.updates.reports.values().filter(|r| r.is_err()).count();
             let unknown = self.updates.reports.values().filter(|r| matches!(r, Ok(report) if matches!(report.status,
-                ts4_mod_manager_core::mod_updates::UpdateStatus::Untracked
-                | ts4_mod_manager_core::mod_updates::UpdateStatus::LocalContentChanged
-                | ts4_mod_manager_core::mod_updates::UpdateStatus::InstalledReleaseUnavailable
-                | ts4_mod_manager_core::mod_updates::UpdateStatus::Incomplete))).count();
+                plumcrate_core::mod_updates::UpdateStatus::Untracked
+                | plumcrate_core::mod_updates::UpdateStatus::LocalContentChanged
+                | plumcrate_core::mod_updates::UpdateStatus::InstalledReleaseUnavailable
+                | plumcrate_core::mod_updates::UpdateStatus::Incomplete))).count();
             egui::Frame::new().fill(ui.visuals().selection.bg_fill).corner_radius(10).inner_margin(12).show(ui, |ui| {
                 ui.horizontal_wrapped(|ui| {
                     ui.label(egui::RichText::new(format!("{available} updates found")).color(ui.visuals().selection.stroke.color));
@@ -229,7 +229,7 @@ impl Controls {
         review
     }
     pub fn update_details(&mut self, ui: &mut egui::Ui, catalog: &Catalog) {
-        use ts4_mod_manager_core::mod_updates::UpdateStatus;
+        use plumcrate_core::mod_updates::UpdateStatus;
         self.record_release_rect = None;
         self.open_update_page_rect = None;
         let Some(entry) = catalog.selected_mod() else { return; };
@@ -301,7 +301,7 @@ impl Controls {
             ui.label("Download from the author's page, then record the release after replacing your local files.");
         }
     }
-    pub fn review_installed_release(&mut self, catalog: &Catalog, report: &ts4_mod_manager_core::mod_updates::UpdateReport, release: &ts4_mod_manager_core::mod_updates::Release) {
+    pub fn review_installed_release(&mut self, catalog: &Catalog, report: &plumcrate_core::mod_updates::UpdateReport, release: &plumcrate_core::mod_updates::Release) {
         let Some(entry) = catalog.selected_mod() else { return; };
         let mut lines = vec![entry.name.clone(), report.source_url.clone(), release.file_name.clone(),
             "Confirm that this release describes the files you have installed.".into(),
@@ -960,7 +960,7 @@ impl Controls {
         if response.clicked() { self.check_updates(catalog, ids); }
     }
     pub fn updates_content(&mut self, ui: &mut egui::Ui, catalog: &Catalog) -> Option<usize> {
-        use ts4_mod_manager_core::mod_updates::UpdateStatus;
+        use plumcrate_core::mod_updates::UpdateStatus;
         self.updates.sync(catalog, self.saved_settings.curseforge_api_key.as_deref());
         ui.label(egui::RichText::new("Updates").size(32.0).strong());
         ui.add_space(16.0);
@@ -1518,7 +1518,7 @@ mod tests {
             std::thread::sleep(std::time::Duration::from_millis(2));
         }
         let identity = controls.identity(&catalog).unwrap();
-        controls.trash_entries = Some((identity, (0..20).map(|n| ts4_mod_manager_core::lifecycle::TrashEntry {
+        controls.trash_entries = Some((identity, (0..20).map(|n| plumcrate_core::lifecycle::TrashEntry {
             title: Some(format!("Mod {n}")), name: format!("mod-{n}"), path: format!("/{}", "long-directory/".repeat(30)),
             original_path: Some(format!("/{}", "original/".repeat(30))), deletion_date: None,
         }).collect()));
@@ -2214,7 +2214,7 @@ mod tests {
     }
     #[test]
     fn permanent_trash_deletion_requires_acknowledgement_and_a_current_review() {
-        use ts4_mod_manager_core::{managed_storage as storage, lifecycle};
+        use plumcrate_core::{managed_storage as storage, lifecycle};
         let dir = tempfile::tempdir().unwrap();
         let managed = dir.path().join("managed");
         let root = dir.path().join("game");
@@ -2292,7 +2292,7 @@ mod tests {
 
     #[test]
     fn bulk_trash_requires_confirmation_rejects_stale_reviews_and_preserves_files() {
-        use ts4_mod_manager_core::{managed_storage as storage, toggle, lifecycle};
+        use plumcrate_core::{managed_storage as storage, toggle, lifecycle};
         let dir = tempfile::tempdir().unwrap();
         let root = dir.path().join("game");
         let managed = dir.path().join("managed");
@@ -2438,9 +2438,9 @@ mod tests {
         std::fs::create_dir_all(root.join("Mods")).unwrap();
         std::fs::create_dir_all(&source).unwrap();
         std::fs::write(source.join("test.package"), b"fixture").unwrap();
-        let metadata = ts4_mod_manager_core::managed_storage::create_managed_mod(
+        let metadata = plumcrate_core::managed_storage::create_managed_mod(
             &managed,
-            ts4_mod_manager_core::managed_storage::ImportRequest {
+            plumcrate_core::managed_storage::ImportRequest {
                 name: "Fixture".into(),
                 slug: None,
                 source_dir: source,
@@ -2472,7 +2472,7 @@ mod tests {
             vec!["https://example.org/fixture".into()],
         );
         assert!(
-            ts4_mod_manager_core::managed_storage::read_managed_mod(&managed, &metadata.mod_id)
+            plumcrate_core::managed_storage::read_managed_mod(&managed, &metadata.mod_id)
                 .unwrap()
                 .source_url
                 .is_none()
@@ -2508,7 +2508,7 @@ mod tests {
             std::thread::sleep(std::time::Duration::from_millis(2));
         }
         assert_eq!(
-            ts4_mod_manager_core::managed_storage::read_managed_mod(&managed, &metadata.mod_id)
+            plumcrate_core::managed_storage::read_managed_mod(&managed, &metadata.mod_id)
                 .unwrap()
                 .source_url
                 .as_deref(),

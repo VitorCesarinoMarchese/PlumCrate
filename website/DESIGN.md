@@ -1,5 +1,5 @@
 ---
-name: Sims 4 Mod Manager website previews
+name: PlumCrate website previews
 description: Five marketing compositions extending the established Plumbob identity.
 colors:
   ink: "#173452"
@@ -53,7 +53,7 @@ components:
     rounded: "{rounded.control}"
 ---
 
-# Design System: Sims 4 Mod Manager website previews
+# Design System: PlumCrate website previews
 
 ## Overview
 

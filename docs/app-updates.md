@@ -46,13 +46,13 @@ that includes it. No GitHub release is published by a local build or update chec
 1. Set `native/Cargo.toml` to the release version, such as `0.0.1-alpha.2`.
 2. Run the full validation and baseline packaging steps in
    [Build and verify an AppImage](appimage.md).
-3. Create a GitHub release in `VitorCesarinoMarchese/TS4ModManager` with the
+3. Create a GitHub release in `VitorCesarinoMarchese/PlumCrate` with the
    matching version tag, such as `v0.0.1-alpha.2`.
 4. Upload both packaging outputs to that release:
 
    ```text
-   ts4-mod-manager-native-0.0.1-alpha.2-x86_64.AppImage
-   ts4-mod-manager-native-0.0.1-alpha.2-x86_64.AppImage.sha256
+   plumcrate-0.0.1-alpha.2-x86_64.AppImage
+   plumcrate-0.0.1-alpha.2-x86_64.AppImage.sha256
    ```
 
 The filename must match the manifest version and architecture exactly. The
@@ -66,7 +66,7 @@ probe, staged installation, preserved backup, and rollback inside a new
 temporary fixture. The input AppImage is left unchanged:
 
 ```sh
-TS4_TEST_APPIMAGE=/absolute/path/to/ts4-mod-manager-native-0.0.1-alpha.1-x86_64.AppImage \
+TS4_TEST_APPIMAGE=/absolute/path/to/plumcrate-0.0.1-alpha.1-x86_64.AppImage \
   cargo test --manifest-path native/Cargo.toml --locked --lib \
   packaged_appimage_can_be_verified_installed_and_restored -- --ignored
 ```
@@ -75,7 +75,7 @@ This check runs without a graphical session. In a Linux desktop session, verify
 the restarted window's startup acknowledgement and screenshot with:
 
 ```sh
-TS4_TEST_APPIMAGE=/absolute/path/to/ts4-mod-manager-native-0.0.1-alpha.1-x86_64.AppImage \
+TS4_TEST_APPIMAGE=/absolute/path/to/plumcrate-0.0.1-alpha.1-x86_64.AppImage \
   cargo test --manifest-path native/Cargo.toml --locked --lib \
   packaged_appimage_restart_acknowledges_a_rendered_window -- --ignored
 ```

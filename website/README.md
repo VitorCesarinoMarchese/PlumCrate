@@ -12,7 +12,7 @@ Open <http://localhost:4173> for the selected Gallery website. Open <http://loca
 
 ## User guide
 
-The [player guide](https://ts4-mod-manager.vercel.app/guide) lives at `/guide` in English and `/pt-br/guide` in Brazilian Portuguese, locally and in production. Landing-page guide links preserve the selected language. It covers installation, game-folder selection, imports, library controls, optional CurseForge access, manual update checks, trash and settings. Desktop control labels remain English to match the current app. The top navigation stays visible while scrolling. Both pages expose the same static navigation, checked against `public/site-navigation.js`. The contents menu follows the reading position and shows the current section as a subdued, disabled link; other sections remain clickable.
+The [player guide](https://plumcrate.vercel.app/guide) lives at `/guide` in English and `/pt-br/guide` in Brazilian Portuguese, locally and in production. Landing-page guide links preserve the selected language. It covers installation, game-folder selection, imports, library controls, optional CurseForge access, manual update checks, trash and settings. Desktop control labels remain English to match the current app. The top navigation stays visible while scrolling. Both pages expose the same static navigation, checked against `public/site-navigation.js`. The contents menu follows the reading position and shows the current section as a subdued, disabled link; other sections remain clickable.
 
 CurseForge sources were checked on 2026-10-20. The official support article describes a developer application reviewed by Overwolf; section 2.2 of the API terms restricts sharing or transferring keys. The guide links to that process without promising a general personal-key entitlement, and describes local configuration only for authorized access. It never collects keys. Local mod management remains usable without a key.
 
@@ -20,12 +20,12 @@ Sources: [application instructions](https://support.curseforge.com/support/solut
 
 ## Deploy the chosen preview to Vercel
 
-Gallery is live at <https://ts4-mod-manager.vercel.app>. Its production default hides the preview selector. The Vercel project is `ts4-mod-manager` in `vitorcesarinomarcheses-projects`.
+Gallery is live at <https://plumcrate.vercel.app>. The previous `ts4-mod-manager.vercel.app` host redirects permanently to the same path on the PlumCrate host. Its production default hides the preview selector. The Vercel project is `plumcrate` in `vitorcesarinomarcheses-projects`.
 
 From the `website` directory, deploy with your authenticated Vercel account:
 
 ```sh
-npx vercel link --yes --project ts4-mod-manager --scope vitorcesarinomarcheses-projects
+npx vercel link --yes --project plumcrate --scope vitorcesarinomarcheses-projects
 npx vercel deploy --prod --yes --scope vitorcesarinomarcheses-projects
 ```
 
@@ -37,7 +37,7 @@ Vercel references: [project configuration](https://vercel.com/docs/project-confi
 
 ## Release downloads
 
-`/api/release` reads the 30 most recent public GitHub releases from `VitorCesarinoMarchese/TS4ModManager`. It chooses the most recently published release containing a non-ARM, non-i686 AppImage. Published prereleases are eligible because the project is in alpha. Drafts, signatures, and download URLs outside the repository are excluded.
+`/api/release` reads the 30 most recent public GitHub releases from `VitorCesarinoMarchese/PlumCrate`. It chooses the most recently published release containing a non-ARM, non-i686 AppImage. Published prereleases are eligible because the project is in alpha. Drafts, signatures, and download URLs outside the repository are excluded.
 
 When an AppImage exists, the main button points directly to its GitHub asset. The response is cached at Vercel for five minutes with a one-hour stale response allowance. GitHub rate limits or outages fall back to the releases page. When no AppImage exists, the site says so and links to releases. No token is required, and no CurseForge key is used by the website.
 
@@ -64,7 +64,7 @@ Each screenshot has an Impeccable provenance sidecar. The plumbob is the existin
 
 The English homepage and guide use `/` and `/guide`; Portuguese uses `/pt-br` and `/pt-br/guide`. Each page contains its full text, navigation, descriptive title, social metadata, JSON-LD, and its own canonical URL before JavaScript runs. Reciprocal `hreflang` links identify English, Brazilian Portuguese, and the default English page. Language controls are ordinary links. JavaScript preserves guide sections and preview choices across language navigation and forwards old `?lang=pt-BR` links to the Portuguese pages.
 
-`public/robots.txt` allows crawling and advertises `public/sitemap.xml`, which lists all four canonical pages. Preview query parameters share each language's canonical page. The repository README links to the public website and guide. Keep the repository's About website field set to `https://ts4-mod-manager.vercel.app/` so visitors and crawlers can follow it.
+`public/robots.txt` allows crawling and advertises `public/sitemap.xml`, which lists all four canonical pages. Preview query parameters share each language's canonical page. The repository README links to the public website and guide. Keep the repository's About website field set to `https://plumcrate.vercel.app/` so visitors and crawlers can follow it.
 
 These changes follow Google's guidance on [language-specific URLs](https://developers.google.com/search/docs/specialty/international/managing-multi-regional-sites), [crawlable links](https://developers.google.com/search/docs/crawling-indexing/links-crawlable), and [search discovery](https://developers.google.com/search/docs/fundamentals/seo-starter-guide). They do not guarantee indexing or ranking. Google says changes can take weeks or longer to affect results. Useful community references and links from relevant Linux and Sims resources remain ongoing work; do not manufacture links, reviews, or verification tokens.
 

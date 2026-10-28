@@ -44,7 +44,7 @@ pub fn open(
                 Kind::SettingsExport => dialog
                     .set_title("Export settings to a new file")
                     .add_filter("JSON settings", &["json"])
-                    .set_file_name("ts4-mod-manager-settings.json")
+                    .set_file_name("plumcrate-settings.json")
                     .save_file(),
             };
             let _ = sender.send(path);

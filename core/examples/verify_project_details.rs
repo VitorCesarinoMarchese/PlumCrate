@@ -1,5 +1,5 @@
 //! Read-only metadata probe. Supply a local key through CURSEFORGE_API_KEY.
-use ts4_mod_manager_core::{
+use plumcrate_core::{
     browser_import::load_browser_project,
     curseforge_client::{CurseForgeClient, UreqCurseForgeTransport},
     curseforge_details::{load_description, load_project_reference},

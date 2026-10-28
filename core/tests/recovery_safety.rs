@@ -1,6 +1,6 @@
 #![cfg(unix)]
 use std::{fs, os::unix::fs::symlink};
-use ts4_mod_manager_core::{
+use plumcrate_core::{
     external_migration::migrate_external_mod,
     managed_storage::{create_managed_mod, ImportRequest},
     operation::recover_pending,
@@ -58,7 +58,7 @@ fn rejected_import_never_publishes_partial_bundle() {
 
 #[test]
 fn restart_rolls_back_a_moved_original_and_created_link() {
-    use ts4_mod_manager_core::operation::Transaction;
+    use plumcrate_core::operation::Transaction;
     let temp = tempfile::tempdir().unwrap();
     let root = temp.path().join("managed");
     let game = temp.path().join("Mods");
@@ -83,7 +83,7 @@ fn restart_rolls_back_a_moved_original_and_created_link() {
 }
 #[test]
 fn recovery_preserves_a_new_user_replacement_and_keeps_journal() {
-    use ts4_mod_manager_core::operation::Transaction;
+    use plumcrate_core::operation::Transaction;
     let temp = tempfile::tempdir().unwrap();
     let root = temp.path().join("managed");
     let original = temp.path().join("original.package");
@@ -103,7 +103,7 @@ fn recovery_preserves_a_new_user_replacement_and_keeps_journal() {
 }
 #[test]
 fn restart_recovers_the_original_holding_across_devices() {
-    use ts4_mod_manager_core::operation::Transaction;
+    use plumcrate_core::operation::Transaction;
     let temp = tempfile::tempdir().unwrap();
     let cross = tempfile::Builder::new()
         .prefix("ts4-recovery-")
@@ -121,7 +121,7 @@ fn restart_recovers_the_original_holding_across_devices() {
 }
 #[test]
 fn failure_after_first_restore_move_rolls_back_all_planned_paths() {
-    use ts4_mod_manager_core::operation::Transaction;
+    use plumcrate_core::operation::Transaction;
     let temp = tempfile::tempdir().unwrap();
     let root = temp.path().join("managed");
     let source = temp.path().join("first.package");
@@ -139,7 +139,7 @@ fn failure_after_first_restore_move_rolls_back_all_planned_paths() {
 }
 #[test]
 fn held_directory_mutation_survives_a_parent_path_swap() {
-    use ts4_mod_manager_core::fs_scope::Directory;
+    use plumcrate_core::fs_scope::Directory;
     let temp = tempfile::tempdir().unwrap();
     let game = temp.path().join("Mods");
     let moved = temp.path().join("original-Mods");
@@ -167,14 +167,14 @@ fn held_directory_mutation_survives_a_parent_path_swap() {
 fn process_lock_child() {
     let root = std::path::PathBuf::from(std::env::var_os("TS4_LOCK_FIXTURE_ROOT").unwrap());
     fs::write(root.join("child-started"), b"started").unwrap();
-    let _guard = ts4_mod_manager_core::operation::acquire(&root).unwrap();
+    let _guard = plumcrate_core::operation::acquire(&root).unwrap();
     fs::write(root.join("child-acquired"), b"acquired").unwrap();
 }
 #[test]
 fn writer_authority_serializes_independent_processes() {
     let temp = tempfile::tempdir().unwrap();
     let root = temp.path();
-    let guard = ts4_mod_manager_core::operation::acquire(root).unwrap();
+    let guard = plumcrate_core::operation::acquire(root).unwrap();
     let different_tmp = root.join("different-tmp");
     fs::create_dir(&different_tmp).unwrap();
     let mut child = std::process::Command::new(std::env::current_exe().unwrap())
@@ -197,7 +197,7 @@ fn writer_authority_serializes_independent_processes() {
 
 #[test]
 fn restart_restores_ownership_record_together_with_disabled_links() {
-    use ts4_mod_manager_core::{link_ownership, operation::Transaction, toggle};
+    use plumcrate_core::{link_ownership, operation::Transaction, toggle};
     let temp = tempfile::tempdir().unwrap();
     let root = temp.path().join("managed");
     let source = temp.path().join("source");
@@ -236,7 +236,7 @@ fn restart_restores_ownership_record_together_with_disabled_links() {
 }
 #[test]
 fn corrupted_journal_path_is_preserved_without_touching_an_outside_file() {
-    use ts4_mod_manager_core::operation::Transaction;
+    use plumcrate_core::operation::Transaction;
     let temp = tempfile::tempdir().unwrap();
     let root = temp.path().join("managed");
     let from = temp.path().join("from");

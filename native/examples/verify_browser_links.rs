@@ -24,7 +24,7 @@ impl eframe::App for Probe {
             ui.ctx().open_url(egui::OpenUrl::new_tab(URL));
             self.requested = true;
         }
-        ts4_mod_manager_native::desktop_links::dispatch_pending(ui.ctx());
+        plumcrate::desktop_links::dispatch_pending(ui.ctx());
         assert!(
             self.started.elapsed() < Duration::from_secs(15),
             "desktop backend did not launch the external browser"

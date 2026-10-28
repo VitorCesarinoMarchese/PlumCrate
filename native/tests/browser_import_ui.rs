@@ -1,4 +1,4 @@
-use ts4_mod_manager_native::{catalog::Catalog, controls::Controls, settings::Settings, ui::View};
+use plumcrate::{catalog::Catalog, controls::Controls, settings::Settings, ui::View};
 
 #[test]
 fn browsing_offers_browser_import_and_requires_a_selected_game() {
@@ -14,7 +14,7 @@ fn browsing_offers_browser_import_and_requires_a_selected_game() {
     let mut view = View::default();
     view.browse_page = true;
     view.discovery.browser.begin(Default::default());
-    view.discovery.selected = Some(ts4_mod_manager_core::curseforge_browse::BrowseProject {
+    view.discovery.selected = Some(plumcrate_core::curseforge_browse::BrowseProject {
         id: 42,
         name: "Synthetic project".into(),
         authors: vec!["Synthetic author".into()],
@@ -27,7 +27,7 @@ fn browsing_offers_browser_import_and_requires_a_selected_game() {
         categories: vec![],
     });
     let ctx = egui::Context::default();
-    ts4_mod_manager_native::ui::setup(&ctx);
+    plumcrate::ui::setup(&ctx);
     for _ in 0..3 {
         let mut output = ctx.run_ui(
             egui::RawInput {
@@ -52,7 +52,7 @@ fn browsing_offers_browser_import_and_requires_a_selected_game() {
 
 #[test]
 fn card_downloads_use_the_existing_selected_game_requirement() {
-    use ts4_mod_manager_core::curseforge_browse::{BrowseQuery, parse_browse_response};
+    use plumcrate_core::curseforge_browse::{BrowseQuery, parse_browse_response};
     let temp = tempfile::tempdir().unwrap();
     let mut controls = Controls::new(
         temp.path().join("managed"),
@@ -69,7 +69,7 @@ fn card_downloads_use_the_existing_selected_game_requirement() {
         r#"{"data":[{"id":42,"gameId":78062,"name":"Synthetic card project","summary":"Summary"}],"pagination":{"index":0,"pageSize":24,"resultCount":1,"totalCount":1}}"#
     ).unwrap()));
     let ctx = egui::Context::default();
-    ts4_mod_manager_native::ui::setup(&ctx);
+    plumcrate::ui::setup(&ctx);
     let mut render = |events| {
         let mut output = ctx.run_ui(
             egui::RawInput {
@@ -136,11 +136,11 @@ fn frame(
 
 #[test]
 fn a_dependency_download_starts_only_that_project_then_imports_and_enables_it() {
-    use ts4_mod_manager_core::{browser_import::load_browser_project,curseforge_client::CurseForgeClient};
-    use ts4_mod_manager_native::{browser_import::Phase,project_details::ReviewRequest};
+    use plumcrate_core::{browser_import::load_browser_project,curseforge_client::CurseForgeClient};
+    use plumcrate::{browser_import::Phase,project_details::ReviewRequest};
     let mut fixture=support::fixture();
     fixture.controls.browser_import.cancel();
-    let ctx=egui::Context::default();ts4_mod_manager_native::ui::setup(&ctx);
+    let ctx=egui::Context::default();plumcrate::ui::setup(&ctx);
     let client=CurseForgeClient::new(Some("synthetic"),details_support::Provider).unwrap();
     let dependency=load_browser_project(&client,9).unwrap();
     let original=fixture.directory.path().join("Downloads/core-library.package");
@@ -183,7 +183,7 @@ fn sized_frame(ctx: &egui::Context, fixture: &mut support::Fixture, events: Vec<
 fn one_download_action_opens_the_download_page_then_imports_and_enables_without_more_clicks() {
     let mut fixture = support::fixture();
     let ctx = egui::Context::default();
-    ts4_mod_manager_native::ui::setup(&ctx);
+    plumcrate::ui::setup(&ctx);
     let downloads = fixture
         .directory
         .path()
@@ -200,7 +200,7 @@ fn one_download_action_opens_the_download_page_then_imports_and_enables_without_
     );
     assert!(!fixture.directory.path().join("managed/mods").exists());
     fixture.controls.browser_import.cancel();
-    fixture.controls.prepare_browser_import(&ctx, &fixture.catalog, ts4_mod_manager_native::project_details::ReviewRequest::Loaded {
+    fixture.controls.prepare_browser_import(&ctx, &fixture.catalog, plumcrate::project_details::ReviewRequest::Loaded {
         project: fixture.project.clone(), file_id: 100,
     });
     let output = frame(&ctx, &mut fixture, vec![]);
@@ -208,7 +208,7 @@ fn one_download_action_opens_the_download_page_then_imports_and_enables_without_
     assert!(output.platform_output.commands.iter().any(|command|matches!(command,egui::OutputCommand::OpenUrl(url) if url.url==fixture.project.releases[0].navigation_url(&fixture.project))));
     let deadline = std::time::Instant::now() + std::time::Duration::from_secs(5);
     while fixture.controls.browser_import.phase
-        != ts4_mod_manager_native::browser_import::Phase::Complete
+        != plumcrate::browser_import::Phase::Complete
     {
         fixture.controls.poll(&mut fixture.catalog);
         frame(&ctx, &mut fixture, vec![]);
@@ -244,7 +244,7 @@ fn one_download_action_opens_the_download_page_then_imports_and_enables_without_
 fn cancelling_preparation_does_not_import_an_existing_matching_download() {
     let mut fixture = support::fixture();
     let ctx = egui::Context::default();
-    ts4_mod_manager_native::ui::setup(&ctx);
+    plumcrate::ui::setup(&ctx);
     std::fs::write(
         fixture.directory.path().join("Downloads/fixture.package"),
         support::BYTES,
@@ -261,7 +261,7 @@ fn cancelling_preparation_does_not_import_an_existing_matching_download() {
     fixture.controls.poll(&mut fixture.catalog);
     assert_eq!(
         fixture.controls.browser_import.phase,
-        ts4_mod_manager_native::browser_import::Phase::Cancelled
+        plumcrate::browser_import::Phase::Cancelled
     );
     assert!(!fixture.directory.path().join("managed/mods").exists());
     assert_eq!(
@@ -277,8 +277,8 @@ fn direct_download_keeps_activity_reachable_in_a_small_window() {
     let mut fixture = support::fixture();
     fixture.controls.browser_import.cancel();
     let ctx = egui::Context::default();
-    ts4_mod_manager_native::ui::setup(&ctx);
-    fixture.controls.prepare_browser_import(&ctx, &fixture.catalog, ts4_mod_manager_native::project_details::ReviewRequest::Loaded {
+    plumcrate::ui::setup(&ctx);
+    fixture.controls.prepare_browser_import(&ctx, &fixture.catalog, plumcrate::project_details::ReviewRequest::Loaded {
         project: fixture.project.clone(), file_id: 100,
     });
     let size = egui::vec2(640.0, 480.0);
@@ -290,11 +290,11 @@ fn direct_download_keeps_activity_reachable_in_a_small_window() {
 
 #[test]
 fn download_action_opens_the_browser_download_page_without_an_extra_popup() {
-    use ts4_mod_manager_native::{browser_import::Phase, project_details::ReviewRequest};
+    use plumcrate::{browser_import::Phase, project_details::ReviewRequest};
     let mut fixture = support::fixture();
     fixture.controls.browser_import.cancel();
     let ctx = egui::Context::default();
-    ts4_mod_manager_native::ui::setup(&ctx);
+    plumcrate::ui::setup(&ctx);
     fixture.controls.prepare_browser_import(&ctx, &fixture.catalog, ReviewRequest::Loaded {
         project: fixture.project.clone(), file_id: 100,
     });
@@ -310,11 +310,11 @@ fn download_action_opens_the_browser_download_page_without_an_extra_popup() {
 
 #[test]
 fn changing_game_before_dispatch_does_not_open_or_install_the_download() {
-    use ts4_mod_manager_native::{browser_import::Phase, project_details::ReviewRequest};
+    use plumcrate::{browser_import::Phase, project_details::ReviewRequest};
     let mut fixture = support::fixture();
     fixture.controls.browser_import.cancel();
     let ctx = egui::Context::default();
-    ts4_mod_manager_native::ui::setup(&ctx);
+    plumcrate::ui::setup(&ctx);
     fixture.controls.prepare_browser_import(&ctx, &fixture.catalog, ReviewRequest::Loaded { project: fixture.project.clone(), file_id: 100 });
     let other = fixture.directory.path().join("other-game");
     std::fs::create_dir_all(other.join("Mods")).unwrap();

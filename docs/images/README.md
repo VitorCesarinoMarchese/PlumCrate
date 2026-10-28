@@ -15,7 +15,7 @@ Mod names and cover artwork belong to their respective creators.
 | [QICC - Sweater Weather Collection](https://www.curseforge.com/sims4/create-a-sim/qicc-sweater-weather-collection) | Quirky_Introvert | [Original cover](https://media.forgecdn.net/avatars/748/297/638087897421968953.jpeg) |
 | [WonderfulWhims](https://www.curseforge.com/sims4/mods/wonderfulwhims) | TURBODRIVER | [Original cover](https://media.forgecdn.net/avatars/602/578/637983317249528036.png) |
 
-`library-light.png`, `library-dark.png`, and `settings.png` are captured at 1440 × 1000 from the native release binary. The README logo is the original vector asset, [`native/assets/logo.svg`](../../native/assets/logo.svg).
+`library-light.png`, `library-dark.png`, and `settings.png` are captured at 1440 × 1000 from the native release binary. The README logo is the PlumCrate wordmark with the existing plumbob icon, [`native/assets/logo.svg`](../../native/assets/logo.svg).
 
 To regenerate the screenshots, build the release binary, then run:
 

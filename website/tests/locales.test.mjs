@@ -19,7 +19,7 @@ test('the deployed artifact exposes complete, linked language pages without Java
   try{
     const {buildSite}=await import('../build.mjs');
     await buildSite({outputDirectory});
-    const origin='https://ts4-mod-manager.vercel.app';
+    const origin='https://plumcrate.vercel.app';
     const pages=[
       ['index.html','/','en','/pt-br'],
       ['guide.html','/guide','en','/pt-br/guide'],

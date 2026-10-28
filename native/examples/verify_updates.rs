@@ -6,8 +6,8 @@ use std::{
     path::PathBuf,
     time::{Duration, Instant},
 };
-use ts4_mod_manager_core::mod_updates::UpdateStatus;
-use ts4_mod_manager_native::{
+use plumcrate_core::mod_updates::UpdateStatus;
+use plumcrate::{
     settings::{Settings, Theme},
     ui,
 };

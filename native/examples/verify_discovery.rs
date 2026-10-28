@@ -3,11 +3,11 @@ use std::{
     path::PathBuf,
     time::{Duration, Instant},
 };
-use ts4_mod_manager_core::{
+use plumcrate_core::{
     curseforge_browse::{BrowseQuery, parse_browse_response, parse_categories_response},
     curseforge_client::SourceLookupError,
 };
-use ts4_mod_manager_native::{
+use plumcrate::{
     catalog::Catalog,
     ui::{self, View},
 };

@@ -1,5 +1,5 @@
 use std::path::Path;
-use ts4_mod_manager_native::browser_import::{BrowserImport, Phase};
+use plumcrate::browser_import::{BrowserImport, Phase};
 
 #[test]
 fn browser_visit_does_not_authorize_an_import() {

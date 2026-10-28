@@ -1,8 +1,8 @@
-use ts4_mod_manager_core::{
+use plumcrate_core::{
     curseforge_client::SourceLookupError,
     curseforge_details::{DescriptionDocument, ProjectReference, SafeUrl},
 };
-use ts4_mod_manager_native::project_details::{Details, Load};
+use plumcrate::project_details::{Details, Load};
 
 #[test]
 fn description_and_release_outcomes_are_independent_and_selection_scoped() {

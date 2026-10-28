@@ -6,7 +6,7 @@ use std::{
     path::PathBuf,
     time::{Duration, Instant},
 };
-use ts4_mod_manager_native::{
+use plumcrate::{
     settings::{Settings, Theme},
     ui,
 };
@@ -47,7 +47,7 @@ impl Capture {
             .path()
             .join(".local/share/Trash/files");
         let id = self.fixture.catalog.mods[0].id.clone().unwrap();
-        ts4_mod_manager_core::lifecycle::uninstall_managed_mod(
+        plumcrate_core::lifecycle::uninstall_managed_mod(
             &managed,
             &root.join("Mods"),
             &trash,
@@ -57,7 +57,7 @@ impl Capture {
         let generation = self.fixture.catalog.begin_scan(root.clone());
         self.fixture.catalog.accept_scan(
             generation,
-            Ok(ts4_mod_manager_native::worker::scan(&root, &managed)
+            Ok(plumcrate::worker::scan(&root, &managed)
                 .unwrap()
                 .mods),
         );
@@ -120,7 +120,7 @@ impl eframe::App for Capture {
         self.fixture.controls.poll(&mut self.fixture.catalog);
         if let Some(root) = self.fixture.controls.refresh.take() {
             self.scans += 1;
-            let scan = ts4_mod_manager_native::worker::scan(
+            let scan = plumcrate::worker::scan(
                 &root,
                 &self.fixture.directory.path().join("managed"),
             )

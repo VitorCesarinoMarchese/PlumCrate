@@ -14,7 +14,7 @@ pub(super) fn image() -> Vec<u8> {
 }
 
 fn release(version: &str, arch: &str) -> serde_json::Value {
-    let name = format!("ts4-mod-manager-native-{version}-{arch}.AppImage");
+    let name = format!("plumcrate-{version}-{arch}.AppImage");
     let base = format!("https://github.com/{REPOSITORY}/releases");
     json!({"tag_name": format!("v{version}"), "html_url": format!("{base}/tag/v{version}"),
         "draft": false, "prerelease": version.contains('-'),

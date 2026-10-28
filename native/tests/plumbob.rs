@@ -1,4 +1,4 @@
-use ts4_mod_manager_native::{catalog::Catalog, ui::{self, View}};
+use plumcrate::{catalog::Catalog, ui::{self, View}};
 
 fn frame(ctx: &egui::Context, view: &mut View, catalog: &mut Catalog, width: f32) -> egui::FullOutput {
     let mut output = ctx.run_ui(egui::RawInput {
@@ -7,6 +7,20 @@ fn frame(ctx: &egui::Context, view: &mut View, catalog: &mut Catalog, width: f32
     }, |ui| { view.show(ui, catalog); });
     output.textures_delta.clear();
     output
+}
+
+#[test]
+fn plumcrate_is_the_visible_application_brand_at_both_navigation_sizes() {
+    let ctx = egui::Context::default();
+    ui::setup(&ctx);
+    let mut catalog = Catalog::default();
+    let mut view = View::default();
+    for width in [1200.0, 640.0] {
+        frame(&ctx, &mut view, &mut catalog, width);
+        let output = frame(&ctx, &mut view, &mut catalog, width);
+        assert!(output.shapes.iter().any(|shape| matches!(&shape.shape,
+            egui::Shape::Text(text) if text.galley.text() == "PlumCrate")), "brand missing at {width}px");
+    }
 }
 
 #[test]

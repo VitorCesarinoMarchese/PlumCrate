@@ -1,5 +1,5 @@
-use ts4_mod_manager_core::curseforge_browse::{BrowseQuery, parse_browse_response};
-use ts4_mod_manager_native::{
+use plumcrate_core::curseforge_browse::{BrowseQuery, parse_browse_response};
+use plumcrate::{
     catalog::Catalog,
     ui::{self, View},
 };
@@ -60,7 +60,7 @@ fn provider_image(ctx: &egui::Context, url: &'static str, bytes: Vec<u8>) {
 fn saved_curseforge_mod(
     project_id: u64,
     enabled: bool,
-) -> ts4_mod_manager_core::mod_scan::ScannedMod {
+) -> plumcrate_core::mod_scan::ScannedMod {
     serde_json::from_value(serde_json::json!({
         "key":"owned", "id":"owned", "name":"Saved local mod", "files":["owned.package"],
         "mod_files":["owned.package"], "preview":null, "source":"managed", "enabled":enabled, "group_path":["owned"],
@@ -81,7 +81,7 @@ fn seed_owned_project(view: &mut View) {
 
 #[test]
 fn discover_recognizes_enabled_and_disabled_library_mods_and_opens_the_local_entry() {
-    use ts4_mod_manager_native::catalog::{EntryId, ModFilter};
+    use plumcrate::catalog::{EntryId, ModFilter};
     for enabled in [true, false] {
         let ctx = egui::Context::default();
         ui::setup(&ctx);
@@ -240,7 +240,7 @@ fn initial_catalog_scan_reserves_library_cards() {
 
 fn filter_fixture(view: &mut View) {
     view.browse_page = true;
-    view.discovery.categories = ts4_mod_manager_core::curseforge_browse::parse_categories_response(
+    view.discovery.categories = plumcrate_core::curseforge_browse::parse_categories_response(
         r#"{"data":[
         {"id":10,"gameId":78062,"name":"Create a Sim","isClass":true},
         {"id":11,"gameId":78062,"name":"Clothing","parentCategoryId":10,"classId":10},
@@ -425,7 +425,7 @@ fn selecting_category_version_and_sort_submits_combined_filters() {
     assert_eq!(query.game_version.as_deref(), Some("1.127.41"));
     assert_eq!(
         query.sort,
-        ts4_mod_manager_core::curseforge_browse::BrowseSort::Created
+        plumcrate_core::curseforge_browse::BrowseSort::Created
     );
 }
 
@@ -595,7 +595,7 @@ fn control_f_and_enter_submit_browser_query_without_changing_local_search() {
     assert_eq!(catalog.query, "local query");
     assert_eq!(
         view.discovery.browser.error,
-        Some(ts4_mod_manager_core::curseforge_client::SourceLookupError::MissingApiKey)
+        Some(plumcrate_core::curseforge_client::SourceLookupError::MissingApiKey)
     );
 }
 
@@ -731,7 +731,7 @@ fn missing_discover_photos_reserve_the_same_space_and_keep_actions_aligned() {
 #[test]
 fn browser_settings_returns_to_browsing_and_uses_only_saved_credentials() {
     let fixture = tempfile::tempdir().unwrap();
-    let mut controls = ts4_mod_manager_native::controls::Controls::new(
+    let mut controls = plumcrate::controls::Controls::new(
         fixture.path().join("managed"),
         fixture.path().into(),
         Default::default(),
@@ -800,7 +800,7 @@ fn browser_settings_returns_to_browsing_and_uses_only_saved_credentials() {
     assert!(view.browse_page);
     assert_eq!(
         view.discovery.browser.error,
-        Some(ts4_mod_manager_core::curseforge_client::SourceLookupError::MissingApiKey)
+        Some(plumcrate_core::curseforge_client::SourceLookupError::MissingApiKey)
     );
     assert_eq!(
         controls.settings.curseforge_api_key.as_deref(),
@@ -836,7 +836,7 @@ fn long_and_short_project_headers_keep_actions_aligned() {
 
 #[test]
 fn card_downloads_are_filled_buttons_that_request_the_clicked_project() {
-    use ts4_mod_manager_native::project_details::ReviewRequest;
+    use plumcrate::project_details::ReviewRequest;
     for theme in [egui::Theme::Light, egui::Theme::Dark] {
         let ctx = egui::Context::default();
         ui::setup(&ctx);
@@ -892,7 +892,7 @@ fn card_downloads_are_filled_buttons_that_request_the_clicked_project() {
 
 #[test]
 fn card_downloads_remain_reachable_in_a_small_window() {
-    use ts4_mod_manager_native::project_details::ReviewRequest;
+    use plumcrate::project_details::ReviewRequest;
     let ctx = egui::Context::default();
     ui::setup(&ctx);
     let mut view = View::default();

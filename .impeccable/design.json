@@ -1,7 +1,7 @@
 {
   "schemaVersion": 2,
   "generatedAt": "2026-10-15T00:00:00Z",
-  "title": "Design System: Sims 4 Mod Manager native",
+  "title": "Design System: PlumCrate native",
   "extensions": {
     "platform": "Linux Fastframe/egui",
     "source": "DESIGN.md -> docs/native-design.md",

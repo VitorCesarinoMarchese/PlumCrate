@@ -1,8 +1,8 @@
-use ts4_mod_manager_core::managed_storage::SourceAttachmentMetadata;
+use plumcrate_core::managed_storage::SourceAttachmentMetadata;
 
 use serde_json::{json, Value};
 use std::{collections::HashMap, fs, path::PathBuf};
-use ts4_mod_manager_core::{
+use plumcrate_core::{
     curseforge_client::{
         CurseForgeClient, CurseForgeRequest, CurseForgeTransport, SourceLookupError,
     },

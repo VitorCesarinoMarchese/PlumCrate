@@ -43,7 +43,7 @@ Native file and folder selection uses `rfd` with the XDG desktop portal, as in [
 
 Managed files live in `~/.local/share/sims4-mod-manager`. Scanning does not create managed storage. Unreadable folders, file entries and damaged managed metadata report an incomplete scan rather than a successful partial catalog. Each managed mod keeps its metadata in `meta.json`.
 
-Settings live in `~/.config/ts4-mod-manager/settings.json`. Saves use atomic replacement and restricted permissions. Custom theme colors persist locally and have a separate JSON export. Settings transfers omit the API key unless explicitly included.
+Settings live in `~/.config/ts4-mod-manager/settings.json`. PlumCrate keeps this path, the existing `~/.local/share/sims4-mod-manager` library, cache paths, ownership markers, and writer lock identifier so existing data stays accessible after the rename. Saves use atomic replacement and restricted permissions. Custom theme colors persist locally and have a separate JSON export. Settings transfers omit the API key unless explicitly included.
 
 Source lookup uses real CurseForge provider results and requires a locally configured API key. Requests run separately from local management, with a 20-second shared network budget and a 5-second request limit. Closing the app does not wait on read-only provider requests. Attachment always requires confirmation. Weak candidates retain their confidence warnings. Keep API keys outside Git, chat and per-mod metadata.
 
@@ -57,9 +57,9 @@ cargo test --manifest-path native/Cargo.toml --locked
 cargo clippy --manifest-path native/Cargo.toml --locked --all-targets -- -D warnings
 cargo build --manifest-path native/Cargo.toml --release --locked
 python3 -m unittest discover -s native/tests -p 'test_*.py'
-python3 native/verify.py --binary native/target/release/ts4-mod-manager-native
-native/target/release/ts4-mod-manager-native --verify-workflows
-python3 native/verify_package.py --binary native/target/release/ts4-mod-manager-native
+python3 native/verify.py --binary native/target/release/plumcrate
+native/target/release/plumcrate --verify-workflows
+python3 native/verify_package.py --binary native/target/release/plumcrate
 ```
 
 The catalog verifier checks 100, 1,000 and 10,000 synthetic mod groups and preserves their input files. The workflow verifier creates isolated fixtures and exercises reviewed management operations. The repository regression checks that the resolved build graph contains no Tauri or WebKit app dependencies.
@@ -81,7 +81,7 @@ cp native/target/navigation-captures/navigation-library-light.png docs/images/li
 After building the release executable:
 
 ```bash
-python3 native/package.py --binary native/target/release/ts4-mod-manager-native
+python3 native/package.py --binary native/target/release/plumcrate
 ```
 
 CI builds release archives on Ubuntu 24.04 and rejects executables requiring glibc newer than 2.39. Use CI artifacts for distribution. Locally built executables inherit the host library requirements and may require a newer Linux installation. Other runtime graphics dependencies still need to be installed.

@@ -30,15 +30,15 @@ jobs:
       - name: Build release
         run: cargo build --manifest-path native/Cargo.toml --release --locked
       - name: Verify Linux release ABI
-        run: python3 native/verify_abi.py --binary native/target/release/ts4-mod-manager-native
+        run: python3 native/verify_abi.py --binary native/target/release/plumcrate
       - name: Verify release catalog fixtures
-        run: python3 native/verify.py --binary native/target/release/ts4-mod-manager-native
+        run: python3 native/verify.py --binary native/target/release/plumcrate
       - name: Verify management workflow fixtures
-        run: native/target/release/ts4-mod-manager-native --verify-workflows
+        run: native/target/release/plumcrate --verify-workflows
       - name: Verify packaged executable
-        run: python3 native/verify_package.py --binary native/target/release/ts4-mod-manager-native
+        run: python3 native/verify_package.py --binary native/target/release/plumcrate
       - name: Package Linux release
-        run: python3 native/package.py --binary native/target/release/ts4-mod-manager-native
+        run: python3 native/package.py --binary native/target/release/plumcrate
       - uses: actions/upload-artifact@v4
         with:
           name: native-linux

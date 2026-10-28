@@ -10,7 +10,7 @@ Import folder and Import ZIP open your desktop's file picker. ZIP selection filt
 
 App reviews appear as centered popups over a dimmed library. Import, rename, source attachment, settings import and management confirmations share this layout. Long paths wrap, long reviews scroll, and the action row remains visible. Cancel, Escape or a click on the backdrop dismisses a review without applying it. Source candidates and trash entries also open in popups; reviewing an entry replaces that popup with its confirmation.
 
-Choose folder and Change folder open the desktop folder picker for the Sims 4 folder containing Mods. You can also enter a game path manually. Settings import opens a JSON file picker and then shows the existing confirmation review. Settings export opens a save dialog suggesting `ts4-mod-manager-settings.json`; exports still refuse to overwrite an existing file.
+Choose folder and Change folder open the desktop folder picker for the Sims 4 folder containing Mods. You can also enter a game path manually. Settings import opens a JSON file picker and then shows the existing confirmation review. Settings export opens a save dialog suggesting `plumcrate-settings.json`; exports still refuse to overwrite an existing file.
 
 The picker starts in Downloads when that folder exists, otherwise in your home directory, and remembers the last selected location during the session. Change folder starts in the current game folder. Only one desktop picker can be open at a time. Picker work runs separately from approved management operations and does not block the UI or normal shutdown.
 
@@ -135,7 +135,7 @@ The default managed root is `~/.local/share/sims4-mod-manager`. Scanning does no
 Headless inspection uses the same scan and search model:
 
 ```bash
-native/target/debug/ts4-mod-manager-native \
+native/target/debug/plumcrate \
   --root '/path/to/The Sims 4' --inspect --query 'filename'
 ```
 
@@ -195,7 +195,7 @@ Run tests and repeatable verification:
 cargo test --manifest-path native/Cargo.toml --locked
 cargo build --manifest-path native/Cargo.toml --locked
 python native/verify.py
-native/target/debug/ts4-mod-manager-native --verify-workflows
+native/target/debug/plumcrate --verify-workflows
 ```
 
 `--verify-workflows` creates its own temporary fixtures and uses the same native controller and management worker as the UI. It verifies folder and ZIP imports, direct enable and disable in two instances, migration, rename, manual source changes, trash and restore, missing-key errors, refreshed catalog data, and byte preservation. It prints a JSON report and ignores user paths for its fixtures.
@@ -246,7 +246,7 @@ The pre-redesign migration build scanned 10,000 synthetic groups in 53 ms. On 1,
 Measure native window mapping and process memory on a running Hyprland desktop without opening real game data:
 
 ```bash
-python3 native/benchmark.py --native native/target/release/ts4-mod-manager-native \
+python3 native/benchmark.py --native native/target/release/plumcrate \
   --mods 1000 --runs 3 \
   --output native/target/benchmark.json
 ```
@@ -257,7 +257,7 @@ Build a Linux release archive with a desktop entry, icon and dependency license 
 
 ```bash
 python3 native/package.py
-python3 native/verify_package.py --binary native/target/release/ts4-mod-manager-native
+python3 native/verify_package.py --binary native/target/release/plumcrate
 ```
 
 Archives are written under `native/target/packages`. Pass `--binary PATH` to package an existing build or `--output PATH` to choose another destination. Packaging does not install anything. The archive's README explains local installation. The executable uses the host OpenGL driver and X11 or Wayland libraries. The verifier extracts the archive and runs its actual executable against an isolated catalog. CI builds on Ubuntu 24.04, verifies a glibc 2.39 maximum requirement, runs native tests, clippy, release fixture checks and package verification, then uploads the Linux archive. Local builds inherit the host library requirements. Fetch the complete locked dependency graph with `cargo fetch --manifest-path native/Cargo.toml --locked` before offline package metadata verification on a fresh checkout.

@@ -7,7 +7,7 @@ use std::{
         atomic::{AtomicU64, Ordering},
     },
 };
-use ts4_mod_manager_core::mod_updates::{UpdateReport, UpdateStatus};
+use plumcrate_core::mod_updates::{UpdateReport, UpdateStatus};
 
 #[derive(Default)]
 pub struct UpdateState {

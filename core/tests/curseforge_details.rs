@@ -1,5 +1,5 @@
 use serde_json::json;
-use ts4_mod_manager_core::{
+use plumcrate_core::{
     curseforge_client::{
         CurseForgeClient, CurseForgeRequest, CurseForgeTransport, SourceLookupError,
     },

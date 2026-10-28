@@ -1,4 +1,4 @@
-use ts4_mod_manager_native::{catalog::Catalog, updates::UpdateState};
+use plumcrate::{catalog::Catalog, updates::UpdateState};
 
 #[test]
 fn update_results_follow_the_game_scan_and_saved_key_but_not_selection() {

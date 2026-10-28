@@ -8,7 +8,7 @@ use std::{
     },
     time::Duration,
 };
-use ts4_mod_manager_core::{
+use plumcrate_core::{
     browser_import::{BrowserProject, load_browser_project},
     curseforge_browse::BrowseProject,
     curseforge_client::{CurseForgeClient, SourceLookupError, UreqCurseForgeTransport},

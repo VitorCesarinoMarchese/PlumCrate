@@ -1,10 +1,10 @@
-use ts4_mod_manager_core::{
+use plumcrate_core::{
     curseforge_browse::{BrowseQuery, BrowseSort, parse_browse_response},
     curseforge_client::SourceLookupError,
 };
-use ts4_mod_manager_native::discovery::Browser;
+use plumcrate::discovery::Browser;
 
-fn page(index: u32, count: u32, total: u32) -> ts4_mod_manager_core::curseforge_browse::BrowsePage {
+fn page(index: u32, count: u32, total: u32) -> plumcrate_core::curseforge_browse::BrowsePage {
     parse_browse_response(&serde_json::json!({"data":[{"id":9,"gameId":78062,"name":"Synthetic project","summary":"Test summary"}],"pagination":{"index":index,"pageSize":24,"resultCount":count,"totalCount":total}}).to_string()).unwrap()
 }
 

@@ -6,7 +6,7 @@ use std::{
     path::PathBuf,
     time::{Duration, Instant},
 };
-use ts4_mod_manager_native::{
+use plumcrate::{
     catalog::Catalog,
     project_details::Load,
     ui::{self, View},

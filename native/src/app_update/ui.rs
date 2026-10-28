@@ -211,7 +211,7 @@ impl AppUpdates {
     }
     pub fn settings(&mut self, ui: &mut egui::Ui, automatic: &mut bool) {
         ui.heading("App updates");
-        ui.label(format!("TS4 Mod Manager {}", env!("CARGO_PKG_VERSION")));
+        ui.label(format!("PlumCrate {}", env!("CARGO_PKG_VERSION")));
         if let Some(reason) = &self.unsupported {
             ui.add(egui::Label::new(reason).wrap());
             ui.hyperlink_to(
@@ -262,7 +262,7 @@ impl AppUpdates {
             return;
         };
         let mut open = self.open;
-        egui::Window::new("Update TS4 Mod Manager").id(egui::Id::new("app-update-review"))
+        egui::Window::new("Update PlumCrate").id(egui::Id::new("app-update-review"))
             .open(&mut open).collapsible(false).resizable(false).default_width(420.0)
             .show(ctx, |ui| {
                 ui.label(format!("{} → {}", env!("CARGO_PKG_VERSION"), release.version));

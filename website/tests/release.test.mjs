@@ -1,8 +1,8 @@
 import {test} from 'node:test';
 import assert from 'node:assert/strict';
 import {selectRelease} from '../api/release.js';
-const url='https://github.com/VitorCesarinoMarchese/TS4ModManager/releases/download/v1/TS4-x86_64.AppImage';
-const release=(assets,more={})=>({tag_name:'v1',html_url:'https://github.com/VitorCesarinoMarchese/TS4ModManager/releases/tag/v1',published_at:'2026-10-01T00:00:00Z',assets,...more});
+const url='https://github.com/VitorCesarinoMarchese/PlumCrate/releases/download/v1/TS4-x86_64.AppImage';
+const release=(assets,more={})=>({tag_name:'v1',html_url:'https://github.com/VitorCesarinoMarchese/PlumCrate/releases/tag/v1',published_at:'2026-10-01T00:00:00Z',assets,...more});
 const asset=(name='TS4-x86_64.AppImage',browser_download_url=url)=>({name,browser_download_url,size:123});
 test('no releases produces an honest unavailable state',()=>assert.equal(selectRelease([]).available,false));
 test('selects a published Linux AppImage, including alpha releases',()=>assert.equal(selectRelease([release([asset()],{prerelease:true})]).url,url));

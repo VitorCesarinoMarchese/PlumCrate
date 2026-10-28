@@ -41,7 +41,7 @@ COVERS = [
 
 
 def cover_bytes(cover):
-    with urlopen(Request(cover[4], headers={"User-Agent": "TS4ModManager README capture"}), timeout=30) as response:
+    with urlopen(Request(cover[4], headers={"User-Agent": "PlumCrate README capture"}), timeout=30) as response:
         data = response.read(8 * 1024 * 1024 + 1)
     if len(data) > 8 * 1024 * 1024 or not data.startswith((b"\x89PNG\r\n\x1a\n", b"\xff\xd8")):
         raise ValueError(f"Invalid cover image for {cover[0]}")
@@ -50,7 +50,7 @@ def cover_bytes(cover):
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--binary", type=Path, default=Path(__file__).parent / "target/release/ts4-mod-manager-native")
+    parser.add_argument("--binary", type=Path, default=Path(__file__).parent / "target/release/plumcrate")
     parser.add_argument("--output", type=Path, default=Path(__file__).resolve().parent.parent / "docs/images")
     args = parser.parse_args()
     binary, output = args.binary.resolve(), args.output.resolve()

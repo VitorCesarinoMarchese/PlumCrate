@@ -42,8 +42,8 @@ class NativeRepository(unittest.TestCase):
             "--locked", "--offline", "--format-version", "1",
         ], text=True))
         names = {package["name"] for package in metadata["packages"]}
-        self.assertIn("ts4-mod-manager-native", names)
-        self.assertIn("ts4-mod-manager-core", names)
+        self.assertIn("plumcrate", names)
+        self.assertIn("plumcrate-core", names)
         self.assertFalse(any(name.startswith(("tauri", "webkit2gtk")) or name == "wry" for name in names))
         self.assertTrue((ROOT / "native/assets/icon.png").is_file(), "Packaging owns its icon")
 

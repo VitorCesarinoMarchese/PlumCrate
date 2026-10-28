@@ -64,7 +64,7 @@ fn library_offers_update_checks_and_detail_page_opens_without_changing_files() {
         .unwrap()
         .as_mut()
         .unwrap()
-        .status = ts4_mod_manager_core::mod_updates::UpdateStatus::Available(release);
+        .status = plumcrate_core::mod_updates::UpdateStatus::Available(release);
     let metadata = fixture
         .directory
         .path()
@@ -73,7 +73,7 @@ fn library_offers_update_checks_and_detail_page_opens_without_changing_files() {
         .join("meta.json");
     let before = std::fs::read(&metadata).unwrap();
     let ctx = egui::Context::default();
-    ts4_mod_manager_native::ui::setup(&ctx);
+    plumcrate::ui::setup(&ctx);
     for _ in 0..3 {
         frame(&ctx, &mut fixture, vec![]);
     }
@@ -108,7 +108,7 @@ fn library_offers_update_checks_and_detail_page_opens_without_changing_files() {
 fn missing_saved_key_opens_settings_without_starting_a_check() {
     let mut fixture = support::fixture();
     let ctx = egui::Context::default();
-    ts4_mod_manager_native::ui::setup(&ctx);
+    plumcrate::ui::setup(&ctx);
     for _ in 0..3 {
         frame(&ctx, &mut fixture, vec![]);
     }
@@ -143,7 +143,7 @@ fn recording_a_release_writes_only_after_the_confirmation_button() {
         .controls
         .review_installed_release(&fixture.catalog, &fixture.report, &release);
     let ctx = egui::Context::default();
-    ts4_mod_manager_native::ui::setup(&ctx);
+    plumcrate::ui::setup(&ctx);
     for _ in 0..3 {
         frame(&ctx, &mut fixture, vec![]);
     }
@@ -190,7 +190,7 @@ fn text_rect(output: &FullOutput, label: &str) -> egui::Rect {
 fn unknown_version_picker_requires_a_choice_before_review() {
     let mut fixture = support::fixture();
     let ctx = egui::Context::default();
-    ts4_mod_manager_native::ui::setup(&ctx);
+    plumcrate::ui::setup(&ctx);
     ctx.all_styles_mut(|style| style.animation_time = 0.0);
     for _ in 0..3 {
         frame(&ctx, &mut fixture, vec![]);
@@ -235,7 +235,7 @@ fn library_switches_enable_and_disable_without_opening_details_or_review() {
         let update_reports = fixture.controls.updates.reports.len();
         let original = fixture.directory.path().join("source/fixture.package");
         let ctx = egui::Context::default();
-        ts4_mod_manager_native::ui::setup(&ctx);
+        plumcrate::ui::setup(&ctx);
         frame(&ctx, &mut fixture, vec![]);
         frame(&ctx, &mut fixture, vec![]);
         if list {
@@ -253,7 +253,7 @@ fn library_switches_enable_and_disable_without_opening_details_or_review() {
                 std::thread::sleep(std::time::Duration::from_millis(2));
             }
             let root = fixture.catalog.root.clone().unwrap();
-            let mods = ts4_mod_manager_native::worker::scan(&root, &fixture.directory.path().join("managed")).unwrap().mods;
+            let mods = plumcrate::worker::scan(&root, &fixture.directory.path().join("managed")).unwrap().mods;
             assert_eq!(mods[0].enabled, enabled, "one switch click must apply the change");
             assert!(fixture.controls.refresh.is_none(), "a toggle must not request a library reload");
             assert_eq!(fixture.catalog.generation(), catalog_generation);
@@ -274,7 +274,7 @@ fn updates_navigation_preserves_library_search_and_checks_only_on_request() {
     fixture.catalog.search("Synthetic".into());
     let selected = fixture.catalog.selected.clone();
     let ctx = egui::Context::default();
-    ts4_mod_manager_native::ui::setup(&ctx);
+    plumcrate::ui::setup(&ctx);
     frame(&ctx, &mut fixture, vec![]);
     frame(&ctx, &mut fixture, vec![]);
     let updates = fixture.view.stats.updates_tab.unwrap();
@@ -296,7 +296,7 @@ fn updates_navigation_preserves_library_search_and_checks_only_on_request() {
 fn add_mods_menu_exposes_folder_and_zip_without_starting_an_operation() {
     let mut fixture = support::fixture();
     let ctx = egui::Context::default();
-    ts4_mod_manager_native::ui::setup(&ctx);
+    plumcrate::ui::setup(&ctx);
     frame(&ctx, &mut fixture, vec![]);
     let output = frame(&ctx, &mut fixture, vec![]);
     let add = output.shapes.iter().find_map(|shape| match &shape.shape {
@@ -316,7 +316,7 @@ fn add_mods_menu_exposes_folder_and_zip_without_starting_an_operation() {
 fn updates_page_has_one_working_review_per_mod() {
     let mut fixture = support::fixture();
     let ctx = egui::Context::default();
-    ts4_mod_manager_native::ui::setup(&ctx);
+    plumcrate::ui::setup(&ctx);
     frame(&ctx, &mut fixture, vec![]);
     frame(&ctx, &mut fixture, vec![]);
     let updates = fixture.view.stats.updates_tab.unwrap();
@@ -338,7 +338,7 @@ fn a_blocked_switch_shows_the_problem_without_touching_the_existing_file() {
     let existing = fixture.directory.path().join("game/Mods/fixture.package");
     std::fs::write(&existing, b"unmanaged original").unwrap();
     let ctx = egui::Context::default();
-    ts4_mod_manager_native::ui::setup(&ctx);
+    plumcrate::ui::setup(&ctx);
     frame(&ctx, &mut fixture, vec![]);
     frame(&ctx, &mut fixture, vec![]);
     let switch = fixture.view.stats.first_toggle.unwrap();
@@ -361,7 +361,7 @@ fn a_duplicate_content_warning_does_not_report_a_successful_switch_as_failed() {
     let mut fixture = support::fixture();
     std::fs::write(fixture.directory.path().join("game/Mods/other.package"), b"synthetic fixture bytes").unwrap();
     let ctx = egui::Context::default();
-    ts4_mod_manager_native::ui::setup(&ctx);
+    plumcrate::ui::setup(&ctx);
     frame(&ctx, &mut fixture, vec![]);
     frame(&ctx, &mut fixture, vec![]);
     let switch = fixture.view.stats.first_toggle.unwrap();
@@ -385,7 +385,7 @@ fn finishing_a_toggle_does_not_refresh_or_patch_a_different_game() {
     fixture.controls.refresh = None;
     let original_game = fixture.catalog.root.clone().unwrap();
     let ctx = egui::Context::default();
-    ts4_mod_manager_native::ui::setup(&ctx);
+    plumcrate::ui::setup(&ctx);
     frame(&ctx, &mut fixture, vec![]);
     frame(&ctx, &mut fixture, vec![]);
     let switch = fixture.view.stats.first_toggle.unwrap();
@@ -402,5 +402,5 @@ fn finishing_a_toggle_does_not_refresh_or_patch_a_different_game() {
     assert!(!fixture.catalog.mods[0].enabled);
     assert!(fixture.controls.refresh.is_none());
     assert_eq!(fixture.catalog.generation(), generation);
-    assert!(ts4_mod_manager_native::worker::scan(&original_game, &fixture.directory.path().join("managed")).unwrap().mods[0].enabled);
+    assert!(plumcrate::worker::scan(&original_game, &fixture.directory.path().join("managed")).unwrap().mods[0].enabled);
 }

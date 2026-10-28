@@ -1,11 +1,11 @@
-use ts4_mod_manager_core::{
+use plumcrate_core::{
     curseforge_client::{
         CurseForgeClient, CurseForgeRequest, CurseForgeTransport, SourceLookupError,
     },
     managed_storage::{self, ImportRequest},
     mod_updates::{self, UpdateReport},
 };
-use ts4_mod_manager_native::{catalog::Catalog, controls::Controls, settings::Settings, ui::View};
+use plumcrate::{catalog::Catalog, controls::Controls, settings::Settings, ui::View};
 
 struct Provider;
 impl CurseForgeTransport for Provider {
@@ -63,7 +63,7 @@ pub fn fixture() -> Fixture {
     let generation = catalog.begin_scan(root.clone());
     catalog.accept_scan(
         generation,
-        Ok(ts4_mod_manager_native::worker::scan(&root, &managed)
+        Ok(plumcrate::worker::scan(&root, &managed)
             .unwrap()
             .mods),
     );

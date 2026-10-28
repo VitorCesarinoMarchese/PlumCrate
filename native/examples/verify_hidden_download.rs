@@ -6,7 +6,7 @@ use std::{
     path::PathBuf,
     time::{Duration, Instant},
 };
-use ts4_mod_manager_native::{browser_import::Phase, ui};
+use plumcrate::{browser_import::Phase, ui};
 struct Probe {
     fixture: support::Fixture,
     signals: PathBuf,

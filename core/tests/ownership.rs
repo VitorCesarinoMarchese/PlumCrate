@@ -2,7 +2,7 @@
 
 use std::{fs, os::unix::fs::symlink, path::PathBuf};
 use tempfile::TempDir;
-use ts4_mod_manager_core::{
+use plumcrate_core::{
     error::ErrorCode,
     managed_storage::{create_managed_mod, read_managed_mod, ImportRequest},
     toggle::{apply_toggle, dry_run_toggle},
@@ -177,7 +177,7 @@ fn toggle_rejects_a_symlink_parent_outside_the_game_folder() {
     )
     .unwrap();
     meta.files = vec!["Group/test.package".into()];
-    ts4_mod_manager_core::managed_storage::write_managed_mod(&fixture.managed, &meta).unwrap();
+    plumcrate_core::managed_storage::write_managed_mod(&fixture.managed, &meta).unwrap();
     let outside = fixture.temp.path().join("user-folder");
     fs::create_dir_all(&outside).unwrap();
     symlink(&outside, fixture.game.join("Group")).unwrap();
@@ -234,7 +234,7 @@ fn legacy_camel_sidecar_is_read_without_rewriting_or_removing_it() {
 fn metadata_edit_never_creates_an_external_bundle() {
     let fixture = Fixture::new();
     assert!(
-        ts4_mod_manager_core::managed_storage::set_custom_display_name(
+        plumcrate_core::managed_storage::set_custom_display_name(
             &fixture.managed,
             "external",
             "Custom".into()

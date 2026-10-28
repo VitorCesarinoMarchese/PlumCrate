@@ -22,33 +22,33 @@ def main():
     if args.binary is None:
         subprocess.run(["cargo", "build", "--manifest-path", str(native / "Cargo.toml"),
                         "--release", "--locked"], check=True)
-    binary = (args.binary or native / "target/release/ts4-mod-manager-native").resolve()
+    binary = (args.binary or native / "target/release/plumcrate").resolve()
     if not binary.is_file() or not os.access(binary, os.X_OK):
         parser.error("The executable does not exist or is not executable")
     metadata = json.loads(subprocess.check_output([
         "cargo", "metadata", "--manifest-path", str(native / "Cargo.toml"),
         "--locked", "--offline", "--format-version", "1",
     ], text=True))
-    package = next(item for item in metadata["packages"] if item["name"] == "ts4-mod-manager-native")
-    bundle_name = f"ts4-mod-manager-native-{package['version']}-linux-{platform.machine()}"
+    package = next(item for item in metadata["packages"] if item["name"] == "plumcrate")
+    bundle_name = f"plumcrate-{package['version']}-linux-{platform.machine()}"
     args.output.mkdir(parents=True, exist_ok=True)
     destination = args.output / f"{bundle_name}.tar.gz"
     with tempfile.TemporaryDirectory(prefix=".ts4-package-", dir=args.output) as temporary:
         staging = Path(temporary)
         bundle = staging / bundle_name
-        executable = bundle / "bin/ts4-mod-manager-native"
+        executable = bundle / "bin/plumcrate"
         executable.parent.mkdir(parents=True)
         shutil.copy2(binary, executable)
-        desktop = bundle / "share/applications/ts4-mod-manager-native.desktop"
+        desktop = bundle / "share/applications/plumcrate.desktop"
         desktop.parent.mkdir(parents=True)
-        desktop.write_text("[Desktop Entry]\nType=Application\nName=Sims 4 Mod Manager\n"
+        desktop.write_text("[Desktop Entry]\nType=Application\nName=PlumCrate\n"
                            "Comment=Manage your local Sims 4 mod collection\n"
-                           "Exec=ts4-mod-manager-native\nIcon=ts4-mod-manager-native\n"
+                           "Exec=plumcrate\nIcon=plumcrate\n"
                            "Terminal=false\nCategories=Game;Utility;\nStartupNotify=true\n")
-        icon = bundle / "share/icons/hicolor/256x256/apps/ts4-mod-manager-native.png"
+        icon = bundle / "share/icons/hicolor/256x256/apps/plumcrate.png"
         icon.parent.mkdir(parents=True)
         shutil.copy2(native / "assets/icon.png", icon)
-        licenses = bundle / "share/licenses/ts4-mod-manager-native"
+        licenses = bundle / "share/licenses/plumcrate"
         shutil.copytree(native / "licenses", licenses)
         shutil.copy2(native.parent / "LICENSE", licenses / "LICENSE")
         inventory = []
@@ -66,8 +66,8 @@ def main():
                               "license": dependency["license"], "files": relative_paths})
         (licenses / "dependencies.json").write_text(json.dumps(inventory, indent=2) + "\n")
         (bundle / "README.txt").write_text(
-            "Sims 4 Mod Manager, native Linux build\n\n"
-            "Run bin/ts4-mod-manager-native from a graphical Linux session.\n"
+            "PlumCrate, native Linux build\n\n"
+            "Run bin/plumcrate from a graphical Linux session.\n"
             "Requires the host OpenGL driver and X11 or Wayland client libraries.\n"
             "To install for your user, copy bin/ into ~/.local/bin/ and share/ into ~/.local/share/.\n"
             "Ensure ~/.local/bin is on PATH. This archive does not install automatically.\n"

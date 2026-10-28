@@ -3,7 +3,7 @@ use std::{
     path::PathBuf,
     time::{Duration, Instant},
 };
-use ts4_mod_manager_native::{
+use plumcrate::{
     catalog::Catalog,
     controls::{Controls, PreferencesSection},
     settings::{CustomTheme, Settings, Theme},

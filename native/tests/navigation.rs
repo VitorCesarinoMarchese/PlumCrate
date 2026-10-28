@@ -1,4 +1,4 @@
-use ts4_mod_manager_native::{
+use plumcrate::{
     catalog::{Catalog, EntryId},
     controls::Controls,
     settings::Settings,
@@ -290,7 +290,7 @@ fn paired_theme_json() -> serde_json::Value {
 #[test]
 fn paired_theme_roundtrips_and_applies_a_different_palette_for_each_mode() {
     let theme =
-        ts4_mod_manager_native::settings::CustomTheme::parse(&paired_theme_json().to_string())
+        plumcrate::settings::CustomTheme::parse(&paired_theme_json().to_string())
             .expect("paired light and dark theme");
     let settings = Settings {
         active_custom_theme: Some(theme.name.clone()),
@@ -329,7 +329,7 @@ fn legacy_theme_keeps_its_palette_and_gets_a_companion_version() {
         let paired = paired_theme_json();
         let legacy = serde_json::json!({"name": "Plum", "colors": paired[mode]});
         let theme =
-            ts4_mod_manager_native::settings::CustomTheme::parse(&legacy.to_string()).unwrap();
+            plumcrate::settings::CustomTheme::parse(&legacy.to_string()).unwrap();
         let exported = serde_json::to_value(theme).unwrap();
         assert_eq!(exported[mode], paired[mode], "preserve all existing colors");
         assert!(exported[if mode == "dark" { "light" } else { "dark" }].is_object());
@@ -339,7 +339,7 @@ fn legacy_theme_keeps_its_palette_and_gets_a_companion_version() {
 
 #[test]
 fn paired_theme_requires_two_valid_palettes_and_rejects_mixed_formats() {
-    use ts4_mod_manager_native::settings::CustomTheme;
+    use plumcrate::settings::CustomTheme;
     assert!(CustomTheme::parse(&paired_theme_json().to_string()).is_ok());
     for mode in ["light", "dark"] {
         let mut json = paired_theme_json();
@@ -361,10 +361,10 @@ fn paired_theme_requires_two_valid_palettes_and_rejects_mixed_formats() {
 fn editor_edits_and_saves_both_versions_without_losing_the_other_draft() {
     let dir = tempfile::tempdir().unwrap();
     let theme =
-        ts4_mod_manager_native::settings::CustomTheme::parse(&paired_theme_json().to_string())
+        plumcrate::settings::CustomTheme::parse(&paired_theme_json().to_string())
             .unwrap();
     let settings = Settings {
-        theme: ts4_mod_manager_native::settings::Theme::Light,
+        theme: plumcrate::settings::Theme::Light,
         active_custom_theme: Some(theme.name.clone()),
         custom_themes: vec![theme],
         ..Settings::default()
@@ -474,10 +474,10 @@ fn editor_edits_and_saves_both_versions_without_losing_the_other_draft() {
 fn reset_changes_only_the_visible_palette_and_copy_exports_both_versions() {
     let dir = tempfile::tempdir().unwrap();
     let settings = Settings {
-        theme: ts4_mod_manager_native::settings::Theme::Dark,
+        theme: plumcrate::settings::Theme::Dark,
         active_custom_theme: Some("Plum".into()),
         custom_themes: vec![
-            ts4_mod_manager_native::settings::CustomTheme::parse(&paired_theme_json().to_string())
+            plumcrate::settings::CustomTheme::parse(&paired_theme_json().to_string())
                 .unwrap(),
         ],
         ..Settings::default()
@@ -533,7 +533,7 @@ fn reset_changes_only_the_visible_palette_and_copy_exports_both_versions() {
     assert_eq!(json["light"], paired_theme_json()["light"]);
     assert_eq!(
         json["dark"],
-        serde_json::to_value(ts4_mod_manager_native::settings::ThemeColors::base(true)).unwrap()
+        serde_json::to_value(plumcrate::settings::ThemeColors::base(true)).unwrap()
     );
     let output = render(vec![]);
     render(click_text(&output, "Save changes"));
@@ -667,7 +667,7 @@ fn settings_save_button_stays_visible_above_scrolling_content() {
 #[test]
 fn settings_transfer_remains_compatible_with_the_previous_app() {
     let mut settings = Settings::default();
-    let theme = ts4_mod_manager_native::settings::CustomTheme::base();
+    let theme = plumcrate::settings::CustomTheme::base();
     settings.active_custom_theme = Some(theme.name.clone());
     settings.custom_themes.push(theme);
     let dir = tempfile::tempdir().unwrap();
@@ -703,7 +703,7 @@ fn color_mode_switch_preserves_the_custom_editor_draft() {
         &mut catalog,
         click_text(&output, "New theme"),
     );
-    controls.set_color_mode(&ctx, ts4_mod_manager_native::settings::Theme::Light);
+    controls.set_color_mode(&ctx, plumcrate::settings::Theme::Light);
     let output = frame(&ctx, &mut view, &mut controls, &mut catalog, vec![]);
     frame(
         &ctx,

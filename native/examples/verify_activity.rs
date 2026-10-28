@@ -3,7 +3,7 @@ use std::{
     path::PathBuf,
     time::{Duration, Instant},
 };
-use ts4_mod_manager_native::{
+use plumcrate::{
     catalog::Catalog,
     controls::Controls,
     settings::{Settings, Theme},
@@ -60,9 +60,9 @@ impl Capture {
         self.view = View::default();
         if matches!(kind, 1 | 2) {
             self.controls.browser_import.phase =
-                ts4_mod_manager_native::browser_import::Phase::Waiting;
+                plumcrate::browser_import::Phase::Waiting;
             self.controls.browser_import.project =
-                Some(ts4_mod_manager_core::browser_import::BrowserProject {
+                Some(plumcrate_core::browser_import::BrowserProject {
                     project_id: 1,
                     title: "Synthetic collection".into(),
                     author: None,

@@ -48,7 +48,7 @@ def main():
             "--setenv", "CARGO_TARGET_DIR", "/build/target",
             "--setenv", "CARGO_BUILD_JOBS", "1", "--setenv", "RUST_TEST_THREADS", "1",
             "--setenv", "LIBGL_ALWAYS_SOFTWARE", "1", "--chdir", "/workspace"]
-    binary = "/build/target/release/ts4-mod-manager-native"
+    binary = "/build/target/release/plumcrate"
     commands = [
         ["cargo", "test", "--manifest-path", "core/Cargo.toml", "--locked", "--offline"],
         ["cargo", "test", "--manifest-path", "native/Cargo.toml", "--locked", "--offline"],

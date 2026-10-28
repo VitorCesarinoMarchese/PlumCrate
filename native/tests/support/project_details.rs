@@ -1,5 +1,5 @@
 use serde_json::json;
-use ts4_mod_manager_core::{
+use plumcrate_core::{
     browser_import::{BrowserProject, load_browser_project},
     curseforge_browse::{BrowseQuery, parse_browse_response},
     curseforge_client::{
@@ -7,7 +7,7 @@ use ts4_mod_manager_core::{
     },
     curseforge_details::{ProjectReference, SafeUrl, parse_description_response},
 };
-use ts4_mod_manager_native::discovery::DiscoverView;
+use plumcrate::discovery::DiscoverView;
 pub struct Provider;
 impl CurseForgeTransport for Provider {
     fn get(&self, request: &CurseForgeRequest) -> Result<(u16, String), SourceLookupError> {

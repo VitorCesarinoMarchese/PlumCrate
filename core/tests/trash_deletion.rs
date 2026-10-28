@@ -1,7 +1,7 @@
 #![cfg(unix)]
 use std::{fs, path::PathBuf};
 use tempfile::TempDir;
-use ts4_mod_manager_core::{
+use plumcrate_core::{
     lifecycle::{delete_reviewed_trash, review_trash_deletion, uninstall_managed_mod},
     managed_storage::{create_managed_mod, ImportRequest},
 };

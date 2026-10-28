@@ -73,7 +73,7 @@ impl CurseForgeTransport for UreqCurseForgeTransport {
         let agent = ureq::builder().timeout(timeout).timeout_connect(timeout).build();
         let response = agent.get(&request.url)
             .set("x-api-key", &request.api_key)
-            .set("User-Agent", "TS4ModManager/0.1 source lookup")
+            .set("User-Agent", "PlumCrate/0.1 source lookup")
             .call();
 
         match response {

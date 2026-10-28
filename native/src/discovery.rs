@@ -8,8 +8,8 @@ use std::{
         mpsc,
     },
 };
-use ts4_mod_manager_core::{browser_import::DependencyCompleteness, curseforge_details::BlockKind};
-use ts4_mod_manager_core::{
+use plumcrate_core::{browser_import::DependencyCompleteness, curseforge_details::BlockKind};
+use plumcrate_core::{
     curseforge_browse::{
         BrowsePage, BrowseProject, BrowseQuery, BrowseSort, Category, category_options,
     },
@@ -1291,7 +1291,7 @@ impl DiscoverView {
                     ui.add_space(8.0);
                     for relation in &file.dependencies.relations {
                         ui.separator();
-                        ui.label(RichText::new(relation.kind.label()).size(12.0).color(if relation.kind==ts4_mod_manager_core::browser_import::RelationKind::Incompatible {ui.visuals().text_color()} else {ui.visuals().weak_text_color()}));
+                        ui.label(RichText::new(relation.kind.label()).size(12.0).color(if relation.kind==plumcrate_core::browser_import::RelationKind::Incompatible {ui.visuals().text_color()} else {ui.visuals().weak_text_color()}));
                         match self.details.references.get(&relation.project_id) {
                             Some(Load::Ready(reference)) => {
                                 ui.add(egui::Label::new(RichText::new(&reference.title).strong().color(ui.visuals().text_color())).wrap());
@@ -1310,8 +1310,8 @@ impl DiscoverView {
                         }
                         if !relation.kind.can_install() {
                             ui.label(match relation.kind {
-                                ts4_mod_manager_core::browser_import::RelationKind::Incompatible=>"Do not install this together with the selected release.",
-                                ts4_mod_manager_core::browser_import::RelationKind::Embedded=>"The provider lists this as an embedded library. No separate install is needed.",
+                                plumcrate_core::browser_import::RelationKind::Incompatible=>"Do not install this together with the selected release.",
+                                plumcrate_core::browser_import::RelationKind::Embedded=>"The provider lists this as an embedded library. No separate install is needed.",
                                 _=>"Check the author's instructions for this relationship before installing separately.",
                             });
                         }
@@ -1449,7 +1449,7 @@ mod preload_tests {
         sync::{Condvar, Mutex},
         time::{Duration, Instant},
     };
-    use ts4_mod_manager_core::curseforge_client::{CurseForgeRequest, CurseForgeTransport};
+    use plumcrate_core::curseforge_client::{CurseForgeRequest, CurseForgeTransport};
     struct Provider {
         indices: Arc<Mutex<Vec<u32>>>,
         gate: Option<Arc<(Mutex<bool>, Condvar)>>,

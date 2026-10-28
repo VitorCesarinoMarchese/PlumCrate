@@ -2,7 +2,7 @@ export const navigationItems = [
   {key: 'features', href: '/#features', en: 'The app', pt: 'O aplicativo'},
   {key: 'start', href: '/#start', en: 'Get started', pt: 'Primeiros passos'},
   {key: 'guide', href: '/guide', en: 'User guide', pt: 'Guia de uso'},
-  {key: 'github', href: 'https://github.com/VitorCesarinoMarchese/TS4ModManager', en: 'GitHub ↗', pt: 'GitHub ↗'},
+  {key: 'github', href: 'https://github.com/VitorCesarinoMarchese/PlumCrate', en: 'GitHub ↗', pt: 'GitHub ↗'},
 ];
 
 export function languageHref(language, pathname, search = '', hash = '') {

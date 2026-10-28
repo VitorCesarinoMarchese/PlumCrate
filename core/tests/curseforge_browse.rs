@@ -1,5 +1,5 @@
 use std::cell::RefCell;
-use ts4_mod_manager_core::{
+use plumcrate_core::{
     curseforge_browse::{
         category_options, parse_browse_response, parse_categories_response,
         parse_game_versions_response, BrowseQuery, BrowseSort,
@@ -261,7 +261,7 @@ fn provider_errors_do_not_become_empty_search_results() {
 #[test]
 #[ignore = "requires CURSEFORGE_API_KEY in environment"]
 fn live_browse_filters_respect_provider_taxonomy() {
-    use ts4_mod_manager_core::curseforge_client::UreqCurseForgeTransport;
+    use plumcrate_core::curseforge_client::UreqCurseForgeTransport;
     let key = std::env::var("CURSEFORGE_API_KEY").expect("local API key");
     let client = CurseForgeClient::new(Some(&key), UreqCurseForgeTransport::default()).unwrap();
     let categories = client.browse_categories().expect("live categories");

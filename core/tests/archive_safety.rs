@@ -1,6 +1,6 @@
 use std::{fs, io::Write};
-use ts4_mod_manager_core::archive_import::extract_archive;
-use ts4_mod_manager_core::error::ErrorCode;
+use plumcrate_core::archive_import::extract_archive;
+use plumcrate_core::error::ErrorCode;
 use zip::{write::SimpleFileOptions, ZipWriter};
 
 #[test]
@@ -95,7 +95,7 @@ fn unvalidated_external_extractors_are_not_used() {
 #[test]
 fn archive_import_rejects_a_redirected_staging_directory() {
     use std::os::unix::fs::symlink;
-    use ts4_mod_manager_core::archive_import::import_archive_to_managed;
+    use plumcrate_core::archive_import::import_archive_to_managed;
     let temp = tempfile::tempdir().unwrap();
     let managed = temp.path().join("managed");
     let outside = temp.path().join("outside");

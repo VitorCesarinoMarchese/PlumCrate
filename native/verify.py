@@ -81,7 +81,7 @@ def run(binary, *args):
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--binary", type=Path, default=Path(__file__).parent / "target/debug/ts4-mod-manager-native")
+    parser.add_argument("--binary", type=Path, default=Path(__file__).parent / "target/debug/plumcrate")
     parser.add_argument("--sizes", type=int, nargs="+", default=[100, 1000, 10000])
     parser.add_argument("--capture-dir", type=Path, help="Also run native renderer and save desktop, dark, and narrow PNGs")
     args = parser.parse_args()

@@ -29,6 +29,6 @@ class ReleaseMetadata(unittest.TestCase):
             archive_path, = (root / "packages").glob("*.tar.gz")
             with tarfile.open(archive_path) as archive:
                 license_path = next((name for name in archive.getnames()
-                                     if name.endswith("/share/licenses/ts4-mod-manager-native/LICENSE")), None)
+                                     if name.endswith("/share/licenses/plumcrate/LICENSE")), None)
                 self.assertIsNotNone(license_path, "The release must include the project license")
                 self.assertEqual(archive.extractfile(license_path).read(), (ROOT / "LICENSE").read_bytes())

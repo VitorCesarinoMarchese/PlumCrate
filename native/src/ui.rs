@@ -2,7 +2,7 @@ use crate::catalog::EntryId;
 use crate::catalog::{Catalog, ModFilter};
 use egui::{Color32, RichText};
 use std::path::PathBuf;
-use ts4_mod_manager_core::path_detection::GameInstance;
+use plumcrate_core::path_detection::GameInstance;
 
 fastframe_icons::icons! {
     pub enum Icon {
@@ -799,9 +799,9 @@ impl View {
     }
 
     fn brand(&mut self, ui: &mut egui::Ui) {
-        let logo = ui.add(egui::Image::new(egui::include_image!("../assets/plumbob.svg")).fit_to_exact_size(egui::vec2(22.0, 34.0)).alt_text("Sims 4 Mod Manager"));
+        let logo = ui.add(egui::Image::new(egui::include_image!("../assets/plumbob.svg")).fit_to_exact_size(egui::vec2(22.0, 34.0)).alt_text("PlumCrate"));
         self.stats.logo = Some(logo.rect);
-        ui.label(RichText::new("Mod Manager").size(18.0).strong().color(ui.visuals().text_color()));
+        ui.label(RichText::new("PlumCrate").size(18.0).strong().color(ui.visuals().text_color()));
     }
 
     fn destinations(&mut self, ui: &mut egui::Ui, controls: &mut Option<&mut crate::controls::Controls>, rail: bool) {
@@ -1038,8 +1038,8 @@ impl View {
                     let entry = &catalog.mods[index];
                     let identity = EntryId::of(entry);
                     let origin = match entry.source {
-                        ts4_mod_manager_core::mod_scan::ModSource::Managed => "Managed",
-                        ts4_mod_manager_core::mod_scan::ModSource::External => "External",
+                        plumcrate_core::mod_scan::ModSource::Managed => "Managed",
+                        plumcrate_core::mod_scan::ModSource::External => "External",
                     };
                     let state = if entry.enabled { "Installed" } else { "Stored" };
                     let count = entry.mod_files.len();

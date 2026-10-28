@@ -1,4 +1,4 @@
-use ts4_mod_manager_native::settings::Settings;
+use plumcrate::settings::Settings;
 #[test]
 fn settings_transfer_omits_key_and_rejects_unknown_schema() {
     let settings=Settings::parse(r#"{"version":1,"theme":"system","gameRoots":["/game"],"curseforgeApiKey":"fixture-secret"}"#).unwrap();
@@ -21,7 +21,7 @@ fn settings_transfer_omits_key_and_rejects_unknown_schema() {
 }
 #[test]
 fn approved_queue_survives_worker_drop() {
-    use ts4_mod_manager_native::management::{Action, Identity, Job, Mutations};
+    use plumcrate::management::{Action, Identity, Job, Mutations};
     let dir = tempfile::tempdir().unwrap();
     let source = dir.path().join("source");
     std::fs::create_dir(&source).unwrap();
@@ -60,7 +60,7 @@ fn settings_normalize_roots_and_reject_relative_paths() {
 }
 #[test]
 fn scoped_identity_requires_same_root_entry_and_generation() {
-    use ts4_mod_manager_native::{catalog::EntryId, management::Identity};
+    use plumcrate::{catalog::EntryId, management::Identity};
     let root: std::path::PathBuf = "/a".into();
     let entry = EntryId::Managed("same".into());
     let id = Identity {
@@ -76,8 +76,8 @@ fn scoped_identity_requires_same_root_entry_and_generation() {
 }
 #[test]
 fn manual_source_rejects_credentials_before_metadata_write() {
-    use ts4_mod_manager_native::catalog::EntryId;
-    use ts4_mod_manager_native::management::{Action, Identity, Job, execute};
+    use plumcrate::catalog::EntryId;
+    use plumcrate::management::{Action, Identity, Job, execute};
     let dir = tempfile::tempdir().unwrap();
     let job = Job {
         identity: Identity {
@@ -164,7 +164,7 @@ fn settings_export_never_overwrites_an_existing_user_file() {
 #[test]
 fn imported_folders_and_archives_start_enabled_in_the_selected_game() {
     use std::io::Write;
-    use ts4_mod_manager_native::management::{Action, Identity, Job, execute};
+    use plumcrate::management::{Action, Identity, Job, execute};
     for archive in [false, true] {
         let dir = tempfile::tempdir().unwrap();
         let source = dir.path().join("source");
@@ -183,7 +183,7 @@ fn imported_folders_and_archives_start_enabled_in_the_selected_game() {
         } else { Action::ImportFolder { path: source.clone(), name: "Fixture".into() } };
         let archive_before = archive.then(|| std::fs::read(&zip_path).unwrap());
         execute(&Job { identity: Identity {operation:1, root:game.clone(), entry:None, generation:1}, managed:managed.clone(),trash:dir.path().join("trash"),action }).unwrap();
-        let mods = ts4_mod_manager_native::worker::scan(&game, &managed).unwrap().mods;
+        let mods = plumcrate::worker::scan(&game, &managed).unwrap().mods;
         assert_eq!(mods.len(), 1);
         assert!(mods[0].enabled, "new imports should already be enabled");
         assert_eq!(std::fs::read(source.join("fixture.package")).unwrap(), b"original");
@@ -193,7 +193,7 @@ fn imported_folders_and_archives_start_enabled_in_the_selected_game() {
 
 #[test]
 fn a_blocked_auto_enable_keeps_the_import_and_unmanaged_file() {
-    use ts4_mod_manager_native::management::{Action, Identity, Job, Output, execute};
+    use plumcrate::management::{Action, Identity, Job, Output, execute};
     let dir = tempfile::tempdir().unwrap();
     let source = dir.path().join("source");
     let game = dir.path().join("game");
@@ -210,7 +210,7 @@ fn a_blocked_auto_enable_keeps_the_import_and_unmanaged_file() {
     let entry = std::fs::read_dir(managed.join("mods")).unwrap().next().unwrap().unwrap();
     assert_eq!(std::fs::read(entry.path().join("files/fixture.package")).unwrap(), b"download");
     let id = entry.file_name().to_string_lossy().into_owned();
-    let job = Job {identity:Identity {operation:2,root:game.clone(),entry:Some(ts4_mod_manager_native::catalog::EntryId::Managed(id)),generation:1},managed,trash:dir.path().join("trash"),action:Action::Toggle {enabled:true}};
+    let job = Job {identity:Identity {operation:2,root:game.clone(),entry:Some(plumcrate::catalog::EntryId::Managed(id)),generation:1},managed,trash:dir.path().join("trash"),action:Action::Toggle {enabled:true}};
     assert!(matches!(execute(&job), Err(error) if error.contains("collision")));
     assert_eq!(std::fs::read(&existing).unwrap(), b"unmanaged original");
 }

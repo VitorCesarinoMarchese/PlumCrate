@@ -1,5 +1,5 @@
 ---
-name: Sims 4 Mod Manager native
+name: PlumCrate native
 description: Plumbob, a simple Sims-inspired home for local mods.
 colors:
   accent-light: "#1263CA"
@@ -74,7 +74,7 @@ components:
     padding: "10pt 14pt"
 ---
 
-# Design System: Sims 4 Mod Manager native
+# Design System: PlumCrate native
 
 ## Overview
 

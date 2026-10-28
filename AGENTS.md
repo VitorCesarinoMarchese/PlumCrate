@@ -1,6 +1,6 @@
 # Agent Rules
 
-Project-specific rules for future coding agents working on TS4 Mod Manager.
+Project-specific rules for future coding agents working on PlumCrate.
 
 ## Product scope
 
@@ -70,6 +70,6 @@ Project-specific rules for future coding agents working on TS4 Mod Manager.
   - `cargo clippy --manifest-path native/Cargo.toml --locked --all-targets -- -D warnings`
   - `cargo build --manifest-path native/Cargo.toml --release --locked`
   - `python3 -m unittest discover -s native/tests -p 'test_*.py'`
-  - `python3 native/verify.py --binary native/target/release/ts4-mod-manager-native`
-  - `native/target/release/ts4-mod-manager-native --verify-workflows`
-  - `python3 native/verify_package.py --binary native/target/release/ts4-mod-manager-native`
+  - `python3 native/verify.py --binary native/target/release/plumcrate`
+  - `native/target/release/plumcrate --verify-workflows`
+  - `python3 native/verify_package.py --binary native/target/release/plumcrate`

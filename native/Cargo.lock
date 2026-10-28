@@ -3953,7 +3953,7 @@ dependencies = [
 ]
 
 [[package]]
-name = "ts4-mod-manager-core"
+name = "plumcrate-core"
 version = "0.0.1-alpha.1"
 dependencies = [
  "chrono",
@@ -3974,7 +3974,7 @@ dependencies = [
 ]
 
 [[package]]
-name = "ts4-mod-manager-native"
+name = "plumcrate"
 version = "0.0.1-alpha.1"
 dependencies = [
  "chrono",
@@ -3993,7 +3993,7 @@ dependencies = [
  "serde_json",
  "sha2",
  "tempfile",
- "ts4-mod-manager-core",
+ "plumcrate-core",
  "ureq 2.12.1",
  "url",
  "webbrowser",

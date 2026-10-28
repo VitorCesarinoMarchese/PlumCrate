@@ -1,5 +1,5 @@
-use ts4_mod_manager_core::{browser_import::{BrowserProject, load_browser_project}, curseforge_client::CurseForgeClient};
-use ts4_mod_manager_native::{browser_import::Phase, project_details::ReviewRequest};
+use plumcrate_core::{browser_import::{BrowserProject, load_browser_project}, curseforge_client::CurseForgeClient};
+use plumcrate::{browser_import::Phase, project_details::ReviewRequest};
 
 #[path = "support/browser_import.rs"]
 mod support;
@@ -68,7 +68,7 @@ fn wait_for(ctx: &egui::Context, fixture: &mut support::Fixture, project_id: u64
 #[test]
 fn a_second_download_waits_in_the_queue_then_starts_after_the_first_installs() {
     let ctx = egui::Context::default();
-    ts4_mod_manager_native::ui::setup(&ctx);
+    plumcrate::ui::setup(&ctx);
     let mut fixture = start_two(&ctx);
     assert_eq!(fixture.controls.browser_import.project.as_ref().unwrap().project_id, 42);
     assert_eq!(fixture.controls.download_queue(), vec![(9, "Synthetic Core Library".to_owned())]);
@@ -86,7 +86,7 @@ fn a_second_download_waits_in_the_queue_then_starts_after_the_first_installs() {
 #[test]
 fn activity_marks_the_waiting_mod_as_next_and_can_remove_it() {
     let ctx = egui::Context::default();
-    ts4_mod_manager_native::ui::setup(&ctx);
+    plumcrate::ui::setup(&ctx);
     let mut fixture = start_two(&ctx);
     let activity = fixture.controls.activity_button_rect.unwrap();
     frame(&ctx, &mut fixture, click(activity));
@@ -103,7 +103,7 @@ fn activity_marks_the_waiting_mod_as_next_and_can_remove_it() {
 #[test]
 fn queueing_the_same_mod_twice_keeps_one_entry() {
     let ctx = egui::Context::default();
-    ts4_mod_manager_native::ui::setup(&ctx);
+    plumcrate::ui::setup(&ctx);
     let mut fixture = start_two(&ctx);
     fixture.controls.prepare_browser_import(&ctx, &fixture.catalog, ReviewRequest::Loaded { project: dependency(), file_id: 200 });
     fixture.controls.prepare_browser_import(&ctx, &fixture.catalog, ReviewRequest::ProjectId(42));
@@ -114,7 +114,7 @@ fn queueing_the_same_mod_twice_keeps_one_entry() {
 #[test]
 fn a_failed_download_pauses_the_queue_until_the_user_skips_it() {
     let ctx = egui::Context::default();
-    ts4_mod_manager_native::ui::setup(&ctx);
+    plumcrate::ui::setup(&ctx);
     let mut fixture = start_two(&ctx);
     let token = fixture.controls.browser_import.token();
     fixture.controls.browser_import.finish(token, Err("Synthetic failure".into()));
@@ -137,7 +137,7 @@ fn a_failed_download_pauses_the_queue_until_the_user_skips_it() {
 #[test]
 fn changing_the_game_folder_clears_queued_downloads() {
     let ctx = egui::Context::default();
-    ts4_mod_manager_native::ui::setup(&ctx);
+    plumcrate::ui::setup(&ctx);
     let mut fixture = start_two(&ctx);
     let other = fixture.directory.path().join("other-game");
     std::fs::create_dir_all(other.join("Mods")).unwrap();
@@ -152,9 +152,9 @@ fn changing_the_game_folder_clears_queued_downloads() {
 
 #[test]
 fn browse_cards_show_which_mod_is_downloading_and_which_is_next() {
-    use ts4_mod_manager_core::curseforge_browse::parse_browse_response;
+    use plumcrate_core::curseforge_browse::parse_browse_response;
     let ctx = egui::Context::default();
-    ts4_mod_manager_native::ui::setup(&ctx);
+    plumcrate::ui::setup(&ctx);
     let mut fixture = start_two(&ctx);
     fixture.view.browse_page = true;
     frame(&ctx, &mut fixture, vec![]);

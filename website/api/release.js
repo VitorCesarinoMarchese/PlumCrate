@@ -1,4 +1,4 @@
-const repo = 'VitorCesarinoMarchese/TS4ModManager';
+const repo = 'VitorCesarinoMarchese/PlumCrate';
 const releasesUrl = `https://github.com/${repo}/releases`;
 export function selectRelease(releases) {
   for (const release of [...releases].filter(r => !r.draft && r.published_at).sort((a,b)=>Date.parse(b.published_at)-Date.parse(a.published_at))) {
@@ -10,7 +10,7 @@ export function selectRelease(releases) {
 export default async function handler(_req,res) {
   res.setHeader('Cache-Control','public, s-maxage=300, stale-while-revalidate=3600');
   try {
-    const response = await fetch(`https://api.github.com/repos/${repo}/releases?per_page=30`, {headers:{Accept:'application/vnd.github+json','User-Agent':'TS4ModManager-website'},signal:AbortSignal.timeout(8000)});
+    const response = await fetch(`https://api.github.com/repos/${repo}/releases?per_page=30`, {headers:{Accept:'application/vnd.github+json','User-Agent':'PlumCrate-website'},signal:AbortSignal.timeout(8000)});
     if (!response.ok) throw new Error('GitHub release lookup failed');
     return res.status(200).json(selectRelease(await response.json()));
   } catch {

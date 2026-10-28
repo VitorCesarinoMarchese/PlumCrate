@@ -11,7 +11,7 @@ use std::time::{Duration, Instant};
 mod ui;
 pub use ui::AppUpdates;
 
-const REPOSITORY: &str = "VitorCesarinoMarchese/TS4ModManager";
+const REPOSITORY: &str = "VitorCesarinoMarchese/PlumCrate";
 const MAX_IMAGE_BYTES: u64 = 512 * 1024 * 1024;
 
 #[derive(Clone, Debug, Deserialize)]
@@ -57,7 +57,7 @@ fn select_release(raw: &str, current: &str, arch: &str) -> Result<Option<Release
         .collect::<Vec<_>>();
     newer.sort_by(|a, b| b.0.cmp_precedence(&a.0));
     for (version, release) in newer {
-        let name = format!("ts4-mod-manager-native-{version}-{arch}.AppImage");
+        let name = format!("plumcrate-{version}-{arch}.AppImage");
         let Some(asset) = release
             .assets
             .iter()
@@ -156,7 +156,7 @@ fn get(raw_url: &str) -> Result<ureq::Response, String> {
             .get(url.as_str())
             .set(
                 "User-Agent",
-                concat!("TS4ModManager/", env!("CARGO_PKG_VERSION")),
+                concat!("PlumCrate/", env!("CARGO_PKG_VERSION")),
             )
             .set(
                 "Accept",
@@ -271,7 +271,7 @@ impl Target {
         let appdir = std::env::var_os("APPDIR")
             .ok_or("The AppImage runtime did not provide its app directory")?;
         let expected =
-            fs::canonicalize(PathBuf::from(appdir).join("usr/bin/ts4-mod-manager-native"))
+            fs::canonicalize(PathBuf::from(appdir).join("usr/bin/plumcrate"))
                 .map_err(|_| "Cannot identify the running AppImage")?;
         if fs::canonicalize(std::env::current_exe().map_err(|_| "Cannot identify this executable")?)
             .map_err(|_| "Cannot resolve this executable")?
@@ -427,7 +427,7 @@ fn probe_version(path: &Path, version: &str) -> Result<(), String> {
         .map_err(|_| "Cannot read the downloaded app version")?;
     if !output.status.success()
         || String::from_utf8_lossy(&output.stdout).trim()
-            != format!("ts4-mod-manager-native {version}")
+            != format!("plumcrate {version}")
     {
         return Err("The downloaded AppImage reports the wrong version or cannot start".into());
     }
