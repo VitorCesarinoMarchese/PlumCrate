@@ -39,6 +39,13 @@ test('the deployed artifact exposes complete, linked language pages without Java
       const data=JSON.parse(html.match(/<script type="application\/ld\+json">([\s\S]*?)<\/script>/)[1]);
       assert.equal(data.url,origin+path);
       assert.equal(data.inLanguage,language);
+      if(!path.endsWith('/guide')){
+        const blocks=[...html.matchAll(/<script type="application\/ld\+json">([\s\S]*?)<\/script>/g)].map(match=>JSON.parse(match[1]));
+        const website=blocks.find(item=>item['@type']==='WebSite');
+        assert.ok(website,`${file}: website identity is missing`);
+        assert.equal(website.name,'PlumCrate');
+        assert.equal(website.url,origin+'/',`${file}: website identity must point to the domain homepage`);
+      }
       assert.doesNotMatch(html,/noindex|undefined/);
       if(language==='pt-BR'){
         assert.match(html,/<title>[^<]*(?:Gerenciador|Guia)[^<]*<\/title>/);

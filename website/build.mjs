@@ -4,8 +4,8 @@ import {fileURLToPath, pathToFileURL} from 'node:url';
 import {parse, parseFragment, serialize} from 'parse5';
 import {homepage, guide} from './copy/pt-BR.mjs';
 import {languageHref, navigationItems} from './public/site-navigation.js';
+import {siteOrigin as origin, indexNowKeyFilename} from './search-discovery.mjs';
 
-const origin = 'https://plumcrate.vercel.app';
 const publicDirectory = fileURLToPath(new URL('./public/', import.meta.url));
 export const defaultOutputDirectory = fileURLToPath(new URL('./dist/', import.meta.url));
 const pages = [
@@ -62,9 +62,10 @@ function renderPage(html, page, language) {
     if (attribute(node, 'rel') === 'canonical') setAttribute(node, 'href', origin + localizedPath);
     if (attribute(node, 'type') === 'application/ld+json') {
       const data = JSON.parse(node.childNodes.map(child => child.value || '').join(''));
-      data.url = origin + localizedPath;
-      data.inLanguage = language;
-      if (language === 'pt-BR') {
+      const isWebsite = data['@type'] === 'WebSite';
+      data.url = origin + (isWebsite ? '/' : localizedPath);
+      data.inLanguage = isWebsite ? ['en', 'pt-BR'] : language;
+      if (language === 'pt-BR' && !isWebsite) {
         data.description = page.description;
         if (data['@type'] === 'TechArticle') data.name = 'Guia do PlumCrate';
         if (data.about) data.about.url = origin + '/pt-br';
@@ -98,7 +99,7 @@ function renderPage(html, page, language) {
   return serialize(document);
 }
 
-export async function buildSite({outputDirectory = defaultOutputDirectory} = {}) {
+export async function buildSite({outputDirectory = defaultOutputDirectory, indexNowKey = process.env.INDEXNOW_KEY} = {}) {
   await cp(publicDirectory, outputDirectory, {recursive: true});
   for (const page of pages) {
     const html = await readFile(join(publicDirectory, page.file), 'utf8');
@@ -107,6 +108,9 @@ export async function buildSite({outputDirectory = defaultOutputDirectory} = {})
       await mkdir(dirname(destination), {recursive: true});
       await writeFile(destination, renderPage(html, page, language));
     }
+  }
+  if (indexNowKey !== undefined) {
+    await writeFile(join(outputDirectory, indexNowKeyFilename(indexNowKey)), indexNowKey + '\n');
   }
 }
 

@@ -68,4 +68,20 @@ The English homepage and guide use `/` and `/guide`; Portuguese uses `/pt-br` an
 
 These changes follow Google's guidance on [language-specific URLs](https://developers.google.com/search/docs/specialty/international/managing-multi-regional-sites), [crawlable links](https://developers.google.com/search/docs/crawling-indexing/links-crawlable), and [search discovery](https://developers.google.com/search/docs/fundamentals/seo-starter-guide). They do not guarantee indexing or ranking. Google says changes can take weeks or longer to affect results. Useful community references and links from relevant Linux and Sims resources remain ongoing work; do not manufacture links, reviews, or verification tokens.
 
+The homepage also declares the `WebSite` name as PlumCrate, with the domain homepage as its URL in both languages. Google documents this as a [site-name signal](https://developers.google.com/search/docs/appearance/site-names), separate from the existing application metadata. The shared 96-pixel square favicon is rasterized from the existing plumbob SVG, following [Google's favicon guidance](https://developers.google.com/search/docs/appearance/favicon-in-search).
+
+### Notify search engines after publishing
+
+The production build reads `INDEXNOW_KEY` and writes its ownership proof to an unguessable root text-file URL. Keep the same value in the ignored local `website/.env.indexnow.local` file and the Vercel project's sensitive production environment variable. The proof is public by protocol, but the publisher configuration is kept out of git and the key is never embedded in page HTML or logged by the notification script.
+
+After deploying a meaningful content change, run from `website`:
+
+```sh
+npm run notify-search
+```
+
+The script verifies the deployed ownership proof and submits only this site's canonical sitemap URLs to the [IndexNow endpoint](https://www.indexnow.org/documentation). HTTP 200 means the submission was received; HTTP 202 means receipt with ownership validation pending. Neither confirms crawling, indexing, or ranking. Submit after changes, rather than polling or resubmitting unchanged URLs.
+
+IndexNow shares notifications among its [participating engines](https://www.indexnow.org/faq), which include Bing, a source for DuckDuckGo results. It does not submit a Google indexing request. Google's direct crawl-request route is [URL Inspection in Search Console](https://developers.google.com/search/docs/crawling-indexing/ask-google-to-recrawl), using a verified owner account. Public crawling remains possible without that account workflow.
+
 Run `npm test` to check canonical URLs, structured data, crawl discovery, and the visible product heading alongside existing website tests.

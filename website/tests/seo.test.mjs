@@ -3,6 +3,23 @@ import assert from 'node:assert/strict';
 import {readFile} from 'node:fs/promises';
 const origin='https://plumcrate.vercel.app';
 const read=name=>readFile(new URL(`../public/${name}`,import.meta.url),'utf8');
+test('the homepage declares PlumCrate as the website name for search engines',async()=>{
+  const html=await read('index.html');
+  const data=[...html.matchAll(/<script type="application\/ld\+json">([\s\S]*?)<\/script>/g)].map(match=>JSON.parse(match[1]));
+  const website=data.find(item=>item['@type']==='WebSite');
+  assert.ok(website,'Google site-name markup is missing');
+  assert.equal(website.name,'PlumCrate');
+  assert.equal(website.url,origin+'/');
+});
+test('both pages use the same square favicon suitable for search results',async()=>{
+  for(const file of ['index.html','guide.html']){
+    assert.match(await read(file),/<link rel="icon" href="\/favicon\.png" sizes="96x96" type="image\/png">/);
+  }
+  const png=await readFile(new URL('../public/favicon.png',import.meta.url));
+  assert.equal(png.subarray(0,8).toString('hex'),'89504e470d0a1a0a');
+  assert.equal(png.readUInt32BE(16),96);
+  assert.equal(png.readUInt32BE(20),96);
+});
 test('old website links redirect permanently to the corresponding PlumCrate page',async()=>{
   const config=JSON.parse(await readFile(new URL('../vercel.json',import.meta.url),'utf8'));
   const redirect=config.redirects?.find(item=>item.source==='/:path*'&&item.has?.some(condition=>condition.type==='host'&&condition.value==='ts4-mod-manager.vercel.app'));
