@@ -3954,7 +3954,7 @@ dependencies = [
 
 [[package]]
 name = "plumcrate-core"
-version = "0.0.1-alpha.1"
+version = "0.0.1-alpha.2"
 dependencies = [
  "chrono",
  "image",
@@ -3975,7 +3975,7 @@ dependencies = [
 
 [[package]]
 name = "plumcrate"
-version = "0.0.1-alpha.1"
+version = "0.0.1-alpha.2"
 dependencies = [
  "chrono",
  "eframe",

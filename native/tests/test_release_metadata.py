@@ -13,7 +13,7 @@ class ReleaseMetadata(unittest.TestCase):
     def test_alpha_version_and_project_license(self):
         for crate in ["core", "native"]:
             package = tomllib.loads((ROOT / crate / "Cargo.toml").read_text())["package"]
-            self.assertEqual(package["version"], "0.0.1-alpha.1")
+            self.assertEqual(package["version"], "0.0.1-alpha.2")
             self.assertEqual(package["license"], "MIT")
 
     def test_archive_contains_the_project_license(self):

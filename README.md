@@ -43,11 +43,11 @@ Browse your collection by photo, find a file by name, and choose which mods are 
 | Recover removed mods | Move managed mods to trash and review where they will go before restoring them. |
 | Make it yours | Choose light, dark, or system appearance, create a custom theme, and remember your game folders. |
 
-## First alpha
+## Alpha release
 
-The first alpha, **v0.0.1-alpha.1**, is being prepared. Read the [release notes](docs/releases/v0.0.1-alpha.1.md) for features, download instructions, and limitations. Expect rough edges and report problems before relying on the app for your main collection.
+**v0.0.1-alpha.2** fixes browser-assisted downloads on Linux desktops such as Hyprland. Read the [release notes](docs/releases/v0.0.1-alpha.2.md) for download instructions and limitations. Expect rough edges and report problems before relying on the app for your main collection.
 
-Linux is the current supported platform. Windows and macOS have not been verified. Release downloads will appear on the [releases page](https://github.com/VitorCesarinoMarchese/PlumCrate/releases) when published. Until then, use the [build and run guide](docs/development.md#run-the-app).
+Linux is the current supported platform. Windows and macOS have not been verified. Download the AppImage from the [releases page](https://github.com/VitorCesarinoMarchese/PlumCrate/releases), or use the [build and run guide](docs/development.md#run-the-app).
 
 The app manages local mods and checks attached CurseForge projects for newer releases on request. Update notices open the mod page for manual download; you replace your local files yourself. Browser-assisted installation opens the official release page and watches your Downloads folder after you approve the source and installation. The website may still require a Download or save click. CurseForge browsing, installation, lookup, and update checks need your own API key saved in local Settings. Suggestions and installed-release records are saved only after you confirm them, and weak source matches show a warning.
 
