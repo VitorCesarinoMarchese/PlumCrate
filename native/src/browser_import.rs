@@ -60,6 +60,7 @@ struct Approved {
 }
 
 enum Event {
+    BrowserLaunchFailed(u64, String),
     Project(u64, Result<BrowserProject, String>),
     Download(u64, Result<MatchedDownload, String>),
 }
@@ -195,6 +196,11 @@ impl BrowserImport {
         }
         while let Ok(event) = self.receiver.try_recv() {
             match event {
+                Event::BrowserLaunchFailed(token, error)
+                    if token == self.token && self.phase == Phase::Waiting && self.scope_valid =>
+                {
+                    self.fail(error);
+                }
                 Event::Project(token, result)
                     if token == self.token && self.phase == Phase::Loading && self.scope_valid =>
                 {
@@ -231,6 +237,20 @@ impl BrowserImport {
             }
         }
         None
+    }
+
+    pub fn launch_failure_reporter(&self, url: &str) -> Option<Box<dyn FnOnce(String) + Send>> {
+        let approved = self.approved.as_ref()?;
+        if self.phase != Phase::Waiting
+            || approved.release.navigation_url(&approved.project) != url
+        {
+            return None;
+        }
+        let sender = self.sender.clone();
+        let token = self.token;
+        Some(Box::new(move |error| {
+            let _ = sender.send(Event::BrowserLaunchFailed(token, error));
+        }))
     }
 
     pub fn start(&mut self, ctx: &Context) -> Result<String, String> {
@@ -515,6 +535,28 @@ mod tests {
             assert!(Instant::now() < deadline, "watch did not find the fixture");
             thread::sleep(Duration::from_millis(10));
         }
+    }
+
+    #[test]
+    fn browser_launch_failure_stops_watch_and_can_retry_without_stale_failures() {
+        let home = tempfile::tempdir().unwrap();
+        let ctx = Context::default();
+        let mut import = review(home.path());
+        let url = import.start(&ctx).unwrap();
+        assert!(import.launch_failure_reporter("https://example.com/unrelated").is_none());
+        let report = import.launch_failure_reporter(&url).unwrap();
+        let stale = import.launch_failure_reporter(&url).unwrap();
+        report("Could not open browser: fixture".into());
+        import.poll();
+        assert_eq!(import.phase, Phase::Failed);
+        assert!(import.error.as_ref().unwrap().contains("Could not open browser"));
+        assert!(import.permit.as_ref().unwrap().is_cancelled());
+        assert!(import.can_retry());
+        import.retry(&ctx).unwrap();
+        stale("old launch failure".into());
+        import.poll();
+        assert_eq!(import.phase, Phase::Waiting);
+        import.cancel();
     }
 
     #[test]

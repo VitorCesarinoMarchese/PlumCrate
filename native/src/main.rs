@@ -260,7 +260,7 @@ impl eframe::App for NativeApp {
         }
         self.window_rendered = true;
         if self.app_update_receipt.is_some() { ui.ctx().request_repaint(); }
-        plumcrate::desktop_links::dispatch_pending(ui.ctx());
+        plumcrate::desktop_links::dispatch_pending(ui.ctx(), Some(&self.controls.browser_import));
         let Some(path) = self.screenshot.as_ref() else {
             return;
         };

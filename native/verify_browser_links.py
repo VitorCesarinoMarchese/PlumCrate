@@ -3,6 +3,7 @@
 import os
 from pathlib import Path
 import subprocess
+import sys
 import tempfile
 import time
 
@@ -33,6 +34,7 @@ Path(os.environ["TS4_BROWSER_RECEIPT"]).write_text(sys.argv[1])
         assert receipt.read_text() == URL
         print("PASS: exact release URL dispatched to an external browser process")
         verify_stalled_resolver(fixture, browser, receipt)
+        verify_desktop_fallback(fixture, receipt)
 
 
 def verify_stalled_resolver(fixture, browser, receipt):
@@ -80,6 +82,34 @@ print("controlled-browser.desktop")
         process.wait(timeout=20)
     assert process.returncode == 0
     assert receipt.read_text() == URL
+
+
+def verify_desktop_fallback(fixture, receipt):
+    receipt.unlink()
+    (fixture / "python3").symlink_to(sys.executable)
+    (fixture / "xdg-settings").write_text("#!/bin/sh\necho missing-browser.desktop\n")
+    opener = fixture / "xdg-open"
+    opener.write_text("#!/bin/sh\nexit 1\n")
+    opener.chmod(0o700)
+    gio = fixture / "gio"
+    gio.write_text('''#!/usr/bin/env python3
+import os
+from pathlib import Path
+import sys
+assert sys.argv[1] == "open"
+assert len(sys.argv) == 3
+Path(os.environ["TS4_BROWSER_RECEIPT"]).write_text(sys.argv[2])
+''')
+    gio.chmod(0o700)
+    env = dict(os.environ, BROWSER="missing-browser", PATH=str(fixture),
+               XDG_CURRENT_DESKTOP="Hyprland", DESKTOP_SESSION="hyprland",
+               XDG_DATA_HOME=str(fixture), XDG_DATA_DIRS=str(fixture),
+               TS4_BROWSER_RECEIPT=str(receipt), TS4_VERIFY_BROWSER_LINKS="1")
+    subprocess.run([
+        str(ROOT / "native/target/debug/examples/verify_browser_links"), str(receipt),
+    ], cwd=ROOT, env=env, check=True, timeout=30)
+    assert receipt.read_text() == URL
+    print("PASS: failed browser discovery and xdg-open fall back to gio with the exact URL")
 
 
 if __name__ == "__main__":
