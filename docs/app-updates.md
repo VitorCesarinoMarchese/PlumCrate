@@ -38,8 +38,17 @@ The restarted AppImage uses extraction mode, so updating does not require FUSE.
 Command-line inspection, workflow verification, version probes, and screenshot
 captures do not check for updates.
 
-AppImages released before this feature require one manual upgrade to a build
-that includes it. No GitHub release is published by a local build or update check.
+The original `0.0.1-alpha.1` build cannot discover PlumCrate releases after the
+project rename. Its updater requires the old asset and executable names, so it
+reports no compatible update. Download the current PlumCrate AppImage from
+[GitHub releases](https://github.com/VitorCesarinoMarchese/PlumCrate/releases),
+verify its checksum, close alpha.1, and launch the new AppImage manually.
+Existing mods and settings remain in their current locations. Alpha.2 and later
+use the PlumCrate names and support subsequent in-app updates.
+
+AppImages released before this feature also require one manual upgrade to a
+build that includes it. No GitHub release is published by a local build or
+update check.
 
 ## Publish an update
 
