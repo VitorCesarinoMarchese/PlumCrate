@@ -158,7 +158,7 @@ fn a_dependency_download_starts_only_that_project_then_imports_and_enables_it() 
         assert!(std::time::Instant::now()<deadline,"{:?}",fixture.controls.browser_import.error);
         std::thread::sleep(std::time::Duration::from_millis(10));
     }
-    assert_eq!(std::fs::read(&original).unwrap(),support::BYTES);
+    assert_download_cleanup(&fixture, &original);
     assert_eq!(std::fs::read(fixture.directory.path().join("game/Mods/core-library.package")).unwrap(),support::BYTES);
     assert!(!fixture.directory.path().join("game/Mods/garden.package").exists());
 }
@@ -220,7 +220,7 @@ fn one_download_action_opens_the_download_page_then_imports_and_enables_without_
         );
         std::thread::sleep(std::time::Duration::from_millis(20));
     }
-    assert_eq!(std::fs::read(&downloads).unwrap(), support::BYTES);
+    assert_download_cleanup(&fixture, &downloads);
     assert_eq!(
         std::fs::read(fixture.directory.path().join("game/Mods/fixture.package")).unwrap(),
         support::BYTES
@@ -324,4 +324,14 @@ fn changing_game_before_dispatch_does_not_open_or_install_the_download() {
     assert_eq!(fixture.controls.browser_import.phase, Phase::Cancelled);
     assert!(!output.platform_output.commands.iter().any(|command| matches!(command, egui::OutputCommand::OpenUrl(_))));
     assert!(!fixture.directory.path().join("managed/mods").exists());
+}
+
+fn assert_download_cleanup(fixture: &support::Fixture, original: &std::path::Path) {
+    if let Some(error) = &fixture.controls.error {
+        assert!(error.starts_with("Mod installed. Download cleanup needs attention:"), "{error}");
+        assert_eq!(std::fs::read(original).unwrap(), support::BYTES,
+            "unavailable Trash must preserve the original download");
+    } else {
+        assert!(!original.exists(), "successful cleanup must remove the original from Downloads");
+    }
 }
