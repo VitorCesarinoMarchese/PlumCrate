@@ -30,7 +30,24 @@ fn decode_image(bytes: &[u8]) -> Option<image::DynamicImage> {
     let orientation = decoder.orientation().ok()?;
     let mut image = image::DynamicImage::from_decoder(decoder).ok()?;
     image.apply_orientation(orientation);
+    // Keep only display-sized pixels. Full-resolution buffers must never reach
+    // the UI queue or texture cache, where CPU and GPU copies can coexist.
+    if image.width() > 512 || image.height() > 512 {
+        image = image.thumbnail(512, 512);
+    }
     Some(image)
+}
+
+pub fn load_local(path: &Path) -> Result<image::DynamicImage, String> {
+    let file = fs::File::open(path).map_err(|_| "Cannot open preview")?;
+    let mut bytes = Vec::new();
+    file.take(MAX_IMAGE_BYTES + 1)
+        .read_to_end(&mut bytes)
+        .map_err(|_| "Cannot read preview")?;
+    if bytes.len() as u64 > MAX_IMAGE_BYTES {
+        return Err("Unsupported or oversized preview".into());
+    }
+    decode_image(&bytes).ok_or_else(|| "Unsupported or oversized preview".into())
 }
 
 fn read_cached(path: &Path) -> Option<(fs::Metadata, image::DynamicImage)> {

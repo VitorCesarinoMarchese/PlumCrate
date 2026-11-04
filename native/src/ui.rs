@@ -1878,16 +1878,16 @@ mod tests {
         catalog.mods[0].preview = Some(path.to_string_lossy().into_owned());
         let ctx = egui::Context::default();
         setup(&ctx);
-        let mut cache = crate::preview::Previews::default();
+        let mut view = View::default();
+        view.previews.begin_frame(&ctx, catalog.generation());
         let deadline = std::time::Instant::now() + std::time::Duration::from_secs(5);
         let texture = loop {
-            if let crate::preview::State::Ready(texture) = cache.load(&ctx, path.to_str(), None) {
+            if let crate::preview::State::Ready(texture) = view.previews.load(&ctx, path.to_str(), None) {
                 break texture;
             }
             assert!(std::time::Instant::now() < deadline, "photo did not load");
             std::thread::sleep(std::time::Duration::from_millis(5));
         };
-        let mut view = View::default();
         render(&ctx, &mut view, &mut catalog, vec![], 1200.0);
         render(&ctx, &mut view, &mut catalog, vec![], 1200.0);
         let row = view.stats.first_row.unwrap().center();

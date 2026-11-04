@@ -17,9 +17,24 @@ enum RemotePhoto {
     Missing,
 }
 
+struct LocalRequest {
+    path: PathBuf,
+    result: mpsc::Sender<Result<egui::ColorImage, String>>,
+    wake: egui::Context,
+}
+
+fn display_pixels(image: image::DynamicImage) -> egui::ColorImage {
+    let rgba = image.into_rgba8();
+    egui::ColorImage::from_rgba_unmultiplied(
+        [rgba.width() as usize, rgba.height() as usize],
+        rgba.as_raw(),
+    )
+}
+
 #[derive(Default)]
 pub struct Previews {
     recent: VecDeque<String>,
+    local_worker: Option<mpsc::SyncSender<LocalRequest>>,
     generation: Option<u64>,
     cache: Option<PathBuf>,
     remote: HashMap<String, RemotePhoto>,
@@ -33,11 +48,36 @@ impl Previews {
         }
     }
 
+    fn load_local(&mut self, request: LocalRequest) -> Result<(), ()> {
+        if self.local_worker.is_none() {
+            let (sender, receiver) = mpsc::sync_channel::<LocalRequest>(1);
+            std::thread::Builder::new()
+                .name("local-previews".into())
+                .spawn(move || {
+                    for request in receiver {
+                        let result =
+                            crate::photo_cache::load_local(&request.path).map(display_pixels);
+                        let _ = request.result.send(result);
+                        request.wake.request_repaint();
+                    }
+                })
+                .map_err(|_| ())?;
+            self.local_worker = Some(sender);
+        }
+        self.local_worker
+            .as_ref()
+            .expect("local worker")
+            .try_send(request)
+            .map_err(|_| ())
+    }
+
     fn cached_photo(&mut self, ctx: &egui::Context, uri: &str) -> Option<State> {
-        let directory = self.cache.clone()?;
-        if !uri.starts_with("http://") && !uri.starts_with("https://") {
+        let local_path = uri.strip_prefix("file://").map(PathBuf::from);
+        let directory = self.cache.clone();
+        if local_path.is_none() && directory.is_none() {
             return None;
         }
+        let mut completed = Vec::new();
         for (url, state) in &mut self.remote {
             let RemotePhoto::Pending(receiver) = state else {
                 continue;
@@ -48,11 +88,18 @@ impl Previews {
                         url,
                         image,
                         egui::TextureOptions::LINEAR,
-                    ))
+                    ));
+                    completed.push(url.clone());
                 }
-                Ok(Err(_)) | Err(mpsc::TryRecvError::Disconnected) => *state = RemotePhoto::Missing,
+                Ok(Err(_)) | Err(mpsc::TryRecvError::Disconnected) => {
+                    *state = RemotePhoto::Missing;
+                    completed.push(url.clone());
+                }
                 Err(mpsc::TryRecvError::Empty) => {}
             }
+        }
+        for url in completed {
+            self.remember(ctx, &url);
         }
         if let Some(state) = self.remote.get(uri) {
             return Some(match state {
@@ -61,37 +108,48 @@ impl Previews {
                 RemotePhoto::Pending(_) => State::Pending,
             });
         }
+        // Local files need no network overlap. Decode one at a time so large
+        // source buffers do not multiply peak memory during a cold library load.
+        let concurrency = if local_path.is_some() { 1 } else { 4 };
         if self
             .remote
             .values()
             .filter(|state| matches!(state, RemotePhoto::Pending(_)))
             .count()
-            >= 4
+            >= concurrency
         {
             return Some(State::Pending);
         }
         let (sender, receiver) = mpsc::channel();
         let url = uri.to_owned();
         let wake = ctx.clone();
-        if std::thread::Builder::new()
-            .name("photo-cache".into())
-            .spawn(move || {
-                let result = crate::photo_cache::fetch(&directory, &url).map(|image| {
-                    let rgba = image.into_rgba8();
-                    egui::ColorImage::from_rgba_unmultiplied(
-                        [rgba.width() as usize, rgba.height() as usize],
-                        rgba.as_raw(),
-                    )
-                });
-                let _ = sender.send(result);
-                wake.request_repaint();
+        let submitted = if let Some(path) = local_path {
+            self.load_local(LocalRequest {
+                path,
+                result: sender,
+                wake,
             })
-            .is_err()
-        {
+        } else {
+            std::thread::Builder::new()
+                .name("photo-cache".into())
+                .spawn(move || {
+                    let result = crate::photo_cache::fetch(
+                        directory.as_deref().expect("remote cache"),
+                        &url,
+                    )
+                    .map(display_pixels);
+                    let _ = sender.send(result);
+                    wake.request_repaint();
+                })
+                .map(|_| ())
+                .map_err(|_| ())
+        };
+        if submitted.is_err() {
             return Some(State::Missing);
         }
         self.remote
             .insert(uri.into(), RemotePhoto::Pending(receiver));
+        self.remember(ctx, uri);
         Some(State::Pending)
     }
 
@@ -127,7 +185,7 @@ impl Previews {
             return State::Missing;
         };
         if let Some(state) = self.cached_photo(ctx, &uri) {
-            if matches!(state, State::Ready(_)) {
+            if self.remote.contains_key(&uri) {
                 self.remember(ctx, &uri);
             }
             return state;
@@ -188,6 +246,77 @@ pub fn resolve_uri(preview: Option<&str>, root: Option<&Path>) -> Option<String>
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn local_decodes_are_serialized_to_limit_full_resolution_working_memory() {
+        let temp = tempfile::tempdir().unwrap();
+        let ctx = egui::Context::default();
+        let mut previews = Previews::default();
+        let (_sender, receiver) = mpsc::channel();
+        previews
+            .remote
+            .insert("file:///pending.png".into(), RemotePhoto::Pending(receiver));
+        let path = temp.path().join("next.png");
+        assert_eq!(previews.load(&ctx, path.to_str(), None), State::Pending);
+        assert_eq!(
+            previews.remote.len(),
+            1,
+            "only one local image may decode at a time"
+        );
+    }
+
+    #[test]
+    fn large_local_and_cached_remote_photos_use_bounded_textures() {
+        use sha2::{Digest, Sha256};
+        let temp = tempfile::tempdir().unwrap();
+        let path = temp.path().join("large.png");
+        image::RgbImage::from_pixel(2048, 1024, image::Rgb([10, 100, 80]))
+            .save(&path)
+            .unwrap();
+        let server = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
+        let url = format!("http://{}/large.png", server.local_addr().unwrap());
+        drop(server);
+        std::fs::copy(
+            &path,
+            temp.path()
+                .join(format!("ts4-photo-{:x}", Sha256::digest(url.as_bytes()))),
+        )
+        .unwrap();
+        let ctx = egui::Context::default();
+        crate::ui::setup(&ctx);
+        let mut previews = Previews::with_cache(temp.path().to_owned());
+        for uri in [path.to_str().unwrap(), &url] {
+            match wait_for_preview(&ctx, &mut previews, uri) {
+                State::Ready(texture) => assert_eq!(texture.size, egui::vec2(512.0, 256.0)),
+                state => panic!("thumbnail failed: {state:?}"),
+            }
+        }
+    }
+
+    #[test]
+    fn completed_offscreen_and_failed_photos_stay_in_bounded_cache() {
+        let temp = tempfile::tempdir().unwrap();
+        let ctx = egui::Context::default();
+        let mut previews = Previews::with_cache(temp.path().to_owned());
+        for index in 0..100 {
+            let uri = format!("https://fixture.invalid/{index}.png");
+            let (sender, receiver) = mpsc::channel();
+            sender
+                .send(if index % 2 == 0 {
+                    Ok(egui::ColorImage::filled([2, 2], egui::Color32::GREEN))
+                } else {
+                    Err("broken".into())
+                })
+                .unwrap();
+            previews.remote.insert(uri, RemotePhoto::Pending(receiver));
+            previews.load(&ctx, Some("https://fixture.invalid/current.png"), None);
+        }
+        assert!(
+            previews.remote.len() <= 32,
+            "offscreen completions and failures must be evicted: {}",
+            previews.remote.len()
+        );
+    }
 
     #[test]
     fn cached_photo_reuses_validated_pixels_without_another_image_decode() {
