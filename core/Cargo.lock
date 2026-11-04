@@ -1216,7 +1216,7 @@ dependencies = [
 
 [[package]]
 name = "plumcrate-core"
-version = "0.0.1-alpha.3"
+version = "0.0.1-alpha.3.1"
 dependencies = [
  "chrono",
  "image",

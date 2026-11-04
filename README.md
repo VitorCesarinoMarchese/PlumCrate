@@ -45,7 +45,7 @@ Browse your collection by photo, find a file by name, and choose which mods are 
 
 ## Alpha release
 
-**v0.0.1-alpha.3** reduces preview memory use and adds automatic cleanup after browser-assisted installs. Read the [release notes](docs/releases/v0.0.1-alpha.3.md) for download instructions and limitations. Expect rough edges and report problems before relying on the app for your main collection.
+**v0.0.1-alpha.3.1** clarifies the manual upgrade required from alpha.1 after the PlumCrate rename. It includes the preview memory improvements and automatic download cleanup from alpha.3. Read the [release notes](docs/releases/v0.0.1-alpha.3.1.md) for download instructions and limitations. Expect rough edges and report problems before relying on the app for your main collection.
 
 Linux is the current supported platform. Windows and macOS have not been verified. Download the AppImage from the [releases page](https://github.com/VitorCesarinoMarchese/PlumCrate/releases), or use the [build and run guide](docs/development.md#run-the-app).
 

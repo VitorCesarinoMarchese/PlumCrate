@@ -2,7 +2,7 @@
 
 Run commands in this guide from the repository root. For app controls, see the [native app reference](native-app.md).
 
-Both crates and release archives use the Cargo version `0.0.1-alpha.3`. The project uses the [MIT License](../LICENSE), which is included in Linux release archives alongside dependency licenses.
+Both crates and release archives use the Cargo version `0.0.1-alpha.3.1`. The project uses the [MIT License](../LICENSE), which is included in Linux release archives alongside dependency licenses.
 
 ## Run the app
 
