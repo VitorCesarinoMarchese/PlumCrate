@@ -480,3 +480,55 @@ fn large_managed_library_does_not_inherit_the_download_watch_entry_limit() {
     )
     .is_ok());
 }
+
+#[test]
+fn download_cleanup_requires_success_and_only_trashes_the_verified_original() {
+    let t = tempfile::tempdir().unwrap();
+    let downloads = t.path().join("Downloads");
+    let game = t.path().join("Mods");
+    fs::create_dir_all(&downloads).unwrap();
+    fs::create_dir_all(&game).unwrap();
+    let original = downloads.join("renamed.package");
+    fs::write(&original, b"package").unwrap();
+    let p = project(provider(b"package", "mod.package"));
+    let matched = match_download(&downloads, &p);
+    assert!(matched.trash_original_with(|_| panic!("not installed")).is_err());
+    browser_import::import_browser_download(&t.path().join("managed"), &game, &p, &p.releases[0], &matched, &ImportPermit::default()).unwrap();
+    matched.trash_original_with(|path| {
+        assert_eq!(fs::read(path).unwrap(), b"package");
+        fs::rename(path, t.path().join("recoverable.package")).unwrap();
+        Ok(())
+    }).unwrap();
+    assert!(!original.exists());
+    assert_eq!(fs::read(game.join("mod.package")).unwrap(), b"package");
+    assert_eq!(fs::read(t.path().join("recoverable.package")).unwrap(), b"package");
+    assert!(matched.trash_original_with(|_| panic!("already cleaned")).is_err());
+}
+
+#[test]
+fn download_cleanup_preserves_replacements_changes_and_trash_failures() {
+    for change in ["replacement", "modified", "symlink", "trash_failure"] {
+        let t = tempfile::tempdir().unwrap();
+        let downloads = t.path().join("Downloads");
+        let game = t.path().join("Mods");
+        fs::create_dir_all(&downloads).unwrap();
+        fs::create_dir_all(&game).unwrap();
+        let original = downloads.join("mod.package");
+        fs::write(&original, b"package").unwrap();
+        let p = project(provider(b"package", "mod.package"));
+        let matched = match_download(&downloads, &p);
+        browser_import::import_browser_download(&t.path().join("managed"), &game, &p, &p.releases[0], &matched, &ImportPermit::default()).unwrap();
+        match change {
+            "replacement" => { fs::rename(&original, downloads.join("saved.package")).unwrap(); fs::write(&original, b"package").unwrap(); }
+            "modified" => fs::write(&original, b"changed").unwrap(),
+            "symlink" => { fs::rename(&original, downloads.join("saved.package")).unwrap(); std::os::unix::fs::symlink("saved.package", &original).unwrap(); }
+            _ => {}
+        }
+        assert!(matched.trash_original_with(|_| {
+            assert_eq!(change, "trash_failure");
+            Err("Trash unavailable".into())
+        }).is_err());
+        assert!(original.symlink_metadata().is_ok());
+        assert_eq!(fs::read(&original).unwrap(), if change == "modified" { b"changed" } else { b"package" });
+    }
+}

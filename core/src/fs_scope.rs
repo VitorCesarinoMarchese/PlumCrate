@@ -312,6 +312,18 @@ impl Directory {
         names.sort();
         Ok(names)
     }
+    pub(crate) fn rename_entry_to(&self, name: &Path, target: &Self, destination: &Path) -> Result<(), ManagerError> {
+        use std::os::{fd::AsRawFd, unix::ffi::OsStrExt};
+        component(&name.to_string_lossy())?;
+        component(&destination.to_string_lossy())?;
+        let from = std::ffi::CString::new(name.as_os_str().as_bytes()).map_err(|_| ManagerError::new(ErrorCode::InvalidPath, "Invalid file name"))?;
+        let to = std::ffi::CString::new(destination.as_os_str().as_bytes()).map_err(|_| ManagerError::new(ErrorCode::InvalidPath, "Invalid file name"))?;
+        if unsafe { libc::renameat2(self.file.as_raw_fd(), from.as_ptr(), target.file.as_raw_fd(), to.as_ptr(), libc::RENAME_NOREPLACE) } < 0 {
+            return Err(io_error(std::io::Error::last_os_error()));
+        }
+        Ok(())
+    }
+
     pub(crate) fn open_regular(&self, relative: &Path) -> Result<fs::File, ManagerError> {
         use std::os::fd::{AsRawFd, FromRawFd};
         let (parent, name) = self.parent(relative, false)?;

@@ -19,7 +19,7 @@ use std::{
     ffi::OsString,
     fs,
     io::{Read, Seek, SeekFrom, Write},
-    path::Path,
+    path::{Path, PathBuf},
     sync::{
         atomic::{AtomicU8, Ordering},
         Arc, Mutex,
@@ -366,10 +366,71 @@ fn stamp(file: &fs::File) -> Result<Stamp, ManagerError> {
     })
 }
 #[derive(Clone)]
-pub struct MatchedDownload(Arc<Mutex<Option<fs::File>>>);
+pub struct MatchedDownload(Arc<Mutex<MatchedFile>>);
+struct MatchedFile {
+    file: Option<fs::File>,
+    directory: Arc<fs_scope::Directory>,
+    directory_path: PathBuf,
+    name: OsString,
+    stamp: Stamp,
+    release: BrowserRelease,
+    installed: bool,
+    cleaned: bool,
+}
+impl MatchedDownload {
+    /// Move only the successfully installed, unchanged original through a recoverable trash adapter.
+    pub fn trash_original_with(&self, trash: impl FnOnce(&Path) -> Result<(), String>) -> Result<(), ManagerError> {
+        let mut matched = self.0.lock().map_err(|_| invalid("Download cleanup unavailable"))?;
+        if !matched.installed || matched.cleaned {
+            return Err(invalid("Download cleanup requires a successful installation and can run only once"));
+        }
+        let current = matched.directory.open_regular(Path::new(&matched.name))?;
+        if stamp(&current)? != matched.stamp {
+            return Err(invalid("Download changed or was replaced; original was preserved"));
+        }
+        // Capture into a private directory before rechecking. A racing replacement is restored,
+        // never passed to the trash adapter, and restoration never overwrites a new download.
+        let staging = tempfile::Builder::new().prefix(".plumcrate-cleanup-")
+            .tempdir_in(&matched.directory_path).map_err(fs_scope::io_error)?.keep();
+        let target = fs_scope::Directory::open(&staging)?;
+        let name = Path::new(&matched.name);
+        let staged = staging.join(&matched.name);
+        let result = (|| {
+            matched.directory.rename_entry_to(name, &target, name)?;
+            let mut file = target.open_regular(name)?;
+            let after = stamp(&file)?;
+            if (after.device, after.inode, after.length, after.modified) !=
+                (matched.stamp.device, matched.stamp.inode, matched.stamp.length, matched.stamp.modified) {
+                return Err(invalid("Download changed during cleanup; file was preserved"));
+            }
+            verify_stream(&mut file, None, &matched.release, &ImportPermit::default())?;
+            trash(&staged).map_err(|error| invalid(&error))
+        })();
+        if let Err(error) = result {
+            if fs::symlink_metadata(&staged).is_ok() {
+                if let Err(restore) = target.rename_entry_to(name, &matched.directory, name) {
+                    return Err(invalid(&format!("{}. File preserved at {}. Restore failed: {}", error.message, staged.display(), restore.message)));
+                }
+                // Renaming changes ctime; permit a safe retry of the same restored inode.
+                if let Ok(file) = matched.directory.open_regular(name) {
+                    let restored = stamp(&file)?;
+                    if restored.device == matched.stamp.device && restored.inode == matched.stamp.inode {
+                        matched.stamp.changed = restored.changed;
+                    }
+                }
+            }
+            let _ = fs::remove_dir(&staging);
+            return Err(error);
+        }
+        matched.cleaned = true;
+        let _ = fs::remove_dir(&staging);
+        Ok(())
+    }
+}
 #[cfg(unix)]
 pub struct DownloadWatch {
-    directory: fs_scope::Directory,
+    directory: Arc<fs_scope::Directory>,
+    directory_path: PathBuf,
     release: BrowserRelease,
     previous: HashMap<OsString, Stamp>,
     rejected: HashMap<OsString, Stamp>,
@@ -378,7 +439,8 @@ pub struct DownloadWatch {
 impl DownloadWatch {
     pub fn new(directory: &Path, release: &BrowserRelease) -> Result<Self, ManagerError> {
         Ok(Self {
-            directory: fs_scope::Directory::open(directory)?,
+            directory: Arc::new(fs_scope::Directory::open(directory)?),
+            directory_path: directory.to_owned(),
             release: release.clone(),
             previous: HashMap::new(),
             rejected: HashMap::new(),
@@ -413,7 +475,10 @@ impl DownloadWatch {
             if verify_stream(&mut file, None, &self.release, permit).is_ok()
                 && stamp(&file)? == current
             {
-                return Ok(Some(MatchedDownload(Arc::new(Mutex::new(Some(file))))));
+                return Ok(Some(MatchedDownload(Arc::new(Mutex::new(MatchedFile {
+                    file: Some(file), directory: self.directory.clone(), directory_path: self.directory_path.clone(),
+                    name, stamp: current, release: self.release.clone(), installed: false, cleaned: false,
+                })))));
             }
             permit.check()?;
             self.rejected.insert(name, current);
@@ -531,6 +596,16 @@ fn enable_plan(root: &Path, game: &Path, id: &str) -> Result<toggle::DryRunResul
 
 #[cfg(unix)]
 pub fn import_browser_download(
+    root: &Path, game: &Path, project: &BrowserProject, release: &BrowserRelease,
+    matched: &MatchedDownload, permit: &ImportPermit,
+) -> Result<ModMetadata, ManagerError> {
+    let metadata = import_browser_download_inner(root, game, project, release, matched, permit)?;
+    matched.0.lock().map_err(|_| invalid("Download cleanup unavailable"))?.installed = true;
+    Ok(metadata)
+}
+
+#[cfg(unix)]
+fn import_browser_download_inner(
     root: &Path,
     game: &Path,
     project: &BrowserProject,
@@ -542,7 +617,7 @@ pub fn import_browser_download(
         .0
         .lock()
         .map_err(|_| invalid("Downloaded file handle unavailable"))?
-        .take()
+        .file.take()
         .ok_or_else(|| invalid("Downloaded file was already consumed; start a new watch"))?;
     permit.check()?;
     if release.release.project_id != project.project_id
