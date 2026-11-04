@@ -79,6 +79,7 @@ pub struct BrowserImport {
     receiver: Receiver<Event>,
     permit: Option<ImportPermit>,
     wake: Option<Thread>,
+    window: crate::download_browser::DownloadBrowser,
 }
 
 impl BrowserImport {
@@ -102,6 +103,7 @@ impl BrowserImport {
             receiver,
             permit: None,
             wake: None,
+            window: Default::default(),
         }
     }
 
@@ -239,6 +241,12 @@ impl BrowserImport {
         None
     }
 
+    pub fn download_window(&self, url: &str) -> Option<(crate::download_browser::DownloadBrowser, PathBuf)> {
+        let approved = self.approved.as_ref()?;
+        if approved.release.navigation_url(&approved.project) != url { return None; }
+        Some((self.window.clone(), approved.download_dir.clone()))
+    }
+
     pub fn launch_failure_reporter(&self, url: &str) -> Option<Box<dyn FnOnce(String) + Send>> {
         let approved = self.approved.as_ref()?;
         if self.phase != Phase::Waiting
@@ -320,6 +328,8 @@ impl BrowserImport {
                 }
             })
             .map_err(|error| format!("Could not start the download watch: {error}"))?;
+        self.window.close();
+        self.window = Default::default();
         self.wake = Some(handle.thread().clone());
         self.project = Some(approved.project.clone());
         self.chosen = Some(approved.release.release.file_id);
@@ -354,6 +364,7 @@ impl BrowserImport {
             self.phase = Phase::Installing;
             return false;
         }
+        self.window.close();
         if let Some(wake) = self.wake.take() {
             wake.unpark();
         }
@@ -381,6 +392,7 @@ impl BrowserImport {
         }
         match result {
             Ok(()) => {
+                self.window.close();
                 self.phase = Phase::Complete;
                 self.error = None;
             }
@@ -427,6 +439,7 @@ impl BrowserImport {
 
 impl Drop for BrowserImport {
     fn drop(&mut self) {
+        self.window.close();
         if let Some(permit) = &self.permit {
             permit.cancel();
         }
@@ -535,6 +548,73 @@ mod tests {
             assert!(Instant::now() < deadline, "watch did not find the fixture");
             thread::sleep(Duration::from_millis(10));
         }
+    }
+
+    #[test]
+    fn owned_window_follows_only_its_matching_session_completion() {
+        let home = tempfile::tempdir().unwrap();
+        let ctx = Context::default();
+        let mut import = review(home.path());
+        let url = import.start(&ctx).unwrap();
+        assert!(import.download_window("https://example.com/unrelated").is_none());
+        let (window, downloads) = import.download_window(&url).unwrap();
+        assert_eq!(downloads, import.download_dir);
+        import.finish(import.token().wrapping_sub(1), Ok(()));
+        assert!(!window.is_closed());
+        import.finish(import.token(), Ok(()));
+        assert!(window.is_closed());
+        assert_eq!(import.phase, Phase::Complete);
+    }
+
+    #[test]
+    fn cancellation_and_retry_have_separate_window_ownership() {
+        let home = tempfile::tempdir().unwrap();
+        let ctx = Context::default();
+        let mut import = review(home.path());
+        let url = import.start(&ctx).unwrap();
+        let (old, _) = import.download_window(&url).unwrap();
+        import.cancel();
+        assert!(old.is_closed());
+        let url = import.retry(&ctx).unwrap();
+        let (new, _) = import.download_window(&url).unwrap();
+        assert!(!new.is_closed());
+        drop(import);
+        assert!(new.is_closed());
+    }
+
+    #[test]
+    #[ignore = "launches a real browser and trashes only a synthetic fixture; use isolated XDG_DATA_HOME"]
+    fn real_browser_download_installs_cleans_up_and_closes_window() {
+        let data_home = std::env::var_os("XDG_DATA_HOME").expect("use an isolated XDG_DATA_HOME");
+        assert!(Path::new(&data_home).join("plumcrate-browser-proof").is_file(), "fixture marker required");
+        let home = tempfile::tempdir_in(&data_home).unwrap();
+        let mut import = review(home.path());
+        std::fs::create_dir_all(home.path().join("game/Mods")).unwrap();
+        let page = home.path().join("download.html");
+        std::fs::write(&page, r#"<!doctype html><a id="download" download="fixture.package" href="data:application/octet-stream;base64,cGFja2FnZQ==">Download fixture</a><script>document.getElementById('download').click()</script>"#).unwrap();
+        let url = import.start(&Context::default()).unwrap();
+        let (window, downloads) = import.download_window(&url).unwrap();
+        window.open(url::Url::from_file_path(&page).unwrap().as_str(), &downloads).unwrap();
+        let deadline = Instant::now() + Duration::from_secs(20);
+        let request = loop {
+            if let Some(request) = import.poll() { break request; }
+            assert!(Instant::now() < deadline, "browser did not save the fixture to the approved Downloads folder");
+            thread::sleep(Duration::from_millis(50));
+        };
+        let output = crate::management::execute(&crate::management::Job {
+            identity: crate::management::Identity { operation: 1, root: home.path().join("game"), entry: None, generation: 1 },
+            managed: home.path().join("managed"), trash: home.path().join("unused-trash"),
+            action: crate::management::Action::ImportBrowser(Box::new(request)),
+        }).unwrap();
+        let crate::management::Output::BrowserImported { token, cleanup_warning, .. } = output else { panic!("wrong import output") };
+        assert!(cleanup_warning.is_none(), "{cleanup_warning:?}");
+        assert_eq!(std::fs::read(home.path().join("game/Mods/mod.package")).unwrap(), b"package");
+        assert!(!downloads.join("fixture.package").exists());
+        let trash = Path::new(&data_home).join("Trash/files");
+        assert!(std::fs::read_dir(trash).unwrap().any(|entry| std::fs::read(entry.unwrap().path()).is_ok_and(|bytes| bytes == b"package")));
+        import.finish(token, Ok(()));
+        assert!(window.is_closed());
+        assert_eq!(import.phase, Phase::Complete);
     }
 
     #[test]

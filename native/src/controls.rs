@@ -768,8 +768,9 @@ impl Controls {
                             }
                             failure = Some(e);
                         },
-                        Ok(Output::BrowserImported { token, metadata }) => {
+                        Ok(Output::BrowserImported { token, metadata, cleanup_warning }) => {
                             self.browser_import.finish(token, Ok(()));
+                            self.error = cleanup_warning;
                             self.updates.invalidate();
                             self.refresh = catalog.root.clone();
                             self.notice = Some(format!("{} imported and enabled in {}", metadata.effective_display_name(), identity.root.display()));

@@ -4,12 +4,17 @@ use egui::{Context, OutputCommand};
 pub fn dispatch_pending(ctx: &Context, import: Option<&crate::browser_import::BrowserImport>) {
     for url in take_urls(ctx) {
         let wake = ctx.clone();
+        let window = import.and_then(|import| import.download_window(&url));
         let launch_error = import.and_then(|import| import.launch_failure_reporter(&url));
         let thread_error = import.and_then(|import| import.launch_failure_reporter(&url));
         if let Err(error) = std::thread::Builder::new()
             .name("desktop-browser-launch".into())
             .spawn(move || {
-                if let Err(error) = open_browser(&url) {
+                let result = match window {
+                    Some((window, downloads)) => window.open(&url, &downloads),
+                    None => open_browser(&url),
+                };
+                if let Err(error) = result {
                     let message = format!("Could not open browser: {error}");
                     eprintln!("{message}");
                     if let Some(report) = launch_error {

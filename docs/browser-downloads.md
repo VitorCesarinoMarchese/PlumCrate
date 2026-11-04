@@ -1,6 +1,6 @@
 # Browser-assisted mod installation
 
-**Download in browser** approves the selected CurseForge source and release for the selected game. An inline note explains that verified files install automatically and the source is saved. The app opens the official `/download/{fileId}` page without an extra confirmation popup; the browser may still require a save action. A saved local API key and selected Sims 4 folder are required.
+**Download in browser** approves the selected CurseForge source and release for the selected game. An inline note explains that verified files install automatically and the source is saved. The app opens the official `/download/{fileId}` page in a separate browser window with an isolated profile. After successful installation, it moves the unchanged verified download to Trash and closes that window. Your ordinary browser windows remain open. The browser may still require a save action. A saved local API key and selected Sims 4 folder are required.
 
 Discover cards choose the latest eligible release. Project details retain a release selector. Projects already attached to a local mod show **View in library** on cards; details still allow an intentional release choice. Each dependency or resolved author-linked mod needs its own explicit download click. There is no dependency queue or recursive installation.
 
@@ -12,7 +12,7 @@ The watcher runs for up to ten minutes. Its default folder comes from XDG Downlo
 
 Only stable regular files with matching length and published checksums qualify. Temporary files and symbolic links are excluded. Renamed supported files and already-completed matching downloads can qualify after the explicit action. Filename equality alone is insufficient.
 
-The installer copies and verifies the held file descriptor into private staging, safely extracts ZIPs, and preserves original downloads. Source metadata (`attachedBy: "user"`) and the verified installed-release baseline are saved in `meta.json`; API keys never enter mod metadata.
+The installer copies and verifies the held file descriptor into private staging and safely extracts ZIPs. The domain import itself preserves original downloads. After it commits, the desktop adapter moves only the unchanged matched original to recoverable system Trash using `gio trash`. Failed installs and changed or replaced files are preserved. Cleanup failures appear in Activity without marking the installed mod as failed. Source metadata (`attachedBy: "user"`) and the verified installed-release baseline are saved in `meta.json`; API keys never enter mod metadata.
 
 Import, game links, and ownership records share one transaction. Existing files are never overwritten and unmanaged files remain untouched. An intact managed copy of the same project and release is reused. Changed source or content requires review. This flow does not replace older releases automatically; [update checks](mod-updates.md) retain manual replacement.
 
@@ -22,7 +22,7 @@ Import, game links, and ownership records share one transaction. Existing files 
 
 Header **Activity** shows preparation, progress, errors, Cancel and scoped Retry. Closing Activity never cancels work. Cancel, game-folder or saved-key changes, and app closure revoke authorization before publication. Once publication starts, installation finishes or rolls back against the approved folders. Selection changes and ordinary rescans preserve the session.
 
-The `desktop_links` adapter launches the browser on a separate thread. The pinned GUI runtime keeps background installation responsive when the window is covered. Existing collision, rollback and ownership checks remain in force.
+The `desktop_links` adapter launches the browser on a separate thread. Approved download sessions use a native Chromium or Firefox process with a unique temporary profile and the selected Downloads folder configured. Browser extensions and Flatpak-only browser installations are not supported for owned windows. Ordinary external links still use the default browser. The isolated profile does not share your normal browser cookies or logins. Success, cancellation, retry replacement, and app shutdown close only the process owned by that session. A late launch after completion or cancellation is immediately reaped. A failed installation leaves its window open until cancellation, retry, or app exit. The pinned GUI runtime keeps background installation responsive when the window is covered. Existing collision, rollback and ownership checks remain in force.
 
 ## Native UI evidence
 
@@ -31,3 +31,13 @@ The approved charcoal/light palettes, blue actions and native typography are pre
 Controller tests verify one explicit action, one browser dispatch, automatic verified installation, canonical source storage, cancellation and game-change invalidation. `native/verify_browser_links.py` checks the exact synthetic route and stalled-browser responsiveness without opening a website.
 
 Direct-download validation: all eight AGENTS.md commands and `native/verify_browser_links.py` passed. Fixture tests cover dispatch and installation without downloading live mods.
+
+## Offline browser cleanup verification
+
+Unit tests cover owned-process isolation, late-launch cancellation, session tokens, verified-file identity, failed installation, changed or replaced downloads, and trash failure recovery. A real-browser fixture exercises download, installation, recoverable trash and window closure without contacting CurseForge:
+
+```sh
+python3 native/verify_download_cleanup.py
+```
+
+This check requires a native Chromium or Firefox browser and a graphical session. It gives `gio trash` an isolated data directory so it never adds fixtures to your personal Trash.

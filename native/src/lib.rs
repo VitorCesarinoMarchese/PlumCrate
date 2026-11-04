@@ -20,6 +20,7 @@ pub mod updates;
 pub mod browser_import;
 
 pub mod desktop_links;
+pub mod download_browser;
 
 mod skeleton;
 pub mod project_details;
