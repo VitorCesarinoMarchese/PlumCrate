@@ -964,9 +964,10 @@ impl View {
                                             egui::Layout::left_to_right(egui::Align::Center),
                                         ),
                                     );
-                                    footer.add(
-                                        Icon::File.image(ui.visuals().weak_text_color(), 13.0),
-                                    );
+                                    footer.spacing_mut().item_spacing.x = 5.0;
+                                    if !self.selecting && !catalog.loading {
+                                        browse_requested = footer.link(RichText::new("Browse files").size(12.0)).clicked();
+                                    }
                                     footer.label(
                                         RichText::new(format!(
                                             "{} {}",
@@ -980,9 +981,6 @@ impl View {
                                         .size(12.0)
                                         .color(ui.visuals().weak_text_color()),
                                     );
-                                    if !self.selecting && !catalog.loading {
-                                        browse_requested = footer.link("Browse files").clicked();
-                                    }
                                     footer.with_layout(
                                         egui::Layout::right_to_left(egui::Align::Center),
                                         |ui| {
@@ -1110,9 +1108,9 @@ impl View {
                             } else {
                                 ui.visuals().weak_text_color()
                             };
-                            row.horizontal(|ui| {
+                            row.allocate_ui_with_layout(egui::vec2(row.available_width(), 18.0), egui::Layout::left_to_right(egui::Align::Center), |ui| {
                                 if !self.selecting && !catalog.loading {
-                                    browse_requested = ui.link("Browse files").clicked();
+                                    browse_requested = ui.link(RichText::new("Browse files").size(12.0)).clicked();
                                 }
                                 ui.add(egui::Label::new(RichText::new(subtitle).size(12.0).color(secondary)).truncate());
                             });
@@ -1393,6 +1391,9 @@ impl View {
                             .size(13.0)
                             .color(ui.visuals().weak_text_color()),
                     );
+                    if !catalog.loading && ui.link("Browse folders").clicked() {
+                        self.folder_browser = Some(FolderBrowser::open(&entry.files, catalog.generation()));
+                    }
                     ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
                         let icon = if copied { Icon::Check } else { Icon::Copy };
                         let copy = ui.add(egui::Button::image_and_text(
@@ -1715,6 +1716,36 @@ mod tests {
     }
 
     #[test]
+    fn details_opens_folder_browser_and_scrolls_to_last_folder() {
+        let ctx = egui::Context::default();
+        setup(&ctx);
+        let mut catalog = populated_catalog();
+        catalog.mods[0].files = (0..120).map(|n| format!("Pack/Folder{n:03}/piece.package")).collect();
+        let mut view = View { detail_open: catalog.selected.clone(), ..Default::default() };
+        let mut frame = |events| render(&ctx, &mut view, &mut catalog, events, 1200.0);
+        let position = |out: &egui::FullOutput, name: &str| out.shapes.iter().find_map(|s| match &s.shape {
+            egui::epaint::Shape::Text(t) if t.galley.text() == name && s.clip_rect.contains(t.visual_bounding_rect().center()) => Some(t.visual_bounding_rect().center()),
+            _ => None,
+        });
+        frame(vec![]);
+        let output = frame(vec![]);
+        frame(click(position(&output, "Browse folders").expect("details action")));
+        frame(vec![]);
+        let output = frame(vec![]);
+        let pos = position(&output, "Folder002").unwrap();
+        frame(vec![egui::Event::PointerMoved(pos), egui::Event::MouseWheel {
+            unit: egui::MouseWheelUnit::Point, delta: egui::vec2(0.0, -100000.0),
+            phase: egui::TouchPhase::Move, modifiers: Default::default(),
+        }]);
+        for _ in 0..6 { frame(vec![]); }
+        let output = frame(vec![]);
+        let last = position(&output, "Folder119").expect("last folder is reachable");
+        frame(click(last));
+        frame(vec![]);
+        assert!(position(&frame(vec![]), "piece.package").is_some());
+    }
+
+    #[test]
     fn folder_browser_survives_rescan_and_shows_new_contents() {
         let ctx = egui::Context::default();
         setup(&ctx);
@@ -1732,6 +1763,26 @@ mod tests {
         for label in ["Files", "new.package"] {
             assert!(output.shapes.iter().any(|s| matches!(&s.shape,
                 egui::epaint::Shape::Text(t) if t.galley.text() == label)), "{label}");
+        }
+    }
+
+    #[test]
+    fn narrow_cards_keep_file_browsing_clear_of_the_switch() {
+        let mut catalog = populated_catalog();
+        for width in [740.0, 980.0, 1216.0] {
+            let ctx = egui::Context::default();
+            setup(&ctx);
+            let mut view = View::default();
+            render(&ctx, &mut view, &mut catalog, vec![], width);
+            let output = render(&ctx, &mut view, &mut catalog, vec![], width);
+            let card = view.stats.first_row.unwrap();
+            let switch = view.stats.first_toggle.unwrap();
+            let link = output.shapes.iter().find_map(|s| match &s.shape {
+                egui::epaint::Shape::Text(t) if t.galley.text() == "Browse files" => Some(t.visual_bounding_rect()),
+                _ => None,
+            }).unwrap();
+            assert!(card.contains_rect(link) && card.contains_rect(switch));
+            assert!(link.right() < switch.left());
         }
     }
 

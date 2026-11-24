@@ -69,14 +69,20 @@ impl FolderBrowser {
 
     pub fn show(&mut self, ctx: &Context, title: &str, files: &[String]) -> bool {
         let modal = crate::popup::show_width(ctx, "collection-files", title, 600.0, |ui| {
-            let mut destination = self.breadcrumbs(ui);
+            let mut destination = egui::ScrollArea::horizontal()
+                .id_salt("folder-breadcrumbs")
+                .stick_to_right(true)
+                .show(ui, |ui| self.breadcrumbs(ui))
+                .inner;
             ui.separator();
+            let row_height = ui.spacing().interact_size.y;
             egui::ScrollArea::vertical()
+                .auto_shrink([false, true])
                 .id_salt(("folder-files", &self.current))
                 .max_height(crate::popup::body_height(ctx))
                 .show_rows(
                     ui,
-                    28.0,
+                    row_height,
                     self.folders.len() + self.files.len(),
                     |ui, rows| {
                         for index in rows {
@@ -87,7 +93,7 @@ impl FolderBrowser {
                                 )
                                 .truncate();
                                 if ui
-                                    .add_sized([ui.available_width(), 28.0], button)
+                                    .add_sized([ui.available_width(), row_height], button)
                                     .on_hover_text(folder)
                                     .clicked()
                                 {
@@ -96,7 +102,7 @@ impl FolderBrowser {
                             } else {
                                 let name = &self.files[index - self.folders.len()];
                                 ui.allocate_ui_with_layout(
-                                    egui::vec2(ui.available_width(), 28.0),
+                                    egui::vec2(ui.available_width(), row_height),
                                     egui::Layout::left_to_right(egui::Align::Center),
                                     |ui| {
                                         ui.add(
@@ -121,7 +127,7 @@ impl FolderBrowser {
 
     fn breadcrumbs(&self, ui: &mut Ui) -> Option<String> {
         let mut destination = None;
-        ui.horizontal_wrapped(|ui| {
+        ui.horizontal(|ui| {
             let mut path = self.root.clone();
             let root_label = if path.is_empty() {
                 "Files"
