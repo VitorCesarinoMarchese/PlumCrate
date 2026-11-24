@@ -1712,6 +1712,11 @@ mod tests {
             let output = frame(vec![]);
             assert!(label(&output, "Shoes").is_some());
             assert!(label(&output, "readme.txt").is_some());
+            let left = |name| output.shapes.iter().find_map(|s| match &s.shape {
+                egui::epaint::Shape::Text(t) if t.galley.text() == name => Some(t.pos.x),
+                _ => None,
+            }).unwrap();
+            assert!((left("Shoes") - left("readme.txt")).abs() <= 1.0, "folder and file names must share a column");
         }
     }
 

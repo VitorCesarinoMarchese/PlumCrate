@@ -69,11 +69,20 @@ impl FolderBrowser {
 
     pub fn show(&mut self, ctx: &Context, title: &str, files: &[String]) -> bool {
         let modal = crate::popup::show_width(ctx, "collection-files", title, 600.0, |ui| {
-            let mut destination = egui::ScrollArea::horizontal()
-                .id_salt("folder-breadcrumbs")
-                .stick_to_right(true)
-                .show(ui, |ui| self.breadcrumbs(ui))
-                .inner;
+            let mut destination = if self.current != self.root {
+                egui::ScrollArea::horizontal()
+                    .id_salt("folder-breadcrumbs")
+                    .stick_to_right(true)
+                    .show(ui, |ui| self.breadcrumbs(ui))
+                    .inner
+            } else {
+                let root = self.root.trim_end_matches('/');
+                let label = if root.is_empty() { "Files" } else { root };
+                if label != title {
+                    ui.label(label);
+                }
+                None
+            };
             ui.separator();
             let row_height = ui.spacing().interact_size.y;
             egui::ScrollArea::vertical()
@@ -87,10 +96,13 @@ impl FolderBrowser {
                     |ui, rows| {
                         for index in rows {
                             if let Some(folder) = self.folders.get(index) {
-                                let button = egui::Button::image_and_text(
-                                    Icon::Folder.image(ui.visuals().text_color(), 16.0),
-                                    folder,
-                                )
+                                let button = egui::Button::new((
+                                    Icon::Folder.image(ui.visuals().hyperlink_color, 16.0),
+                                    folder.as_str(),
+                                ))
+                                .right_text("›")
+                                .frame(false)
+                                .gap(ui.spacing().item_spacing.x)
                                 .truncate();
                                 if ui
                                     .add_sized([ui.available_width(), row_height], button)
@@ -141,7 +153,9 @@ impl FolderBrowser {
                 path.push_str(folder);
                 path.push('/');
                 ui.label("/");
-                if ui.link(folder).clicked() {
+                if path == self.current {
+                    ui.label(folder);
+                } else if ui.link(folder).clicked() {
                     destination = Some(path.clone());
                 }
             }
