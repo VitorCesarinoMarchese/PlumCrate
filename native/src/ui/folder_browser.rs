@@ -12,13 +12,17 @@ pub(super) struct FolderBrowser {
 }
 
 impl FolderBrowser {
-    pub fn open(files: &[String], generation: u64) -> Self {
-        let root = files
+    fn root_for(files: &[String]) -> String {
+        files
             .first()
             .and_then(|f| f.split_once('/'))
             .map(|(name, _)| format!("{name}/"))
             .filter(|prefix| files.iter().all(|f| f.starts_with(prefix)))
-            .unwrap_or_default();
+            .unwrap_or_default()
+    }
+
+    pub fn open(files: &[String], generation: u64) -> Self {
+        let root = Self::root_for(files);
         let mut browser = Self {
             generation,
             current: root.clone(),
@@ -28,6 +32,22 @@ impl FolderBrowser {
         };
         browser.read_folder(files);
         browser
+    }
+
+    pub fn refresh(&mut self, files: &[String], generation: u64) {
+        self.generation = generation;
+        self.root = Self::root_for(files);
+        if !self.current.starts_with(&self.root) {
+            self.current.clone_from(&self.root);
+        }
+        while self.current.len() > self.root.len()
+            && !files.iter().any(|file| file.starts_with(&self.current))
+        {
+            self.current.pop();
+            let parent_len = self.current.rfind('/').map_or(0, |index| index + 1);
+            self.current.truncate(parent_len);
+        }
+        self.read_folder(files);
     }
 
     fn read_folder(&mut self, paths: &[String]) {
@@ -104,7 +124,7 @@ impl FolderBrowser {
         ui.horizontal_wrapped(|ui| {
             let mut path = self.root.clone();
             let root_label = if path.is_empty() {
-                "Mods"
+                "Files"
             } else {
                 path.trim_end_matches('/')
             };

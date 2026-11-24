@@ -769,7 +769,7 @@ impl View {
         if self.detail_open != catalog.selected || catalog.selected_mod().is_none() {
             self.detail_open = None;
         }
-        if self.detail_open.is_none() || self.folder_browser.as_ref().is_some_and(|b| b.generation != catalog.generation()) {
+        if self.detail_open.is_none() {
             self.folder_browser = None;
         }
         if !settings_page
@@ -970,8 +970,8 @@ impl View {
                                     footer.label(
                                         RichText::new(format!(
                                             "{} {}",
-                                            entry.mod_files.len(),
-                                            if entry.mod_files.len() == 1 {
+                                            entry.files.len(),
+                                            if entry.files.len() == 1 {
                                                 "file"
                                             } else {
                                                 "files"
@@ -1040,7 +1040,7 @@ impl View {
         mut controls: Option<&mut crate::controls::Controls>,
     ) {
         let compact = ui.available_height() < 64.0;
-        let row_height = if compact { 40.0 } else { 64.0 };
+        let row_height = if compact { 48.0 } else { 64.0 };
         let root_id = catalog.root.clone();
         egui::ScrollArea::vertical()
             .id_salt(("catalog", root_id))
@@ -1185,6 +1185,9 @@ impl View {
             return;
         };
         if let Some(browser) = &mut self.folder_browser {
+            if !catalog.loading && browser.generation != catalog.generation() {
+                browser.refresh(&entry.files, catalog.generation());
+            }
             if browser.show(ctx, &entry.name, &entry.files) {
                 self.folder_browser = None;
                 self.detail_open = None;
@@ -1708,6 +1711,27 @@ mod tests {
             let output = frame(vec![]);
             assert!(label(&output, "Shoes").is_some());
             assert!(label(&output, "readme.txt").is_some());
+        }
+    }
+
+    #[test]
+    fn folder_browser_survives_rescan_and_shows_new_contents() {
+        let ctx = egui::Context::default();
+        setup(&ctx);
+        let mut catalog = populated_catalog();
+        let mut view = View::default();
+        view.browse_files(&mut catalog, 0);
+        let generation = catalog.begin_scan(catalog.root.clone().unwrap());
+        render(&ctx, &mut view, &mut catalog, vec![], 1200.0);
+        assert!(view.folder_browser.is_some(), "keep the browser open during refresh");
+        let mut entries = std::mem::take(&mut catalog.mods);
+        entries[0].files = vec!["new.package".into()];
+        catalog.accept_scan(generation, Ok(entries));
+        render(&ctx, &mut view, &mut catalog, vec![], 1200.0);
+        let output = render(&ctx, &mut view, &mut catalog, vec![], 1200.0);
+        for label in ["Files", "new.package"] {
+            assert!(output.shapes.iter().any(|s| matches!(&s.shape,
+                egui::epaint::Shape::Text(t) if t.galley.text() == label)), "{label}");
         }
     }
 
