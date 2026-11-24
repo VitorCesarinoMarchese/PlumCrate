@@ -1736,6 +1736,31 @@ mod tests {
     }
 
     #[test]
+    fn browse_link_stays_inside_each_list_row() {
+        for height in [60.0, 200.0] {
+            let ctx = egui::Context::default();
+            setup(&ctx);
+            let mut catalog = populated_catalog();
+            let mut view = View::default();
+            let mut frame = || ctx.run_ui(egui::RawInput {
+                screen_rect: Some(egui::Rect::from_min_size(egui::Pos2::ZERO, egui::vec2(640.0, height))),
+                ..Default::default()
+            }, |ui| view.library_list(ui, &mut catalog, None));
+            frame().textures_delta.clear();
+            let mut output = frame();
+            output.textures_delta.clear();
+            let row = view.stats.first_row.unwrap();
+            for label in ["Browse files", "External · 1 mod file"] {
+                let bounds = output.shapes.iter().find_map(|s| match &s.shape {
+                    egui::epaint::Shape::Text(t) if t.galley.text() == label => Some(t.visual_bounding_rect()),
+                    _ => None,
+                }).expect(label);
+                assert!(row.contains_rect(bounds), "{label} at {bounds:?} exceeds {row:?}");
+            }
+        }
+    }
+
+    #[test]
     fn multi_select_works_in_both_library_views_without_opening_details() {
         for layout in [LibraryLayout::Cards, LibraryLayout::List] {
             let ctx = egui::Context::default();

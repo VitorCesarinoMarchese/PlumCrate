@@ -143,3 +143,26 @@ impl FolderBrowser {
         destination
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn refresh_keeps_the_nearest_surviving_folder() {
+        let paths = |names: &[&str]| names.iter().map(|s| s.to_string()).collect::<Vec<_>>();
+        let mut browser = FolderBrowser::open(&paths(&["Clothes/Tops/old.package"]), 0);
+        browser.current = "Clothes/Tops/".into();
+        for (generation, (file, expected)) in [
+            ("Clothes/Tops/new.package", "Clothes/Tops/"),
+            ("Clothes/Shoes/boots.package", "Clothes/"),
+            ("Hair/short.package", "Hair/"),
+        ]
+        .into_iter()
+        .enumerate()
+        {
+            browser.refresh(&paths(&[file]), generation as u64 + 1);
+            assert_eq!(browser.current, expected);
+        }
+    }
+}
