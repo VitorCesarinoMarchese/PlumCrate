@@ -1427,8 +1427,7 @@ impl View {
                 if start > 0 {
                     ui.add_space(start as f32 * stride);
                 }
-                for index in start..end {
-                    let file = &entry.files[index];
+                for file in &entry.files[start..end] {
                     let (parent, basename) = file.rsplit_once(['/', '\\']).unwrap_or(("", file));
                     let (rect, _) = ui.allocate_exact_size(
                         egui::vec2(ui.available_width(), 48.0),
