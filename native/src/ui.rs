@@ -1,3 +1,6 @@
+#[path = "ui/folder_browser.rs"]
+mod folder_browser;
+use folder_browser::FolderBrowser;
 use crate::catalog::EntryId;
 use crate::catalog::{Catalog, ModFilter};
 use egui::{Color32, RichText};
@@ -377,6 +380,7 @@ pub struct View {
     updates_page: bool,
     pub discovery: crate::discovery::DiscoverView,
     detail_open: Option<EntryId>,
+    folder_browser: Option<FolderBrowser>,
     selecting: bool,
     editing_root: bool,
     help_open: bool,
@@ -765,6 +769,9 @@ impl View {
         if self.detail_open != catalog.selected || catalog.selected_mod().is_none() {
             self.detail_open = None;
         }
+        if self.detail_open.is_none() || self.folder_browser.as_ref().is_some_and(|b| b.generation != catalog.generation()) {
+            self.folder_browser = None;
+        }
         if !settings_page
             && !self.browse_page
             && !self.help_open
@@ -858,8 +865,9 @@ impl View {
                             let entry = &catalog.mods[index];
                             let identity = EntryId::of(entry);
                             let selected = if self.selecting { catalog.marked.contains(&identity) } else { catalog.selected.as_ref() == Some(&identity) };
+                            let mut browse_requested = false;
                             let mut toggle_requested = false;
-                    let mut mark_requested = false;
+                            let mut mark_requested = false;
                             let response = ui
                                 .push_id(&identity, |ui| {
                                     ui.style_mut().interaction.selectable_labels = false;
@@ -972,6 +980,9 @@ impl View {
                                         .size(12.0)
                                         .color(ui.visuals().weak_text_color()),
                                     );
+                                    if !self.selecting && !catalog.loading {
+                                        browse_requested = footer.link("Browse files").clicked();
+                                    }
                                     footer.with_layout(
                                         egui::Layout::right_to_left(egui::Align::Center),
                                         |ui| {
@@ -1008,7 +1019,9 @@ impl View {
                                 self.stats.first_row = Some(response.rect.intersect(ui.clip_rect()));
                             }
                             self.stats.rows += 1;
-                            if mark_requested || (self.selecting && response.clicked() && !toggle_requested) {
+                            if browse_requested {
+                                self.browse_files(catalog, index);
+                            } else if mark_requested || (self.selecting && response.clicked() && !toggle_requested) {
                                 catalog.toggle_mark(index);
                             } else if response.clicked() && !toggle_requested {
                                 catalog.select(index);
@@ -1049,6 +1062,7 @@ impl View {
                     );
                     if entry.id.as_ref().is_some_and(|id| controls.as_ref().is_some_and(|c| c.updates.available(id))) { subtitle.push_str(" · Update available"); }
                     let selected = if self.selecting { catalog.marked.contains(&identity) } else { catalog.selected.as_ref() == Some(&identity) };
+                    let mut browse_requested = false;
                     let mut toggle_requested = false;
                     let mut mark_requested = false;
                     let response = ui
@@ -1096,12 +1110,12 @@ impl View {
                             } else {
                                 ui.visuals().weak_text_color()
                             };
-                            row.add(
-                                egui::Label::new(
-                                    RichText::new(subtitle).size(12.0).color(secondary),
-                                )
-                                .truncate(),
-                            );
+                            row.horizontal(|ui| {
+                                if !self.selecting && !catalog.loading {
+                                    browse_requested = ui.link("Browse files").clicked();
+                                }
+                                ui.add(egui::Label::new(RichText::new(subtitle).size(12.0).color(secondary)).truncate());
+                            });
                             let mut status = ui.new_child(
                                 egui::UiBuilder::new()
                                     .max_rect(egui::Rect::from_min_max(
@@ -1143,7 +1157,9 @@ impl View {
                         self.stats.first_row = Some(response.rect.intersect(ui.clip_rect()));
                     }
                     self.stats.rows += 1;
-                    if mark_requested || (self.selecting && response.clicked() && !toggle_requested) {
+                    if browse_requested {
+                        self.browse_files(catalog, index);
+                    } else if mark_requested || (self.selecting && response.clicked() && !toggle_requested) {
                         catalog.toggle_mark(index);
                     } else if response.clicked() && !toggle_requested {
                         catalog.select(index);
@@ -1151,6 +1167,12 @@ impl View {
                     }
                 }
             });
+    }
+
+    fn browse_files(&mut self, catalog: &mut Catalog, index: usize) {
+        self.folder_browser = Some(FolderBrowser::open(&catalog.mods[index].files, catalog.generation()));
+        catalog.select(index);
+        self.detail_open = catalog.selected.clone();
     }
 
     fn details_popup(
@@ -1162,6 +1184,13 @@ impl View {
         let Some(entry) = catalog.selected_mod() else {
             return;
         };
+        if let Some(browser) = &mut self.folder_browser {
+            if browser.show(ctx, &entry.name, &entry.files) {
+                self.folder_browser = None;
+                self.detail_open = None;
+            }
+            return;
+        }
         let title = entry.name.clone();
         let position = catalog
             .visible
@@ -1644,6 +1673,41 @@ mod tests {
             let sampled_aspect = source.x * uv.width() / (source.y * uv.height());
             assert!((sampled_aspect - destination.x / destination.y).abs() < 0.001);
             assert!(uv.min.x >= 0.0 && uv.min.y >= 0.0 && uv.max.x <= 1.0 && uv.max.y <= 1.0);
+        }
+    }
+
+    #[test]
+    fn browse_nested_files_from_cards_and_list() {
+        fn label(output: &egui::FullOutput, name: &str) -> Option<egui::Pos2> {
+            output.shapes.iter().find_map(|shape| match &shape.shape {
+                egui::epaint::Shape::Text(t) if t.galley.text() == name => Some(t.visual_bounding_rect().center()),
+                _ => None,
+            })
+        }
+        for layout in [LibraryLayout::Cards, LibraryLayout::List] {
+            let ctx = egui::Context::default();
+            setup(&ctx);
+            let mut catalog = populated_catalog();
+            catalog.mods[0].files = ["Clothes/Tops/shirt.package", "Clothes/Shoes/boots.package", "Clothes/readme.txt"]
+                .into_iter().map(str::to_owned).collect();
+            let mut view = View { layout, ..Default::default() };
+            let mut frame = |events| render(&ctx, &mut view, &mut catalog, events, 1200.0);
+            frame(vec![]);
+            let mut output = frame(vec![]);
+            for target in ["Browse files", "Tops"] {
+                let pos = label(&output, target).expect(target);
+                frame(click(pos));
+                frame(vec![]);
+                output = frame(vec![]);
+            }
+            assert!(label(&output, "shirt.package").is_some());
+            assert!(label(&output, "boots.package").is_none());
+            let root = label(&output, "Clothes").expect("root breadcrumb");
+            frame(click(root));
+            frame(vec![]);
+            let output = frame(vec![]);
+            assert!(label(&output, "Shoes").is_some());
+            assert!(label(&output, "readme.txt").is_some());
         }
     }
 
