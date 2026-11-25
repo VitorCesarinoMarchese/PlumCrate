@@ -170,6 +170,14 @@ pub fn validate_custom_instance(path: &Path) -> Result<GameInstance, ManagerErro
         ));
     }
 
+    #[cfg(unix)]
+    crate::fs_scope::Directory::open(&mods).map_err(|error| {
+        ManagerError::new(error.code, format!(
+            "Cannot use {}. Choose a game folder with a readable Mods directory and no symbolic links in its path. {}",
+            mods.display(), error.message,
+        ))
+    })?;
+
     Ok(GameInstance::new(path.to_path_buf(), InstanceSource::Custom))
 }
 
@@ -275,6 +283,18 @@ mod tests {
         assert!(instances
             .iter()
             .any(|i| i.path == proton && i.source == InstanceSource::Steam));
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn custom_instance_rejects_symlinked_mods_before_opening_the_library() {
+        let temp = tempfile::tempdir().unwrap();
+        let root = temp.path().join("game");
+        let external = temp.path().join("library");
+        fs::create_dir(&root).unwrap();
+        fs::create_dir(&external).unwrap();
+        std::os::unix::fs::symlink(external, root.join("Mods")).unwrap();
+        assert!(validate_custom_instance(&root).unwrap_err().message.contains("symbolic links"));
     }
 
     #[test]
