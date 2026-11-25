@@ -371,7 +371,7 @@ pub fn execute(job: &Job) -> Result<Output, String> {
             Ok(Output::TrashDeleted(review.entries().len()))
         }
         Action::ListTrash => Ok(Output::Trash(
-            plumcrate_core::lifecycle::list_trash_entries(&job.trash).map_err(error)?,
+            plumcrate_core::lifecycle::list_trash_entries_with_ownership(managed, &job.trash).map_err(error)?,
         )),
         Action::Restore(name) => {
             plumcrate_core::lifecycle::restore_trashed_mod(managed, &mods, &job.trash, name)

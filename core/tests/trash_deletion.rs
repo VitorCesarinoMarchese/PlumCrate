@@ -104,3 +104,19 @@ fn deletion_rejects_unmanaged_entries_traversal_symlinks_and_other_scopes() {
     assert!(delete_reviewed_trash(&managed, &trash, &review).is_err());
     assert!(trash.join(name).exists());
 }
+
+#[test]
+fn trash_list_marks_only_bundles_owned_by_the_current_library_deletable() {
+    use plumcrate_core::lifecycle::list_trash_entries_with_ownership;
+
+    let temp = TempDir::new().unwrap();
+    let (managed, trash, owned_name) = trashed(&temp, "owned");
+    fs::write(trash.join("external.package"), b"external").unwrap();
+    let entries = list_trash_entries_with_ownership(&managed, &trash).unwrap();
+    assert_eq!(entries.len(), 2);
+    assert!(entries.iter().find(|entry| entry.name == owned_name).unwrap().deletable);
+    assert!(!entries.iter().find(|entry| entry.name == "external.package").unwrap().deletable);
+    let other_library = temp.path().join("separate-library");
+    assert!(list_trash_entries_with_ownership(&other_library, &trash).unwrap().iter()
+        .all(|entry| !entry.deletable));
+}

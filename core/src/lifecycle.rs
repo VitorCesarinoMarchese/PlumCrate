@@ -26,6 +26,8 @@ pub struct TrashEntry {
     pub path: String,
     pub original_path: Option<String>,
     pub deletion_date: Option<String>,
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub deletable: bool,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
@@ -134,6 +136,17 @@ pub fn uninstall_managed_mod(
 }
 
 pub fn list_trash_entries(trash_files_dir: &Path) -> Result<Vec<TrashEntry>, ManagerError> {
+    list_trash(trash_files_dir, None)
+}
+
+pub fn list_trash_entries_with_ownership(
+    managed: &Path,
+    trash_files_dir: &Path,
+) -> Result<Vec<TrashEntry>, ManagerError> {
+    list_trash(trash_files_dir, Some(managed))
+}
+
+fn list_trash(trash_files_dir: &Path, managed: Option<&Path>) -> Result<Vec<TrashEntry>, ManagerError> {
     if !trash_files_dir.exists() {
         return Ok(vec![]);
     }
@@ -167,8 +180,12 @@ pub fn list_trash_entries(trash_files_dir: &Path) -> Result<Vec<TrashEntry>, Man
                     .unwrap_or_else(|| if metadata.display_name.trim().is_empty() { metadata.name } else { metadata.display_name });
                 Some(title)
             })();
+            let deletable = managed.is_some_and(|root| {
+                trash_deletion::owned_bundle(root, trash_files_dir, &name).is_ok()
+            });
             Some(TrashEntry {
                 title,
+                deletable,
                 name,
                 path: path.to_string_lossy().to_string(),
                 original_path: info.as_ref().and_then(|info| info.original_path.clone()),

@@ -1314,7 +1314,8 @@ impl Controls {
                                         self.confirm(catalog, Action::Restore(entry.name.clone()), "Restore mod", vec![entry.title.as_deref().unwrap_or(&entry.name).to_owned(), "Restore checks destinations and refuses to overwrite files.".into()]);
                                         keep = false;
                                     }
-                                    let delete = ui.add_enabled(ready, egui::Button::new("Delete permanently…").frame(true).stroke(ui.visuals().widgets.noninteractive.bg_stroke).min_size(egui::vec2(150.0, 36.0)));
+                                    let delete = ui.add_enabled(ready && entry.deletable, egui::Button::new("Delete permanently…").frame(true).stroke(ui.visuals().widgets.noninteractive.bg_stroke).min_size(egui::vec2(150.0, 36.0)))
+                                        .on_disabled_hover_text("Permanent deletion requires a bundle owned by this library.");
                                     self.trash_delete_rects.push(delete.rect);
                                     if delete.clicked() { self.review_trash_deletion(catalog, vec![entry.name.clone()]); }
                                 });
@@ -1332,7 +1333,7 @@ impl Controls {
                 ui.label(egui::RichText::new("Only verified app-managed mods can be deleted. Other system trash stays untouched.").small().color(ui.visuals().weak_text_color()));
                 ui.add_space(8.0);
                 ui.horizontal(|ui| {
-                    let empty = ui.add_enabled(!entries.is_empty() && ready, egui::Button::new("Empty mod trash…").frame(true).stroke(ui.visuals().widgets.noninteractive.bg_stroke).min_size(egui::vec2(150.0, 36.0)));
+                    let empty = ui.add_enabled(ready && entries.iter().any(|entry| entry.deletable), egui::Button::new("Empty mod trash…").frame(true).stroke(ui.visuals().widgets.noninteractive.bg_stroke).min_size(egui::vec2(150.0, 36.0)));
                     self.empty_trash_rect = Some(empty.rect);
                     if empty.clicked() { self.review_trash_deletion(catalog, vec![]); }
                     ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
@@ -1560,7 +1561,7 @@ mod tests {
         let identity = controls.identity(&catalog).unwrap();
         controls.trash_entries = Some((identity, (0..20).map(|n| plumcrate_core::lifecycle::TrashEntry {
             title: Some(format!("Mod {n}")), name: format!("mod-{n}"), path: format!("/{}", "long-directory/".repeat(30)),
-            original_path: Some(format!("/{}", "original/".repeat(30))), deletion_date: None,
+            original_path: Some(format!("/{}", "original/".repeat(30))), deletion_date: None, deletable: true,
         }).collect()));
         let ctx = egui::Context::default();
         crate::ui::setup(&ctx);

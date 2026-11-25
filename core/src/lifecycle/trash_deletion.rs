@@ -35,7 +35,11 @@ fn invalid(message: &str) -> ManagerError {
     ManagerError::new(ErrorCode::InvalidPath, message)
 }
 
-fn inspect(managed: &Path, trash: &Path, name: &str) -> Result<TrashDeletionEntry, ManagerError> {
+pub(super) fn owned_bundle(
+    managed: &Path,
+    trash: &Path,
+    name: &str,
+) -> Result<(ModMetadata, fs_scope::Directory), ManagerError> {
     fs_scope::component(name)?;
     fs_scope::Directory::open(trash)?;
     validate_trashinfo_scope(trash, name)?;
@@ -72,6 +76,11 @@ fn inspect(managed: &Path, trash: &Path, name: &str) -> Result<TrashDeletionEntr
     {
         return Err(invalid("Trash entry belongs to another location"));
     }
+    Ok((metadata, directory))
+}
+
+fn inspect(managed: &Path, trash: &Path, name: &str) -> Result<TrashDeletionEntry, ManagerError> {
+    let (metadata, directory) = owned_bundle(managed, trash, name)?;
     let index = trash
         .parent()
         .ok_or_else(|| invalid("Missing trash root"))?
