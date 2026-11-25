@@ -27,7 +27,7 @@ pub fn migrate_external_mod(
     let scanned = scan_mods(game_mods_dir, managed_root)?;
     let external = scanned
         .into_iter()
-        .find(|m| m.key == external_mod_key)
+        .find(|m| m.key == external_mod_key && m.source == ModSource::External)
         .ok_or_else(|| {
             ManagerError::new(
                 ErrorCode::NotFound,
@@ -35,19 +35,14 @@ pub fn migrate_external_mod(
             )
         })?;
 
-    if external.source != ModSource::External {
-        return Err(ManagerError::new(
-            ErrorCode::ExternalLink,
-            format!("Mod is not external: {external_mod_key}"),
-        ));
-    }
+    let temporary = managed_root.join("tmp");
+    fs_scope::create_dir_all(&temporary)?;
+    let staging = tempfile::Builder::new()
+        .prefix("migrate-")
+        .tempdir_in(temporary)
+        .map_err(fs_scope::io_error)?;
 
-    let staging = managed_root
-        .join("tmp")
-        .join(format!("migrate-{}", Uuid::new_v4()));
-    fs_scope::create_dir_all(&staging)?;
-
-    copy_external_contents(game_mods_dir, &staging, &external.files)?;
+    copy_external_contents(game_mods_dir, staging.path(), &external.files)?;
 
     let mut transaction = operation::Transaction::new(managed_root, "external_migration")?;
     let result = (|| {
@@ -56,7 +51,7 @@ pub fn migrate_external_mod(
             ImportRequest {
                 name: external.name,
                 slug: None,
-                source_dir: staging.clone(),
+                source_dir: staging.path().to_owned(),
             },
             &mut transaction,
         )?;

@@ -239,7 +239,7 @@ pub fn execute(job: &Job) -> Result<Output, String> {
             };
             let current = plumcrate_core::mod_scan::scan_mods(&mods, managed).map_err(error)?
                 .into_iter()
-                .find(|m| m.key == *key)
+                .find(|m| m.key == *key && m.source == plumcrate_core::mod_scan::ModSource::External)
                 .ok_or("External mod no longer exists")?;
             if current.files != *files {
                 return Err("External files changed. Review them again.".into());

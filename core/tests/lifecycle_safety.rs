@@ -316,3 +316,19 @@ fn folder_import_without_mod_files_leaves_no_bundle_or_staging_copy() {
         assert!(fs::read_dir(managed.join(child)).map_or(true, |mut dir| dir.next().is_none()));
     }
 }
+
+#[test]
+fn migrate_external_group_sharing_a_folder_leaves_no_staging_copy() {
+    use plumcrate_core::{external_migration::migrate_external_mod, toggle::apply_toggle};
+
+    let temp = tempfile::tempdir().unwrap();
+    let (managed, game, id) = imported(&temp);
+    assert!(apply_toggle(&managed, &game, &id, true).unwrap().applied);
+    let external = game.join("test_extra.package");
+    fs::write(&external, b"external mod").unwrap();
+
+    let migrated = migrate_external_mod(&managed, &game, "test").unwrap();
+    assert_ne!(migrated.managed_mod_id, id);
+    assert_eq!(fs::read(external).unwrap(), b"external mod");
+    assert!(fs::read_dir(managed.join("tmp")).unwrap().next().is_none());
+}

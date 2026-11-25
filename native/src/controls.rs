@@ -798,8 +798,11 @@ impl Controls {
                                 self.updates.invalidate();
                                 self.refresh = catalog.root.clone();
                             }
-                            if !issues.is_empty() && toggled.is_none() {
-                                failure = Some(issues.join("\n"))
+                            if !issues.is_empty() && toggled.is_none()
+                                && catalog.root.as_ref() == Some(&identity.root)
+                            {
+                                self.error = None;
+                                self.notice = Some(issues.join("\n"));
                             }
                         }
                         Ok(Output::Imported { name, enable_error }) => {
