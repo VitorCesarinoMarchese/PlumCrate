@@ -19,6 +19,10 @@ impl EntryId {
     }
 }
 
+pub fn needs_toggle(entry: &ScannedMod, enabled: bool) -> bool {
+    entry.id.is_some() && (entry.enabled != enabled || (!enabled && entry.partially_installed))
+}
+
 #[derive(Default, Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ModFilter {
     #[default]

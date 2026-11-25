@@ -980,7 +980,7 @@ impl Controls {
     pub fn set_marked_enabled(&mut self, catalog: &Catalog, enabled: bool) {
         if catalog.loading || self.busy() { return; }
         let mod_ids: Vec<_> = catalog.mods.iter()
-            .filter(|entry| entry.enabled != enabled && catalog.marked.contains(&EntryId::of(entry)))
+            .filter(|entry| crate::catalog::needs_toggle(entry, enabled) && catalog.marked.contains(&EntryId::of(entry)))
             .filter_map(|entry| entry.id.clone())
             .collect();
         if !mod_ids.is_empty() && let Some(identity) = self.identity(catalog) {
@@ -1159,6 +1159,13 @@ impl Controls {
                             {
                                 ui.close();
                             self.submit(id, Action::Toggle { enabled: !entry.enabled })
+                            }
+                            if entry.partially_installed
+                                && ui.add_enabled(!self.busy(), egui::Button::new("Disable remaining links")).clicked()
+                                && let Some(identity) = self.identity(catalog)
+                            {
+                                ui.close();
+                                self.submit(identity, Action::Toggle { enabled: false });
                             }
                             if ui.button("Rename").clicked()
                                 && let Some(identity) = self.identity(catalog)

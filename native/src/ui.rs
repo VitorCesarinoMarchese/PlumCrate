@@ -725,7 +725,7 @@ impl View {
                         if let Some(c) = controls.as_deref_mut() {
                             let ready = !catalog.loading && !c.busy();
                             for (enabled, label) in [(true, "Enable selected"), (false, "Disable selected")] {
-                                let actionable = catalog.mods.iter().any(|entry| entry.id.is_some() && entry.enabled != enabled && catalog.marked.contains(&EntryId::of(entry)));
+                                let actionable = catalog.mods.iter().any(|entry| crate::catalog::needs_toggle(entry, enabled) && catalog.marked.contains(&EntryId::of(entry)));
                                 if ui.add_enabled(ready && actionable, egui::Button::new(label)).on_hover_text("Changes selected managed mods only. External mods are skipped.").clicked() {
                                     c.set_marked_enabled(catalog, enabled);
                                 }
