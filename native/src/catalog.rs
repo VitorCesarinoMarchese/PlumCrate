@@ -167,12 +167,12 @@ impl Catalog {
         }
     }
 
-    pub(crate) fn set_collection_filter(&mut self, members: Option<BTreeSet<String>>) {
+    pub fn set_collection_filter(&mut self, members: Option<BTreeSet<String>>) {
         self.collection_filter = members;
         self.filter();
     }
 
-    pub(crate) fn collection_filtered(&self) -> bool {
+    pub fn collection_filtered(&self) -> bool {
         self.collection_filter.is_some()
     }
 
