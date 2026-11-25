@@ -913,10 +913,17 @@ impl View {
                                         mark_requested = check.changed();
                                         if self.stats.first_checkbox.is_none() { self.stats.first_checkbox = Some(check.rect); }
                                     }
-                                    if entry.id.as_ref().is_some_and(|id| controls.as_ref().is_some_and(|c| c.updates.available(id))) {
+                                    let badge_text = if entry.partially_installed {
+                                        Some("Partially installed")
+                                    } else if entry.id.as_ref().is_some_and(|id| controls.as_ref().is_some_and(|c| c.updates.available(id))) {
+                                        Some("Update available")
+                                    } else {
+                                        None
+                                    };
+                                    if let Some(badge_text) = badge_text {
                                         let badge = egui::Rect::from_min_size(image_rect.min + egui::vec2(6.0, 6.0), egui::vec2(132.0, 24.0));
                                         ui.painter().rect_filled(badge, 4, ui.visuals().selection.bg_fill);
-                                        ui.painter().text(badge.center(), egui::Align2::CENTER_CENTER, "Update available", egui::FontId::proportional(12.0), ui.visuals().selection.stroke.color);
+                                        ui.painter().text(badge.center(), egui::Align2::CENTER_CENTER, badge_text, egui::FontId::proportional(12.0), ui.visuals().selection.stroke.color);
                                     }
                                     let title_rect = egui::Rect::from_min_max(
                                         rect.min + egui::vec2(14.0, photo_height + 22.0),
@@ -1052,14 +1059,15 @@ impl View {
                         plumcrate_core::mod_scan::ModSource::Managed => "Managed",
                         plumcrate_core::mod_scan::ModSource::External => "External",
                     };
-                    let state = if entry.partially_installed {
-                    "Partially installed. Turn on to repair missing links."
-                } else if entry.enabled { "Installed" } else { "Stored" };
+                    let state = if entry.enabled { "Installed" } else { "Stored" };
                     let count = entry.mod_files.len();
                     let mut subtitle = format!(
                         "{origin} · {count} {}",
                         if count == 1 { "mod file" } else { "mod files" }
                     );
+                    if entry.partially_installed {
+                        subtitle.push_str(" · Partially installed");
+                    }
                     if entry.id.as_ref().is_some_and(|id| controls.as_ref().is_some_and(|c| c.updates.available(id))) { subtitle.push_str(" · Update available"); }
                     let selected = if self.selecting { catalog.marked.contains(&identity) } else { catalog.selected.as_ref() == Some(&identity) };
                     let mut browse_requested = false;
