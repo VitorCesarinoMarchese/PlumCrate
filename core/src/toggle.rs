@@ -45,6 +45,16 @@ pub fn dry_run_toggle(
     mod_id: &str,
     target_enabled: bool,
 ) -> Result<DryRunResult, ManagerError> {
+    plan_toggle(managed_root, game_mods_dir, mod_id, target_enabled, &mut None)
+}
+
+fn plan_toggle(
+    managed_root: &Path,
+    game_mods_dir: &Path,
+    mod_id: &str,
+    target_enabled: bool,
+    hashes: &mut Option<HashMap<String, PathBuf>>,
+) -> Result<DryRunResult, ManagerError> {
     let mut operations = vec![];
     let mut issues = vec![];
     let mut can_apply = true;
@@ -58,7 +68,7 @@ pub fn dry_run_toggle(
 
     if target_enabled {
         let meta = read_managed_mod(managed_root, mod_id)?;
-        let existing_hashes = collect_hashes(game_mods_dir);
+        let existing_hashes = hashes.get_or_insert_with(|| collect_hashes(game_mods_dir));
 
         let mut recorded_links = None;
         for rel in meta.files {
@@ -192,8 +202,31 @@ pub fn apply_toggle(
     mod_id: &str,
     target_enabled: bool,
 ) -> Result<ApplyResult, ManagerError> {
+    apply_with_hashes(managed_root, game_mods_dir, mod_id, target_enabled, &mut None)
+}
+
+pub fn apply_toggle_batch(
+    managed_root: &Path,
+    game_mods_dir: &Path,
+    mod_ids: &[String],
+    target_enabled: bool,
+) -> Vec<Result<ApplyResult, ManagerError>> {
+    // Toggles change symlinks only. The index covers regular files and is advisory.
+    let mut hashes = None;
+    mod_ids.iter().map(|id| {
+        apply_with_hashes(managed_root, game_mods_dir, id, target_enabled, &mut hashes)
+    }).collect()
+}
+
+fn apply_with_hashes(
+    managed_root: &Path,
+    game_mods_dir: &Path,
+    mod_id: &str,
+    target_enabled: bool,
+    hashes: &mut Option<HashMap<String, PathBuf>>,
+) -> Result<ApplyResult, ManagerError> {
     let _guard = crate::operation::acquire(managed_root)?;
-    let dry = dry_run_toggle(managed_root, game_mods_dir, mod_id, target_enabled)?;
+    let dry = plan_toggle(managed_root, game_mods_dir, mod_id, target_enabled, hashes)?;
 
     if !dry.can_apply {
         return Ok(ApplyResult {

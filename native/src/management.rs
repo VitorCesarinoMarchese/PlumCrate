@@ -26,6 +26,7 @@ pub enum Action {
     ImportFolder { path: PathBuf, name: String },
     ImportZip { path: PathBuf, name: String },
     Toggle { enabled: bool },
+    ToggleBatch { enabled: bool, mod_ids: Vec<String> },
     Migrate { files: Vec<String> },
     Rename(String),
     ManualSource(String),
@@ -58,6 +59,8 @@ impl Action {
             Self::Toggle { enabled: false } => {
                 "Disable"
             }
+            Self::ToggleBatch { enabled: true, .. } => "Enable selected",
+            Self::ToggleBatch { enabled: false, .. } => "Disable selected",
             Self::Migrate { .. } => "Manage external mod",
             Self::Rename(_) => "Rename",
             Self::ManualSource(_) | Self::Attach(_) => "Attach source",
@@ -83,6 +86,7 @@ pub struct Job {
 }
 pub enum Output {
     Changed(Vec<String>),
+    BatchToggled { enabled: bool, results: Vec<(String, Result<Vec<String>, String>)> },
     Imported { name: String, enable_error: Option<String> },
     Candidates(Vec<SourceCandidate>),
     Trash(Vec<plumcrate_core::lifecycle::TrashEntry>),
@@ -198,6 +202,10 @@ fn changed() -> Result<Output, String> {
 fn set_enabled(managed: &std::path::Path, mods: &std::path::Path, id: &str, enabled: bool) -> Result<Vec<String>, String> {
     let result = toggle::apply_toggle(managed, mods, id, enabled)
         .map_err(|error| format!("{}: {}", error.code.as_str(), error.message))?;
+    toggle_issues(result)
+}
+
+fn toggle_issues(result: toggle::ApplyResult) -> Result<Vec<String>, String> {
     let issues: Vec<_> = result.issues.into_iter().map(|issue| issue.message).collect();
     if !result.applied { return Err(issues.join("\n")); }
     Ok(issues)
@@ -231,6 +239,13 @@ pub fn execute(job: &Job) -> Result<Output, String> {
         Action::Toggle { enabled } => {
             let issues = set_enabled(managed, &mods, id(job)?, *enabled)?;
             Ok(Output::Changed(issues))
+        }
+        Action::ToggleBatch { enabled, mod_ids } => {
+            let results = toggle::apply_toggle_batch(managed, &mods, mod_ids, *enabled);
+            let results = mod_ids.iter().cloned().zip(results.into_iter().map(|result| {
+                result.map_err(error).and_then(toggle_issues)
+            })).collect();
+            Ok(Output::BatchToggled { enabled: *enabled, results })
         }
         Action::Migrate { files } => {
             let _authority = plumcrate_core::operation::acquire(managed).map_err(error)?;

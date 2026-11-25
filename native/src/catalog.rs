@@ -138,6 +138,16 @@ impl Catalog {
         }
     }
 
+    pub fn set_batch_enabled(&mut self, ids: &HashSet<String>, enabled: bool) {
+        for entry in &mut self.mods {
+            if entry.id.as_ref().is_some_and(|id| ids.contains(id)) {
+                entry.enabled = enabled;
+                entry.partially_installed = false;
+            }
+        }
+        self.filter();
+    }
+
     pub fn search(&mut self, query: String) {
         if self.query != query {
             self.query = query;

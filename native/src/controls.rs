@@ -612,7 +612,7 @@ impl Controls {
             self.notice = Some("A source lookup is already running. Local actions remain available.".into());
             return;
         }
-        if !action.read_only() && !matches!(action, Action::Toggle { .. }) {
+        if !action.read_only() && !matches!(action, Action::Toggle { .. } | Action::ToggleBatch { .. }) {
             self.updates.invalidate();
             self.release_choice = None;
         }
@@ -840,6 +840,44 @@ impl Controls {
                                 self.notice = Some(issues.join("\n"));
                             }
                         }
+                        Ok(Output::BatchToggled { enabled, results }) => {
+                            use std::collections::{HashMap, HashSet};
+                            let names: HashMap<_, _> = catalog.mods.iter()
+                                .filter_map(|entry| Some((entry.id.as_ref()?, entry.name.as_str())))
+                                .collect();
+                            let mut successful = HashSet::new();
+                            let mut problems = Vec::new();
+                            let mut warnings = Vec::new();
+                            for (id, result) in results {
+                                match result {
+                                    Ok(issues) => {
+                                        successful.insert(id);
+                                        warnings.extend(issues);
+                                    }
+                                    Err(problem) => {
+                                        let name = names.get(&id).copied().unwrap_or(&id);
+                                        problems.push(format!("{name}: {problem}"));
+                                    }
+                                }
+                            }
+                            if catalog.root.as_ref() == Some(&identity.root) && !successful.is_empty() {
+                                let verb = if enabled { "Enabled" } else { "Disabled" };
+                                let mut notice = format!("{verb} {} selected mods", successful.len());
+                                if !warnings.is_empty() {
+                                    notice.push_str(&format!(". {}", warnings.join("\n")));
+                                }
+                                self.error = None;
+                                self.notice = Some(notice);
+                                if catalog.loading {
+                                    self.refresh = catalog.root.clone();
+                                } else {
+                                    catalog.set_batch_enabled(&successful, enabled);
+                                }
+                            }
+                            if !problems.is_empty() {
+                                failure = Some(problems.join("\n"));
+                            }
+                        }
                         Ok(Output::Imported { name, enable_error }) => {
                             self.updates.invalidate();
                             self.refresh = catalog.root.clone();
@@ -941,13 +979,12 @@ impl Controls {
 
     pub fn set_marked_enabled(&mut self, catalog: &Catalog, enabled: bool) {
         if catalog.loading || self.busy() { return; }
-        let Some(root) = catalog.root.clone() else { return; };
-        for entry in &catalog.mods {
-            let identity = EntryId::of(entry);
-            if entry.id.is_none() || entry.enabled == enabled || !catalog.marked.contains(&identity) { continue; }
-            let identity = Identity { operation: self.next, root: root.clone(), entry: Some(identity), generation: catalog.generation() };
-            self.next += 1;
-            self.submit(identity, Action::Toggle { enabled });
+        let mod_ids: Vec<_> = catalog.mods.iter()
+            .filter(|entry| entry.enabled != enabled && catalog.marked.contains(&EntryId::of(entry)))
+            .filter_map(|entry| entry.id.clone())
+            .collect();
+        if !mod_ids.is_empty() && let Some(identity) = self.identity(catalog) {
+            self.submit(identity, Action::ToggleBatch { enabled, mod_ids });
         }
     }
 
@@ -2422,14 +2459,11 @@ mod tests {
         catalog.accept_scan(generation, Ok(entries));
         for index in [0, 1, 2, 4] { catalog.toggle_mark(index); }
         controls.set_marked_enabled(&catalog, true);
-        assert_eq!(controls.operations.len(), 2);
-        assert_eq!(controls.operations[0].identity.entry, Some(EntryId::Managed("a".into())));
-        assert_eq!(controls.operations[1].identity.entry, Some(EntryId::Managed("b".into())));
-        assert_ne!(controls.operations[0].identity.operation, controls.operations[1].identity.operation);
-        assert!(controls.operations.iter().all(|op| op.kind == OperationKind::Toggle(true)));
+        assert_eq!(controls.operations.len(), 1);
+        assert_eq!(controls.operations[0].label, "Enable selected");
         assert!(catalog.selected.is_none());
         controls.set_marked_enabled(&catalog, false);
-        assert_eq!(controls.operations.len(), 2, "busy bulk actions must not submit twice");
+        assert_eq!(controls.operations.len(), 1, "busy bulk actions must not submit twice");
     }
 
     #[test]

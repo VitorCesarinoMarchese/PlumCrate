@@ -357,3 +357,27 @@ fn partial_install_lists_full_manifest_and_can_repair_owned_links() {
     assert!(apply_toggle(&managed, &game, &pair.mod_id, true).unwrap().applied);
     assert_eq!(fs::read(game.join("two.package")).unwrap(), b"two.package");
 }
+
+#[test]
+fn batch_enable_preserves_duplicate_warnings_and_isolates_collisions() {
+    use plumcrate_core::toggle::apply_toggle_batch;
+
+    let temp = tempfile::tempdir().unwrap();
+    let (managed, game, first) = imported(&temp);
+    let source = temp.path().join("second");
+    fs::create_dir(&source).unwrap();
+    fs::write(source.join("other.package"), b"existing regular file").unwrap();
+    let second = create_managed_mod(&managed, ImportRequest {
+        name: "Second".into(), slug: None, source_dir: source,
+    }).unwrap();
+    fs::write(game.join("test.package"), b"leave the collision alone").unwrap();
+    fs::write(game.join("external.package"), b"existing regular file").unwrap();
+
+    let results = apply_toggle_batch(&managed, &game, &[first, second.mod_id], true);
+    assert!(!results[0].as_ref().unwrap().applied);
+    let successful = results[1].as_ref().unwrap();
+    assert!(successful.applied);
+    assert!(successful.issues.iter().any(|issue| issue.id == "dup:other.package"));
+    assert_eq!(fs::read(game.join("test.package")).unwrap(), b"leave the collision alone");
+    assert_eq!(fs::read(game.join("other.package")).unwrap(), b"existing regular file");
+}

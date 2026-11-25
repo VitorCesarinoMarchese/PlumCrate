@@ -132,6 +132,7 @@ fn append_disabled_managed_mods(scanned: &mut Vec<ScannedMod>, managed_root: &Pa
         Err(e) if e.kind() == std::io::ErrorKind::NotFound => return Ok(()),
         Err(e) => return Err(scan_error(&managed_mods, e)),
     };
+    let installed: HashSet<_> = scanned.iter().filter_map(|entry| entry.id.clone()).collect();
     for entry in entries {
         let entry = entry.map_err(|e| scan_error(&managed_mods, e))?;
         let mod_id = entry.file_name().to_string_lossy().to_string();
@@ -139,10 +140,7 @@ fn append_disabled_managed_mods(scanned: &mut Vec<ScannedMod>, managed_root: &Pa
         if mod_id.starts_with(".ts4-holding-") {
             continue;
         }
-        if scanned
-            .iter()
-            .any(|mod_entry| mod_entry.id.as_deref() == Some(&mod_id))
-        {
+        if installed.contains(&mod_id) {
             continue;
         }
         let meta = read_managed_mod(managed_root, &mod_id).map_err(|e| {
