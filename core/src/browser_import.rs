@@ -693,20 +693,6 @@ fn import_browser_download_inner(
             &mut transaction,
             |meta, files_root| {
                 permit.check()?;
-                if !meta.files.iter().any(|name| {
-                    matches!(
-                        Path::new(name)
-                            .extension()
-                            .and_then(|x| x.to_str())
-                            .map(str::to_ascii_lowercase)
-                            .as_deref(),
-                        Some("package" | "ts4script")
-                    )
-                }) {
-                    return Err(invalid(
-                        "Archive contains no Sims 4 package or script files",
-                    ));
-                }
                 let installed = InstalledRelease {
                     project_id: project.project_id,
                     file_id: release.release.file_id,

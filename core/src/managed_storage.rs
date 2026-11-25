@@ -98,6 +98,7 @@ pub fn create_managed_mod(
     managed_root: &Path,
     req: ImportRequest,
 ) -> Result<ModMetadata, ManagerError> {
+    validate_import_scope(managed_root, &req.source_dir)?;
     let _guard = crate::operation::acquire(managed_root)?;
     let mut transaction = crate::operation::Transaction::new(managed_root, "folder_import")?;
     let metadata = match create_managed_mod_transaction(managed_root, req, &mut transaction) {
@@ -134,18 +135,17 @@ pub(crate) fn create_managed_mod_transaction_initialized(
     before_publish: impl FnOnce() -> Result<(), ManagerError>,
     check: impl Fn() -> Result<(), ManagerError>,
 ) -> Result<ModMetadata, ManagerError> {
-    if !req.source_dir.is_dir() {
-        return Err(ManagerError::new(
-            ErrorCode::InvalidPath,
-            format!("Import source dir invalid: {}", req.source_dir.display()),
-        ));
-    }
-
+    validate_import_scope(managed_root, &req.source_dir)?;
     let mod_id = Uuid::new_v4().to_string();
-    fs_scope::create_dir_all(managed_root)?;
     fs_scope::ensure_no_symlink_parents(managed_root, Path::new("mods/staging"))?;
     let final_root = managed_root.join("mods").join(&mod_id);
-    let mod_root = managed_root.join("tmp").join(format!("import-{mod_id}"));
+    let temporary = managed_root.join("tmp");
+    fs_scope::create_dir_all(&temporary)?;
+    let staging = tempfile::Builder::new()
+        .prefix("import-")
+        .tempdir_in(&temporary)
+        .map_err(fs_scope::io_error)?;
+    let mod_root = staging.path();
     let files_root = mod_root.join("files");
 
     fs_scope::create_dir_all(&files_root)?;
@@ -153,6 +153,13 @@ pub(crate) fn create_managed_mod_transaction_initialized(
 
     fs_scope::Directory::open(&req.source_dir)?;
     let files = copy_recursive_checked(&req.source_dir, &files_root, &check)?;
+
+    if !files.iter().any(|file| crate::mod_scan::is_mod_file(file)) {
+        return Err(ManagerError::new(
+            ErrorCode::InvalidPath,
+            "Import contains no Sims 4 package or script files",
+        ));
+    }
 
     let name = req.name;
     let detected_name = detect_display_name(&name);
@@ -183,9 +190,24 @@ pub(crate) fn create_managed_mod_transaction_initialized(
     )?;
     fs_scope::create_dir_all(final_root.parent().unwrap())?;
     before_publish()?;
-    transaction.move_path(&mod_root, &final_root)?;
+    // Once the move is journaled, recovery may need the staged bundle.
+    transaction.move_path(&staging.keep(), &final_root)?;
 
     Ok(meta)
+}
+
+fn validate_import_scope(managed_root: &Path, source: &Path) -> Result<(), ManagerError> {
+    fs_scope::Directory::open(source)?;
+    let source = fs::canonicalize(source).map_err(fs_scope::io_error)?;
+    let absolute_staging = std::path::absolute(managed_root.join("tmp"))
+        .map_err(fs_scope::io_error)?;
+    if fs_scope::normalize(&absolute_staging).starts_with(&source) {
+        return Err(ManagerError::new(
+            ErrorCode::InvalidPath,
+            "Import source and managed staging directory overlap",
+        ));
+    }
+    Ok(())
 }
 
 pub fn write_managed_mod(managed_root: &Path, meta: &ModMetadata) -> Result<(), ManagerError> {

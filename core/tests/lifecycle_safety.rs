@@ -285,3 +285,34 @@ fn cross_device_wrapper_restore_retires_wrapper_and_preserves_originals() {
         .path();
     assert_eq!(fs::read(retired_index).unwrap(), info);
 }
+
+#[test]
+fn folder_import_rejects_overlapping_storage_before_staging() {
+    let temp = tempfile::tempdir().unwrap();
+    let source = temp.path().join("source");
+    let managed = source.join("managed");
+    fs::create_dir(&source).unwrap();
+    // A symlink makes the old implementation stop without copying a large tree.
+    std::os::unix::fs::symlink("missing", source.join("link")).unwrap();
+    let error = create_managed_mod(&managed, ImportRequest {
+        name: "Overlap".into(), slug: None, source_dir: source,
+    }).unwrap_err();
+    assert!(error.message.contains("overlap"), "{}", error.message);
+    assert!(!managed.exists());
+}
+
+#[test]
+fn folder_import_without_mod_files_leaves_no_bundle_or_staging_copy() {
+    let temp = tempfile::tempdir().unwrap();
+    let source = temp.path().join("source");
+    let managed = temp.path().join("managed");
+    fs::create_dir(&source).unwrap();
+    fs::write(source.join("notes.txt"), "notes").unwrap();
+    let error = create_managed_mod(&managed, ImportRequest {
+        name: "Notes".into(), slug: None, source_dir: source,
+    }).unwrap_err();
+    assert!(error.message.contains("no Sims 4"), "{}", error.message);
+    for child in ["mods", "tmp"] {
+        assert!(fs::read_dir(managed.join(child)).map_or(true, |mut dir| dir.next().is_none()));
+    }
+}

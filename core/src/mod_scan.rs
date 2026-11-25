@@ -290,7 +290,7 @@ fn filename_prefix(filename: &str) -> String {
     }
 }
 
-fn is_mod_file(path: &str) -> bool {
+pub(crate) fn is_mod_file(path: &str) -> bool {
     let lower = path.to_ascii_lowercase();
     lower.ends_with(".package") || lower.ends_with(".ts4script")
 }
