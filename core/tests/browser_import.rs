@@ -489,9 +489,12 @@ fn download_cleanup_requires_success_and_only_trashes_the_verified_original() {
     fs::create_dir_all(&downloads).unwrap();
     fs::create_dir_all(&game).unwrap();
     let original = downloads.join("renamed.package");
-    fs::write(&original, b"package").unwrap();
     let p = project(provider(b"package", "mod.package"));
-    let matched = match_download(&downloads, &p);
+    let mut watch = DownloadWatch::new(&downloads, &p.releases[0]).unwrap();
+    fs::write(&original, b"package").unwrap();
+    let permit = ImportPermit::default();
+    assert!(watch.poll(&permit).unwrap().is_none());
+    let matched = watch.poll(&permit).unwrap().unwrap();
     assert!(matched.trash_original_with(|_| panic!("not installed")).is_err());
     browser_import::import_browser_download(&t.path().join("managed"), &game, &p, &p.releases[0], &matched, &ImportPermit::default()).unwrap();
     matched.trash_original_with(|path| {
@@ -514,9 +517,12 @@ fn download_cleanup_preserves_replacements_changes_and_trash_failures() {
         fs::create_dir_all(&downloads).unwrap();
         fs::create_dir_all(&game).unwrap();
         let original = downloads.join("mod.package");
-        fs::write(&original, b"package").unwrap();
         let p = project(provider(b"package", "mod.package"));
-        let matched = match_download(&downloads, &p);
+        let mut watch = DownloadWatch::new(&downloads, &p.releases[0]).unwrap();
+        fs::write(&original, b"package").unwrap();
+        let permit = ImportPermit::default();
+        assert!(watch.poll(&permit).unwrap().is_none());
+        let matched = watch.poll(&permit).unwrap().unwrap();
         browser_import::import_browser_download(&t.path().join("managed"), &game, &p, &p.releases[0], &matched, &ImportPermit::default()).unwrap();
         match change {
             "replacement" => { fs::rename(&original, downloads.join("saved.package")).unwrap(); fs::write(&original, b"package").unwrap(); }
@@ -531,4 +537,23 @@ fn download_cleanup_preserves_replacements_changes_and_trash_failures() {
         assert!(original.symlink_metadata().is_ok());
         assert_eq!(fs::read(&original).unwrap(), if change == "modified" { b"changed" } else { b"package" });
     }
+}
+
+#[test]
+fn download_cleanup_never_trashes_a_preexisting_match() {
+    let temp = tempfile::tempdir().unwrap();
+    let downloads = temp.path().join("Downloads");
+    let game = temp.path().join("Mods");
+    fs::create_dir(&downloads).unwrap();
+    fs::create_dir(&game).unwrap();
+    let original = downloads.join("saved.package");
+    fs::write(&original, b"package").unwrap();
+    let p = project(provider(b"package", "mod.package"));
+
+    let matched = match_download(&downloads, &p);
+    browser_import::import_browser_download(
+        &temp.path().join("managed"), &game, &p, &p.releases[0], &matched, &ImportPermit::default(),
+    ).unwrap();
+    assert!(matched.trash_original_with(|_| panic!("pre-existing file passed to trash")).is_err());
+    assert_eq!(fs::read(original).unwrap(), b"package");
 }

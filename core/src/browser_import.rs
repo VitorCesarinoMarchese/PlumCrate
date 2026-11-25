@@ -374,15 +374,24 @@ struct MatchedFile {
     name: OsString,
     stamp: Stamp,
     release: BrowserRelease,
+    arrived_during_watch: bool,
     installed: bool,
     cleaned: bool,
 }
 impl MatchedDownload {
+    pub fn arrived_during_watch(&self) -> bool {
+        self.0.lock().is_ok_and(|matched| matched.arrived_during_watch)
+    }
+
+
     /// Move only the successfully installed, unchanged original through a recoverable trash adapter.
     pub fn trash_original_with(&self, trash: impl FnOnce(&Path) -> Result<(), String>) -> Result<(), ManagerError> {
         let mut matched = self.0.lock().map_err(|_| invalid("Download cleanup unavailable"))?;
         if !matched.installed || matched.cleaned {
             return Err(invalid("Download cleanup requires a successful installation and can run only once"));
+        }
+        if !matched.arrived_during_watch {
+            return Err(invalid("Existing download kept in its original location"));
         }
         let current = matched.directory.open_regular(Path::new(&matched.name))?;
         if stamp(&current)? != matched.stamp {
@@ -432,15 +441,24 @@ pub struct DownloadWatch {
     directory: Arc<fs_scope::Directory>,
     directory_path: PathBuf,
     release: BrowserRelease,
+    existing_files: HashSet<(u64, u64)>,
     previous: HashMap<OsString, Stamp>,
     rejected: HashMap<OsString, Stamp>,
 }
 #[cfg(unix)]
 impl DownloadWatch {
     pub fn new(directory: &Path, release: &BrowserRelease) -> Result<Self, ManagerError> {
+        let path = directory;
+        let directory = Arc::new(fs_scope::Directory::open(path)?);
+        let existing_files = directory.entry_names(1024)?.into_iter()
+            .filter_map(|name| directory.open_regular(Path::new(&name)).ok())
+            .filter_map(|file| stamp(&file).ok())
+            .map(|stamp| (stamp.device, stamp.inode))
+            .collect();
         Ok(Self {
-            directory: Arc::new(fs_scope::Directory::open(directory)?),
-            directory_path: directory.to_owned(),
+            directory,
+            directory_path: path.to_owned(),
+            existing_files,
             release: release.clone(),
             previous: HashMap::new(),
             rejected: HashMap::new(),
@@ -477,6 +495,7 @@ impl DownloadWatch {
             {
                 return Ok(Some(MatchedDownload(Arc::new(Mutex::new(MatchedFile {
                     file: Some(file), directory: self.directory.clone(), directory_path: self.directory_path.clone(),
+                    arrived_during_watch: !self.existing_files.contains(&(current.device, current.inode)),
                     name, stamp: current, release: self.release.clone(), installed: false, cleaned: false,
                 })))));
             }

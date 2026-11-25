@@ -297,7 +297,7 @@ impl BrowserImport {
             return Err("Choose an absolute Downloads folder.".into());
         }
         let mut watch = DownloadWatch::new(&approved.download_dir, &approved.release)
-            .map_err(|_| "Choose an existing real Downloads folder without symlinks.".to_owned())?;
+            .map_err(|error| download_folder_error(&error))?;
         let navigation = approved.release.navigation_url(&approved.project);
         let permit = ImportPermit::default();
         self.token = self.token.wrapping_add(1);
@@ -317,7 +317,7 @@ impl BrowserImport {
                         )),
                         Ok(None) => None,
                         Err(_) if worker_permit.is_cancelled() => break,
-                        Err(_) => Some(Err("Could not read the Downloads folder. Check its permissions and retry.".into())),
+                        Err(error) => Some(Err(download_folder_error(&error))),
                     };
                     if let Some(result) = result {
                         let _ = sender.send(Event::Download(token, result));
@@ -447,6 +447,10 @@ impl Drop for BrowserImport {
             wake.unpark();
         }
     }
+}
+
+fn download_folder_error(error: &plumcrate_core::error::ManagerError) -> String {
+    format!("Cannot watch the Downloads folder. {}. Choose a different folder in Settings → Folders or retry.", error.message.trim_end_matches('.'))
 }
 
 fn downloads_directory(home: &Path, config_file: &Path) -> PathBuf {

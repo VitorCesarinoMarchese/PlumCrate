@@ -309,12 +309,16 @@ pub fn execute(job: &Job) -> Result<Output, String> {
         Action::ImportBrowser(request) => {
             let metadata = plumcrate_core::browser_import::import_browser_download(managed, &request.root.join("Mods"), &request.project, &request.release, &request.matched, &request.permit)
                 .map_err(|error| error.message)?;
-            let cleanup_warning = request.matched.trash_original_with(|path| {
+            let cleanup_warning = if request.matched.arrived_during_watch() {
+                request.matched.trash_original_with(|path| {
                 let output = std::process::Command::new("gio").arg("trash").arg("--").arg(path)
                     .stdin(std::process::Stdio::null()).stdout(std::process::Stdio::null())
                     .output().map_err(|error| error.to_string())?;
                 if output.status.success() { Ok(()) } else { Err(format!("Could not move the original download to Trash: {}", String::from_utf8_lossy(&output.stderr).trim())) }
-            }).err().map(|error| format!("Mod installed. Download cleanup needs attention: {}", error.message));
+                }).err().map(|error| format!("Mod installed. Download cleanup needs attention: {}", error.message))
+            } else {
+                None
+            };
             Ok(Output::BrowserImported { token: request.token, metadata: Box::new(metadata), cleanup_warning })
         }
         Action::RecordRelease { report, release, .. } => {
