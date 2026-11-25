@@ -8,6 +8,8 @@ use std::path::PathBuf;
 mod preferences;
 #[path = "controls/activity.rs"]
 mod activity;
+#[path = "controls/collections.rs"]
+mod collections;
 pub use preferences::PreferencesSection;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -127,6 +129,7 @@ pub struct Controls {
     pub settings: Settings,
     saved_settings: Settings,
     settings_path: PathBuf,
+    collections: collections::Collections,
     next: u64,
     recovering: bool,
     operations: Vec<Operation>,
@@ -193,6 +196,7 @@ impl Controls {
             saved_settings: settings.clone(),
             settings,
             settings_path: home.join(".config/ts4-mod-manager/settings.json"),
+            collections: collections::Collections::open(home.join(".config/ts4-mod-manager/collections.json")),
             next: 1,
             recovering: true,
             operations: vec![],
@@ -983,6 +987,10 @@ impl Controls {
             .filter(|entry| crate::catalog::needs_toggle(entry, enabled) && catalog.marked.contains(&EntryId::of(entry)))
             .filter_map(|entry| entry.id.clone())
             .collect();
+        self.submit_toggle_batch(catalog, enabled, mod_ids);
+    }
+
+    fn submit_toggle_batch(&mut self, catalog: &Catalog, enabled: bool, mod_ids: Vec<String>) {
         if !mod_ids.is_empty() && let Some(identity) = self.identity(catalog) {
             self.submit(identity, Action::ToggleBatch { enabled, mod_ids });
         }
@@ -1224,6 +1232,7 @@ impl Controls {
     }
     pub fn review_open(&self) -> bool {
         self.dialog.is_some() || self.candidates.is_some() || self.trash_entries.is_some()
+            || self.collections.dialog_open()
     }
 
     pub fn show_dialogs(&mut self, ctx: &egui::Context, catalog: &Catalog) {
@@ -1240,6 +1249,9 @@ impl Controls {
                 crate::browser_import::Phase::Loading => {},
                 _ => self.browser_pending_start = false,
             }
+        }
+        if self.show_collection_dialog(ctx) {
+            return;
         }
         if self.candidates.as_ref().is_some_and(|(id, _)| {
             !id.current(

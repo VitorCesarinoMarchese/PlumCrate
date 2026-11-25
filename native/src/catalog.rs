@@ -1,5 +1,5 @@
 use std::{
-    collections::{BTreeMap, HashSet},
+    collections::{BTreeMap, BTreeSet, HashSet},
     path::PathBuf,
 };
 use plumcrate_core::mod_scan::ScannedMod;
@@ -59,6 +59,7 @@ pub struct Catalog {
     pub root: Option<PathBuf>,
     pub query: String,
     pub installation_filter: ModFilter,
+    collection_filter: Option<BTreeSet<String>>,
     generation: u64,
     search_keys: Vec<String>,
     curseforge_projects: BTreeMap<u64, EntryId>,
@@ -166,6 +167,15 @@ impl Catalog {
         }
     }
 
+    pub(crate) fn set_collection_filter(&mut self, members: Option<BTreeSet<String>>) {
+        self.collection_filter = members;
+        self.filter();
+    }
+
+    pub(crate) fn collection_filtered(&self) -> bool {
+        self.collection_filter.is_some()
+    }
+
     fn filter(&mut self) {
         let query = self.query.trim().to_lowercase();
         self.visible = self
@@ -173,7 +183,11 @@ impl Catalog {
             .iter()
             .enumerate()
             .filter_map(|(index, text)| {
-                (text.contains(&query) && self.installation_filter.matches(&self.mods[index]))
+                let entry = &self.mods[index];
+                let in_collection = self.collection_filter.as_ref().is_none_or(|members| {
+                    entry.id.as_ref().is_some_and(|id| members.contains(id))
+                });
+                (in_collection && text.contains(&query) && self.installation_filter.matches(entry))
                     .then_some(index)
             })
             .collect();
@@ -223,6 +237,26 @@ mod tests {
             "group_path": [name], "enabled": true
         }))
         .expect("fixture")
+    }
+
+    #[test]
+    fn named_collection_filters_by_managed_id_across_rescans() {
+        let mut catalog = Catalog::default();
+        let root = PathBuf::from("Game");
+        let generation = catalog.begin_scan(root.clone());
+        catalog.accept_scan(generation, Ok(vec![entry("Alpha", Some("a")), entry("External", None)]));
+        catalog.set_collection_filter(Some(BTreeSet::from(["a".into()])));
+        assert_eq!(catalog.visible, [0]);
+        catalog.mark_visible();
+        catalog.search("external".into());
+        assert!(catalog.visible.is_empty());
+        assert!(catalog.marked.is_empty());
+        catalog.search(String::new());
+        let generation = catalog.begin_scan(root);
+        catalog.accept_scan(generation, Ok(vec![entry("Beta", Some("a")), entry("Alpha", Some("b"))]));
+        assert_eq!(catalog.mods[catalog.visible[0]].name, "Beta");
+        catalog.set_collection_filter(None);
+        assert_eq!(catalog.visible.len(), 2);
     }
 
     #[test]

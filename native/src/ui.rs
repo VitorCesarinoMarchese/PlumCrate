@@ -663,6 +663,9 @@ impl View {
                         && let Some(index) = catalog.mods.iter().position(|entry| EntryId::of(entry) == identity) {
                         catalog.search(String::new());
                         catalog.set_filter(ModFilter::All);
+                        if let Some(c) = controls.as_deref_mut() {
+                            c.clear_collection_filter(catalog);
+                        }
                         catalog.select(index);
                         self.detail_open = catalog.selected.clone();
                         self.browse_page = false;
@@ -715,6 +718,9 @@ impl View {
                         if cards.clicked() { self.layout = LibraryLayout::Cards; }
                     });
                 });
+                if let Some(c) = controls.as_deref_mut() {
+                    c.collection_toolbar(ui, catalog);
+                }
                 if self.selecting {
                     ui.horizontal_wrapped(|ui| {
                         ui.label(format!("{} selected", catalog.marked.len()));
@@ -730,6 +736,7 @@ impl View {
                                     c.set_marked_enabled(catalog, enabled);
                                 }
                             }
+                            c.collection_selection(ui, catalog);
                             let managed_selected = catalog.mods.iter().any(|entry| entry.id.is_some() && catalog.marked.contains(&EntryId::of(entry)));
                             let trash = ui.add_enabled(ready && managed_selected, egui::Button::new("Move selected to trash"))
                                 .on_hover_text("Review selected managed mods before moving them to recoverable trash. External mods stay untouched.");
@@ -749,6 +756,8 @@ impl View {
                         ("No matching mods", "Try another name or filename, or clear your search.")
                     } else if catalog.installation_filter != ModFilter::All {
                         ("No mods in this view", "Switch to All mods to see the rest of your collection.")
+                    } else if catalog.collection_filtered() {
+                        ("No mods in this collection", "Select managed mods in the Library and choose Add to collection.")
                     } else {
                         ("No mods found", "This folder has no package or script mods. Managed mods also appear here when stored locally.")
                     };
@@ -951,9 +960,9 @@ impl View {
                                                     .map(|author| format!("By {author}"))
                                                     .unwrap_or_else(|| {
                                                         if entry.id.is_some() {
-                                                            "Managed collection".into()
+                                                            "Managed bundle".into()
                                                         } else {
-                                                            "External collection".into()
+                                                            "External bundle".into()
                                                         }
                                                     }),
                                             )
