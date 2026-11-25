@@ -441,6 +441,7 @@ pub struct DownloadWatch {
     directory: Arc<fs_scope::Directory>,
     directory_path: PathBuf,
     release: BrowserRelease,
+    existing_names: HashSet<OsString>,
     existing_files: HashSet<(u64, u64)>,
     previous: HashMap<OsString, Stamp>,
     rejected: HashMap<OsString, Stamp>,
@@ -450,14 +451,16 @@ impl DownloadWatch {
     pub fn new(directory: &Path, release: &BrowserRelease) -> Result<Self, ManagerError> {
         let path = directory;
         let directory = Arc::new(fs_scope::Directory::open(path)?);
-        let existing_files = directory.entry_names(1024)?.into_iter()
-            .filter_map(|name| directory.open_regular(Path::new(&name)).ok())
+        let existing_names: HashSet<_> = directory.entry_names(1024)?.into_iter().collect();
+        let existing_files = existing_names.iter()
+            .filter_map(|name| directory.open_regular(Path::new(name)).ok())
             .filter_map(|file| stamp(&file).ok())
             .map(|stamp| (stamp.device, stamp.inode))
             .collect();
         Ok(Self {
             directory,
             directory_path: path.to_owned(),
+            existing_names,
             existing_files,
             release: release.clone(),
             previous: HashMap::new(),
@@ -495,7 +498,8 @@ impl DownloadWatch {
             {
                 return Ok(Some(MatchedDownload(Arc::new(Mutex::new(MatchedFile {
                     file: Some(file), directory: self.directory.clone(), directory_path: self.directory_path.clone(),
-                    arrived_during_watch: !self.existing_files.contains(&(current.device, current.inode)),
+                    arrived_during_watch: !self.existing_names.contains(&name)
+                        && !self.existing_files.contains(&(current.device, current.inode)),
                     name, stamp: current, release: self.release.clone(), installed: false, cleaned: false,
                 })))));
             }
