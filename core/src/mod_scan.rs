@@ -1,4 +1,4 @@
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, HashSet};
 use std::fs;
 use std::path::{Path, PathBuf};
 
@@ -30,6 +30,8 @@ pub struct ScannedMod {
     pub source_attachment: Option<SourceAttachmentMetadata>,
     pub source: ModSource,
     pub enabled: bool,
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub partially_installed: bool,
     pub group_path: Vec<String>,
 }
 
@@ -48,6 +50,8 @@ enum GroupOwner {
 }
 
 pub fn scan_mods(mods_dir: &Path, managed_root: &Path) -> Result<Vec<ScannedMod>, ManagerError> {
+    let canonical_root = managed_root.canonicalize().ok();
+    let managed_root = canonical_root.as_deref().unwrap_or(managed_root);
     let mut groups: BTreeMap<GroupOwner, (String, Vec<FileEntry>)> = BTreeMap::new();
     let mut stack = vec![mods_dir.to_path_buf()];
 
@@ -171,17 +175,18 @@ fn scanned_mod_from_metadata(meta: ModMetadata) -> ScannedMod {
         source_attachment: meta.source_attachment,
         source: ModSource::Managed,
         enabled: false,
+        partially_installed: false,
         group_path: vec![name],
     }
 }
 
 fn build_scanned_mod(key: String, files: Vec<FileEntry>, managed_root: &Path) -> ScannedMod {
-    let enabled = files
+    let mut enabled = files
         .iter()
         .any(|file| is_mod_file(&file.relative) && file.absolute.is_file());
-    let all_files = files.iter().map(|f| f.relative.clone()).collect::<Vec<_>>();
+    let mut all_files = files.iter().map(|f| f.relative.clone()).collect::<Vec<_>>();
 
-    let mod_files = files
+    let mut mod_files = files
         .iter()
         .filter(|f| is_mod_file(&f.relative))
         .map(|f| f.relative.clone())
@@ -201,6 +206,21 @@ fn build_scanned_mod(key: String, files: Vec<FileEntry>, managed_root: &Path) ->
     let group_path = key.split('/').map(ToString::to_string).collect::<Vec<_>>();
     let raw_name = group_path.last().cloned().unwrap_or_else(|| key.clone());
     let metadata = managed_metadata_from_files(&files, managed_root);
+    let mut partially_installed = false;
+    if let Some(meta) = &metadata {
+        let installed: HashSet<_> = files.iter()
+            .filter(|file| {
+                let expected = managed_root.join("mods").join(&meta.mod_id)
+                    .join("files").join(&file.relative);
+                file.symlink_target.as_ref() == Some(&expected) && file.absolute.is_file()
+            })
+            .map(|file| file.relative.as_str())
+            .collect();
+        enabled = !meta.files.is_empty() && meta.files.iter().all(|file| installed.contains(file.as_str()));
+        partially_installed = !enabled && !installed.is_empty();
+        all_files.clone_from(&meta.files);
+        mod_files = all_files.iter().filter(|file| is_mod_file(file)).cloned().collect();
+    }
     let id = metadata.as_ref().map(|meta| meta.mod_id.clone());
     let source_url = metadata.as_ref().and_then(|meta| meta.source_url.clone());
     let source_attachment = metadata
@@ -230,6 +250,7 @@ fn build_scanned_mod(key: String, files: Vec<FileEntry>, managed_root: &Path) ->
         source_attachment,
         source,
         enabled,
+        partially_installed,
         group_path,
     }
 }

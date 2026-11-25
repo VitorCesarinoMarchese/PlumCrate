@@ -1052,7 +1052,9 @@ impl View {
                         plumcrate_core::mod_scan::ModSource::Managed => "Managed",
                         plumcrate_core::mod_scan::ModSource::External => "External",
                     };
-                    let state = if entry.enabled { "Installed" } else { "Stored" };
+                    let state = if entry.partially_installed {
+                    "Partially installed. Turn on to repair missing links."
+                } else if entry.enabled { "Installed" } else { "Stored" };
                     let count = entry.mod_files.len();
                     let mut subtitle = format!(
                         "{origin} · {count} {}",
@@ -1271,7 +1273,9 @@ impl View {
             .max_height(height)
             .auto_shrink([false, true])
             .show(ui, |ui| {
-                let state = if entry.enabled {
+                let state = if entry.partially_installed {
+                    "Partially installed. Turn on to repair missing links."
+                } else if entry.enabled {
                     "Installed in this game folder"
                 } else {
                     "Stored in managed storage"

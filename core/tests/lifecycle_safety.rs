@@ -332,3 +332,28 @@ fn migrate_external_group_sharing_a_folder_leaves_no_staging_copy() {
     assert_eq!(fs::read(external).unwrap(), b"external mod");
     assert!(fs::read_dir(managed.join("tmp")).unwrap().next().is_none());
 }
+
+#[test]
+fn partial_install_lists_full_manifest_and_can_repair_owned_links() {
+    use plumcrate_core::{mod_scan::scan_mods, toggle::apply_toggle};
+
+    let temp = tempfile::tempdir().unwrap();
+    let (managed, game, _) = imported(&temp);
+    let source = temp.path().join("pair");
+    fs::create_dir(&source).unwrap();
+    for file in ["one.package", "two.package"] {
+        fs::write(source.join(file), file).unwrap();
+    }
+    let pair = create_managed_mod(&managed, ImportRequest {
+        name: "Pair".into(), slug: None, source_dir: source,
+    }).unwrap();
+    assert!(apply_toggle(&managed, &game, &pair.mod_id, true).unwrap().applied);
+
+    fs::remove_file(game.join("two.package")).unwrap();
+    let scanned = scan_mods(&game, &managed).unwrap().into_iter()
+        .find(|entry| entry.id.as_deref() == Some(&pair.mod_id)).unwrap();
+    assert!(!scanned.enabled);
+    assert_eq!(scanned.files, pair.files);
+    assert!(apply_toggle(&managed, &game, &pair.mod_id, true).unwrap().applied);
+    assert_eq!(fs::read(game.join("two.package")).unwrap(), b"two.package");
+}

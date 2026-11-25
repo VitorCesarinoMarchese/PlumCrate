@@ -133,6 +133,7 @@ impl Catalog {
     pub fn set_enabled(&mut self, mod_id: &str, enabled: bool) {
         if let Some(entry) = self.mods.iter_mut().find(|entry| entry.id.as_deref() == Some(mod_id)) {
             entry.enabled = enabled;
+            entry.partially_installed = false;
             self.filter();
         }
     }

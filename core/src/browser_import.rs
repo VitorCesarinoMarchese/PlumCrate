@@ -4,7 +4,7 @@ use crate::{
         classify_status, CurseForgeClient, CurseForgeTransport, SourceLookupError, SIMS4_GAME_ID,
     },
     error::{ErrorCode, ManagerError},
-    fs_scope, link_ownership,
+    fs_scope,
     managed_storage::{self, ImportRequest, ModMetadata, SourceAttachmentMetadata, SourceEvidence},
     mod_updates::{InstalledRelease, Release},
     operation::Transaction,
@@ -573,18 +573,7 @@ fn existing_release(
     Ok(None)
 }
 fn enable_plan(root: &Path, game: &Path, id: &str) -> Result<toggle::DryRunResult, ManagerError> {
-    let mut dry = toggle::dry_run_toggle(root, game, id, true)?;
-    let mut owned = HashSet::new();
-    for op in &mut dry.operations {
-        if op.action == "skip" && link_ownership::owned(root, id, game, &op.path).unwrap_or(false) {
-            owned.insert(op.path.clone());
-            op.action = "keep_symlink".into();
-            op.reason = None;
-        }
-    }
-    dry.issues
-        .retain(|issue| !owned.iter().any(|p| issue.id == format!("collision:{p}")));
-    dry.can_apply = !dry.operations.iter().any(|op| op.action == "skip");
+    let dry = toggle::dry_run_toggle(root, game, id, true)?;
     if !dry.can_apply {
         return Err(ManagerError::new(
             ErrorCode::PathCollision,

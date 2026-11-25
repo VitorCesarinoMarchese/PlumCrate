@@ -25,15 +25,13 @@ pub fn migrate_external_mod(
     let _guard = operation::acquire(managed_root)?;
     fs_scope::component(external_mod_key)?;
     let scanned = scan_mods(game_mods_dir, managed_root)?;
-    let external = scanned
-        .into_iter()
-        .find(|m| m.key == external_mod_key && m.source == ModSource::External)
-        .ok_or_else(|| {
-            ManagerError::new(
-                ErrorCode::NotFound,
-                format!("External mod not found: {external_mod_key}"),
-            )
-        })?;
+    let mut matching = scanned.into_iter().filter(|entry| entry.key == external_mod_key).peekable();
+    if matching.peek().is_none() {
+        return Err(ManagerError::new(ErrorCode::NotFound, format!("External mod not found: {external_mod_key}")));
+    }
+    let external = matching.find(|entry| entry.source == ModSource::External).ok_or_else(|| {
+        ManagerError::new(ErrorCode::ExternalLink, format!("Mod is not external: {external_mod_key}"))
+    })?;
 
     let temporary = managed_root.join("tmp");
     fs_scope::create_dir_all(&temporary)?;

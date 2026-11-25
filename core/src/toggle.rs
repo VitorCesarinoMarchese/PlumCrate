@@ -60,6 +60,7 @@ pub fn dry_run_toggle(
         let meta = read_managed_mod(managed_root, mod_id)?;
         let existing_hashes = collect_hashes(game_mods_dir);
 
+        let mut recorded_links = None;
         for rel in meta.files {
             let src = managed_root
                 .join("mods")
@@ -87,6 +88,18 @@ pub fn dry_run_toggle(
                 ));
             }
             if fs_scope::exists(&dst) {
+                let links = match &mut recorded_links {
+                    Some(links) => links,
+                    slot @ None => slot.insert(match link_ownership::read(managed_root, mod_id, game_mods_dir) {
+                        Ok(record) => record.links.into_iter().collect::<std::collections::HashSet<_>>(),
+                        Err(error) if error.code == ErrorCode::NotFound => Default::default(),
+                        Err(error) => return Err(error),
+                    }),
+                };
+                if links.contains(&rel) && link_ownership::owned(managed_root, mod_id, game_mods_dir, &rel)? {
+                    operations.push(DryRunOp { action: "keep_symlink".into(), path: rel_dst, reason: None });
+                    continue;
+                }
                 can_apply = false;
                 operations.push(DryRunOp {
                     action: "skip".to_string(),
