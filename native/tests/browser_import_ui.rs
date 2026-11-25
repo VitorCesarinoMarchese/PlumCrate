@@ -144,7 +144,6 @@ fn a_dependency_download_starts_only_that_project_then_imports_and_enables_it() 
     let client=CurseForgeClient::new(Some("synthetic"),details_support::Provider).unwrap();
     let dependency=load_browser_project(&client,9).unwrap();
     let original=fixture.directory.path().join("Downloads/core-library.package");
-    std::fs::write(&original,support::BYTES).unwrap();
     fixture.controls.prepare_browser_import(&ctx,&fixture.catalog,ReviewRequest::Loaded {project:dependency,file_id:200});
     assert_eq!(fixture.controls.browser_import.phase,Phase::Ready);
     assert_eq!(fixture.controls.browser_import.chosen,Some(200));
@@ -152,6 +151,7 @@ fn a_dependency_download_starts_only_that_project_then_imports_and_enables_it() 
     let output=frame(&ctx,&mut fixture,vec![]);
     assert!(!fixture.controls.review_open());
     assert!(output.platform_output.commands.iter().any(|c|matches!(c,egui::OutputCommand::OpenUrl(url) if url.url.ends_with("/synthetic-core/download/200"))));
+    std::fs::write(&original, support::BYTES).unwrap();
     let deadline=std::time::Instant::now()+std::time::Duration::from_secs(5);
     while fixture.controls.browser_import.phase!=Phase::Complete {
         fixture.controls.poll(&mut fixture.catalog);
@@ -180,7 +180,7 @@ fn sized_frame(ctx: &egui::Context, fixture: &mut support::Fixture, events: Vec<
     output
 }
 #[test]
-fn one_download_action_opens_the_download_page_then_imports_and_enables_without_more_clicks() {
+fn one_download_action_imports_a_preexisting_match_without_trashing_it() {
     let mut fixture = support::fixture();
     let ctx = egui::Context::default();
     plumcrate::ui::setup(&ctx);
@@ -220,7 +220,8 @@ fn one_download_action_opens_the_download_page_then_imports_and_enables_without_
         );
         std::thread::sleep(std::time::Duration::from_millis(20));
     }
-    assert_download_cleanup(&fixture, &downloads);
+    assert_eq!(std::fs::read(downloads).unwrap(), support::BYTES);
+    assert!(fixture.controls.error.is_none());
     assert_eq!(
         std::fs::read(fixture.directory.path().join("game/Mods/fixture.package")).unwrap(),
         support::BYTES
