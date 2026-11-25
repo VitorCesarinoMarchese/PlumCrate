@@ -1301,8 +1301,9 @@ impl Controls {
             });
             if keep && !popup.should_close() {
                 self.candidates = Some((identity, candidates));
+            } else {
+                ctx.request_repaint();
             }
-            ctx.request_repaint();
             return;
         }
         if let Some((identity, entries)) = self.trash_entries.take().filter(|(id, _)| {
@@ -1380,8 +1381,9 @@ impl Controls {
             });
             if keep && !popup.should_close() {
                 self.trash_entries = Some((identity, entries));
+            } else {
+                ctx.request_repaint();
             }
-            ctx.request_repaint();
             return;
         }
         let Some(mut dialog) = self.dialog.take() else {
@@ -1582,6 +1584,43 @@ impl Controls {
 }
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn idle_trash_and_source_dialogs_can_stop_repainting() {
+        let fixture = tempfile::tempdir().unwrap();
+        let mut catalog = Catalog::default();
+        let generation = catalog.begin_scan(fixture.path().join("game"));
+        catalog.accept_scan(generation, Ok(vec![]));
+        let mut controls = Controls::new(
+            fixture.path().join("managed"), fixture.path().into(), Settings::default(), || {},
+        ).unwrap();
+        controls.recovering = false;
+
+        for is_trash in [false, true] {
+            let identity = controls.identity(&catalog).unwrap();
+            if is_trash {
+                controls.trash_entries = Some((identity, vec![]));
+            } else {
+                controls.candidates = Some((identity, vec![]));
+            }
+            let ctx = egui::Context::default();
+            let mut repaint_delay = std::time::Duration::ZERO;
+            for frame in 0..30 {
+                let input = egui::RawInput {
+                    time: Some(f64::from(frame) / 60.0),
+                    ..Default::default()
+                };
+                let mut output = ctx.run_ui(input, |ui| {
+                    controls.show_dialogs(ui.ctx(), &catalog);
+                });
+                repaint_delay = output.viewport_output[&egui::ViewportId::ROOT].repaint_delay;
+                output.textures_delta.clear();
+            }
+            assert_ne!(repaint_delay, std::time::Duration::ZERO, "idle dialog kept repainting: {:?}", ctx.repaint_causes());
+            controls.candidates = None;
+            controls.trash_entries = None;
+        }
+    }
+
     #[test]
     fn trash_actions_fit_and_restore_click_opens_review() {
         let dir = tempfile::tempdir().unwrap();
