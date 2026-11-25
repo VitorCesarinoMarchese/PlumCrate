@@ -27,12 +27,10 @@ impl Activity {
             read: false,
             dismissed: false,
         });
-        if self.messages.len() > 30
-            && let Some(index) = self
-                .messages
-                .iter()
+        if self.messages.len() > 30 {
+            let index = self.messages.iter()
                 .position(|message| !message.error || message.dismissed)
-        {
+                .unwrap_or(0);
             self.messages.remove(index);
         }
     }
@@ -87,13 +85,13 @@ impl Controls {
     }
     fn running_tasks(&self) -> usize {
         let pending =
-            |operation: &&Operation| matches!(operation.status.as_str(), "Queued" | "Running");
+            |operation: &&Operation| operation.pending();
         let operations = self.operations.iter().filter(pending).count();
         let browser_owned = self
             .operations
             .iter()
             .filter(pending)
-            .any(|operation| matches!(operation.job.action, Action::ImportBrowser(_)));
+            .any(|operation| matches!(operation.kind, OperationKind::BrowserImport(_)));
         operations
             + usize::from(self.recovering)
             + usize::from((self.browser_import.running() || self.browser_import.preparing()) && !browser_owned)
@@ -214,9 +212,9 @@ impl Controls {
         for operation in self
             .operations
             .iter()
-            .filter(|operation| matches!(operation.status.as_str(), "Queued" | "Running"))
+            .filter(|operation| operation.pending())
         {
-            if matches!(operation.job.action, Action::ImportBrowser(_)) {
+            if matches!(operation.kind, OperationKind::BrowserImport(_)) {
                 continue;
             }
             ui.horizontal_wrapped(|ui| {
@@ -225,7 +223,7 @@ impl Controls {
                 }
                 ui.label(format!(
                     "{} · {}",
-                    operation.job.action.label(),
+                    operation.label,
                     operation.status
                 ));
             });
@@ -285,39 +283,32 @@ impl Controls {
         if let Some(index) = dismiss {
             self.activity.messages[index].dismissed = true;
         }
-        let mut retry = None;
         if !self.operations.is_empty() {
             egui::CollapsingHeader::new("Operation history")
                 .id_salt("management-activity")
                 .default_open(self.operations.iter().any(|operation| operation.error))
                 .show(ui, |ui| {
                     for operation in self.operations.iter().rev() {
-                        ui.push_id(operation.job.identity.operation, |ui| {
+                        ui.push_id(operation.identity.operation, |ui| {
                             ui.label(format!(
                                 "{} · {}",
-                                operation.job.action.label(),
+                                operation.label,
                                 operation.status
                             ));
                             ui.label(
-                                RichText::new(operation.job.identity.root.display().to_string())
+                                RichText::new(operation.identity.root.display().to_string())
                                     .small()
                                     .color(ui.visuals().weak_text_color()),
                             );
                             if operation.error
-                                && !matches!(operation.job.action, Action::ImportBrowser(_))
-                                && ui.button("Retry").clicked()
+                                && !matches!(operation.kind, OperationKind::BrowserImport(_))
                             {
-                                retry = Some(operation.job.clone());
+                                ui.label("Start the action again to review the current game and selection.");
                             }
                             ui.separator();
                         });
                     }
                 });
-        }
-        if let Some(mut job) = retry {
-            job.identity.operation = self.next;
-            self.next += 1;
-            self.submit(job.identity, job.action);
         }
     }
     pub fn notifications(&mut self, ctx: &egui::Context) {
@@ -416,6 +407,16 @@ mod tests {
         activity.observe_error(0, Some("Error".into()), 6.0);
         assert_eq!(activity.messages.len(), 4);
     }
+    #[test]
+    fn repeated_errors_keep_activity_history_bounded() {
+        let mut activity = Activity::default();
+        for index in 0..100 {
+            activity.observe_error(0, Some(format!("Error {index}")), index as f64);
+        }
+        assert_eq!(activity.messages.len(), 30);
+        assert_eq!(activity.toast(100.0).unwrap().1.text, "Error 99");
+    }
+
     #[test]
     fn recent_history_does_not_evict_undismissed_errors() {
         let mut activity = Activity::default();

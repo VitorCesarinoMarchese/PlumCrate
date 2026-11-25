@@ -10,11 +10,40 @@ mod preferences;
 mod activity;
 pub use preferences::PreferencesSection;
 
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum OperationKind {
+    Lookup,
+    Toggle(bool),
+    BrowserImport(u64),
+    ReviewTrashDeletion,
+    Other,
+}
+
 struct Operation {
-    job: Job,
+    identity: Identity,
+    kind: OperationKind,
+    label: &'static str,
+    read_only: bool,
     status: String,
     error: bool,
 }
+impl Operation {
+    fn pending(&self) -> bool {
+        matches!(self.status.as_str(), "Queued" | "Running")
+    }
+}
+
+fn prune_history(operations: &mut Vec<Operation>) {
+    let mut remaining = operations.iter().filter(|operation| !operation.pending()).count().saturating_sub(30);
+    operations.retain(|operation| {
+        if remaining > 0 && !operation.pending() {
+            remaining -= 1;
+            return false;
+        }
+        true
+    });
+}
+
 struct TrashSelection {
     root: PathBuf,
     generation: u64,
@@ -202,7 +231,7 @@ impl Controls {
                 epoch: self.updates.epoch.clone(),
                 token,
             });
-            if !self.operations.last().is_some_and(|job| job.job.identity.operation == operation) { self.updates.pending = false; }
+            if !self.operations.last().is_some_and(|job| job.identity.operation == operation) { self.updates.pending = false; }
         }
     }
     pub fn update_summary(&self, ui: &mut egui::Ui, offer_navigation: bool) -> bool {
@@ -579,7 +608,7 @@ impl Controls {
             return;
         }
         if matches!(action, Action::Lookup(_)) && self.operations.iter().any(|o|
-            matches!(o.job.action, Action::Lookup(_)) && (o.status == "Queued" || o.status == "Running")) {
+            o.kind == OperationKind::Lookup && o.pending()) {
             self.notice = Some("A source lookup is already running. Local actions remain available.".into());
             return;
         }
@@ -587,18 +616,23 @@ impl Controls {
             self.updates.invalidate();
             self.release_choice = None;
         }
-        let job = Job {
-            identity,
-            managed: self.managed.clone(),
-            trash: self.trash.clone(),
-            action,
+        let operation = Operation {
+            identity: identity.clone(),
+            kind: match &action {
+                Action::Lookup(_) => OperationKind::Lookup,
+                Action::Toggle { enabled } => OperationKind::Toggle(*enabled),
+                Action::ImportBrowser(request) => OperationKind::BrowserImport(request.token),
+                Action::ReviewTrashDeletion(_) => OperationKind::ReviewTrashDeletion,
+                _ => OperationKind::Other,
+            },
+            label: action.label(),
+            read_only: action.read_only(),
+            status: "Queued".into(),
+            error: false,
         };
-        match self.worker.submit(job.clone()) {
-            Ok(()) => self.operations.push(Operation {
-                job,
-                status: "Queued".into(),
-                error: false,
-            }),
+        let job = Job { identity, managed: self.managed.clone(), trash: self.trash.clone(), action };
+        match self.worker.submit(job) {
+            Ok(()) => self.operations.push(operation),
             Err(e) => self.error = Some(e),
         }
     }
@@ -626,7 +660,7 @@ impl Controls {
         if self
             .operations
             .last()
-            .is_some_and(|job| job.job.identity.operation == operation)
+            .is_some_and(|job| job.identity.operation == operation)
         {
             Ok(operation)
         } else {
@@ -671,7 +705,7 @@ impl Controls {
                         if let Some(job) = self
                             .operations
                             .iter_mut()
-                            .find(|job| job.job.identity.operation == identity.operation)
+                            .find(|job| job.identity.operation == identity.operation)
                         {
                             job.status = "Running".into();
                         }
@@ -680,11 +714,12 @@ impl Controls {
                         if let Some(job) = self
                             .operations
                             .iter_mut()
-                            .find(|job| job.job.identity.operation == operation)
+                            .find(|job| job.identity.operation == operation)
                         {
                             job.status = "Finished".into();
                             job.error = result.is_err();
                         }
+                        prune_history(&mut self.operations);
                         return result;
                     }
                     _ => {}
@@ -702,7 +737,7 @@ impl Controls {
             || self
                 .operations
                 .iter()
-                .any(|o| !o.job.action.read_only() && (o.status == "Queued" || o.status == "Running"))
+                .any(|o| !o.read_only && o.pending())
     }
     pub fn poll(&mut self, catalog: &mut Catalog) {
         self.browser_import.sync(catalog.root.as_ref(), self.saved_settings.curseforge_api_key.as_deref());
@@ -712,7 +747,7 @@ impl Controls {
             self.next += 1;
             let operation = identity.operation;
             self.submit(identity, Action::ImportBrowser(Box::new(request)));
-            if !self.operations.last().is_some_and(|job| job.job.identity.operation == operation) {
+            if !self.operations.last().is_some_and(|job| job.identity.operation == operation) {
                 self.browser_import.finish(token, Err("Could not queue the verified installation. Retry the download session.".into()));
             }
         }
@@ -752,7 +787,7 @@ impl Controls {
                     if let Some(op) = self
                         .operations
                         .iter_mut()
-                        .find(|o| o.job.identity.operation == identity.operation)
+                        .find(|o| o.identity.operation == identity.operation)
                     {
                         op.status = "Running".into()
                     }
@@ -761,9 +796,9 @@ impl Controls {
                     let mut failure = None;
                     match result {
                         Err(e) => {
-                            if let Some(operation) = self.operations.iter().find(|op| op.job.identity.operation == identity.operation)
-                                && let Action::ImportBrowser(request) = &operation.job.action {
-                                self.browser_import.finish(request.token, Err(e.clone()));
+                            if let Some(operation) = self.operations.iter().find(|op| op.identity.operation == identity.operation)
+                                && let OperationKind::BrowserImport(token) = operation.kind {
+                                self.browser_import.finish(token, Err(e.clone()));
                                 self.refresh = catalog.root.clone();
                             }
                             failure = Some(e);
@@ -776,8 +811,8 @@ impl Controls {
                             self.notice = Some(format!("{} imported and enabled in {}", metadata.effective_display_name(), identity.root.display()));
                         },
                         Ok(Output::Changed(issues)) => {
-                            let toggled = self.operations.iter().find(|operation| operation.job.identity.operation == identity.operation)
-                                .and_then(|operation| match operation.job.action { Action::Toggle {enabled} => Some(enabled), _ => None });
+                            let toggled = self.operations.iter().find(|operation| operation.identity.operation == identity.operation)
+                                .and_then(|operation| match operation.kind { OperationKind::Toggle(enabled) => Some(enabled), _ => None });
                             if catalog.root.as_ref() == Some(&identity.root)
                                 && let Some(enabled) = toggled {
                                 self.error = None;
@@ -855,15 +890,16 @@ impl Controls {
                     if let Some(op) = self
                         .operations
                         .iter_mut()
-                        .find(|o| o.job.identity.operation == identity.operation)
+                        .find(|o| o.identity.operation == identity.operation)
                     {
                         if let Some(error) = &failure
                             && identity.root == catalog.root.clone().unwrap_or_default() {
-                            self.error = Some(format!("{} failed: {error}", op.job.action.label()));
+                            self.error = Some(format!("{} failed: {error}", op.label));
                         }
                         op.error = failure.is_some();
                         op.status = failure.unwrap_or_else(|| "Finished".into());
                     }
+                    prune_history(&mut self.operations);
                 }
             }
         }
@@ -1243,7 +1279,7 @@ impl Controls {
             let popup = crate::popup::show_width(ctx, "restore-from-trash", "Trash", 600.0, |ui| {
                 ui.label("Restore removed mods to your library. Deleting them requires a separate review.");
                 ui.add_space(8.0);
-                let reviewing = self.operations.iter().any(|op| matches!(op.job.action, Action::ReviewTrashDeletion(_)) && matches!(op.status.as_str(), "Queued" | "Running"));
+                let reviewing = self.operations.iter().any(|op| op.kind == OperationKind::ReviewTrashDeletion && op.pending());
                 if self.busy() || reviewing {
                     ui.horizontal(|ui| { ui.spinner(); ui.label("Preparing review…"); });
                 } else {
@@ -2350,7 +2386,7 @@ mod tests {
             egui::Event::PointerButton { pos, button: egui::PointerButton::Primary, pressed: true, modifiers: Default::default() },
             egui::Event::PointerButton { pos, button: egui::PointerButton::Primary, pressed: false, modifiers: Default::default() }]);
         assert_eq!(controls.operations.len(), 2);
-        assert!(controls.operations.iter().all(|op| matches!(op.job.action, Action::Trash)));
+        assert!(controls.operations.iter().all(|op| op.label == "Move to trash"));
         let deadline = std::time::Instant::now() + std::time::Duration::from_secs(5);
         while controls.busy() {
             controls.poll(&mut catalog);
@@ -2386,10 +2422,10 @@ mod tests {
         for index in [0, 1, 2, 4] { catalog.toggle_mark(index); }
         controls.set_marked_enabled(&catalog, true);
         assert_eq!(controls.operations.len(), 2);
-        assert_eq!(controls.operations[0].job.identity.entry, Some(EntryId::Managed("a".into())));
-        assert_eq!(controls.operations[1].job.identity.entry, Some(EntryId::Managed("b".into())));
-        assert_ne!(controls.operations[0].job.identity.operation, controls.operations[1].job.identity.operation);
-        assert!(controls.operations.iter().all(|op| matches!(op.job.action, Action::Toggle { enabled: true })));
+        assert_eq!(controls.operations[0].identity.entry, Some(EntryId::Managed("a".into())));
+        assert_eq!(controls.operations[1].identity.entry, Some(EntryId::Managed("b".into())));
+        assert_ne!(controls.operations[0].identity.operation, controls.operations[1].identity.operation);
+        assert!(controls.operations.iter().all(|op| op.kind == OperationKind::Toggle(true)));
         assert!(catalog.selected.is_none());
         controls.set_marked_enabled(&catalog, false);
         assert_eq!(controls.operations.len(), 2, "busy bulk actions must not submit twice");
@@ -2431,7 +2467,7 @@ mod tests {
         assert!(controls.refresh.is_none());
         assert!(catalog.error.is_none());
         assert!(controls.operations[0].error);
-        assert_eq!(controls.operations[0].job.identity, identity);
+        assert_eq!(controls.operations[0].identity, identity);
     }
     #[test]
     fn manual_source_metadata_is_written_only_after_actual_confirmation_click() {

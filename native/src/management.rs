@@ -50,7 +50,7 @@ impl Action {
     pub fn read_only(&self) -> bool {
         matches!(self, Self::Lookup(_) | Self::CheckUpdates { .. } | Self::ReviewTrashDeletion(_))
     }
-    pub fn label(&self) -> &str {
+    pub fn label(&self) -> &'static str {
         match self {
             Self::ImportFolder { .. } => "Import folder",
             Self::ImportZip { .. } => "Import ZIP",
